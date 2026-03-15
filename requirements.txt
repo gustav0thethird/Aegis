@@ -1,0 +1,11 @@
+boto3
+requests
+fastapi
+uvicorn[standard]
+cryptography
+python-multipart
+sqlalchemy
+alembic
+psycopg2-binary
+redis
+bcrypt

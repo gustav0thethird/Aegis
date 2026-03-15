@@ -1,0 +1,21 @@
+{
+  "cyberark": {
+    "host":        "cyberark.example.com",
+    "app_id":      "BrokerApp",
+    "auth_safe":   "Broker-Safe",
+    "auth_object": "BrokerSvc"
+  },
+  "vault": {
+    "addr":  "http://vault.example.com:8200",
+    "token": "s.XXXXXXXXXXXXXXXXXXXX"
+  },
+  "aws": {
+    "region": "eu-west-1"
+  },
+  "conjur": {
+    "host":    "conjur.example.com",
+    "account": "myorg",
+    "login":   "host/secrets-broker",
+    "api_key": "XXXXXXXXXXXXXXXXXXXX"
+  }
+}

@@ -1,0 +1,1704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aegis</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ────────────────────────────────────── */
+:root {
+  --bg:        #07090f;
+  --surface-1: #0d1117;
+  --surface-2: #131820;
+  --surface-3: #1a2130;
+  --border:    #1e2a3a;
+  --border-hi: #2a3f58;
+  --text-1:    #e2e8f0;
+  --text-2:    #94a3b8;
+  --text-3:    #4a5568;
+  --indigo:    #6366f1;
+  --indigo-hi: #818cf8;
+  --indigo-lo: #1e1f4a;
+  --success:   #10b981;
+  --warning:   #f59e0b;
+  --danger:    #ef4444;
+  --danger-lo: #3a1515;
+}
+* { font-family: 'Fira Code', monospace; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text-1); margin: 0; }
+
+/* ── Scrollbar ───────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface-1); }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+/* ── Focus ───────────────────────────────────────────── */
+:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; border-radius: 4px; }
+
+/* ── Typography ──────────────────────────────────────── */
+.text-xs  { font-size: 11px; line-height: 1.5; }
+.text-sm  { font-size: 12px; line-height: 1.5; }
+.text-md  { font-size: 13px; line-height: 1.6; }
+.text-lg  { font-size: 15px; line-height: 1.5; }
+.text-xl  { font-size: 18px; line-height: 1.4; }
+.text-2xl { font-size: 24px; line-height: 1.3; }
+.text-3xl { font-size: 32px; line-height: 1.2; }
+.font-mono { font-family: 'Fira Code', monospace; }
+
+/* ── Inputs ──────────────────────────────────────────── */
+input, select {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  color: var(--text-1);
+  border-radius: 5px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-family: 'Fira Code', monospace;
+  width: 100%;
+  outline: none;
+  transition: border-color 0.15s;
+}
+input:focus, select:focus { border-color: var(--indigo); }
+input::placeholder { color: var(--text-3); }
+select option { background: var(--surface-2); }
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 5px;
+  font-size: 12px; font-weight: 500;
+  font-family: 'Fira Code', monospace;
+  cursor: pointer; transition: all 0.15s;
+  border: none; white-space: nowrap;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.btn-primary  { background: var(--indigo); color: #fff; }
+.btn-primary:hover  { background: var(--indigo-hi); box-shadow: 0 0 12px rgba(99,102,241,0.35); }
+.btn-ghost    { background: transparent; color: var(--text-2); border: 1px solid var(--border); }
+.btn-ghost:hover    { background: var(--surface-3); color: var(--text-1); border-color: var(--border-hi); }
+.btn-danger   { background: var(--danger); color: #fff; }
+.btn-danger:hover   { background: #dc2626; box-shadow: 0 0 10px rgba(239,68,68,0.3); }
+.btn-amber    { background: #d97706; color: #fff; }
+.btn-amber:hover    { background: var(--warning); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* ── Pills ───────────────────────────────────────────── */
+.pill {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.pill-cyberark { background: #1a1d4a; color: #a5b4fc; border: 1px solid #2d3178; }
+.pill-vault    { background: #2a1a0a; color: #fdba74; border: 1px solid #78350f; }
+.pill-aws      { background: #2a1f00; color: #fcd34d; border: 1px solid #78600a; }
+.pill-conjur   { background: #072a1a; color: #6ee7b7; border: 1px solid #065f46; }
+
+/* ── Action pill colours (change log) ─────────────────── */
+.pill-created    { background:#07291a; color:#6ee7b7; border:1px solid #065f46; }
+.pill-updated    { background:#1a1d4a; color:#a5b4fc; border:1px solid #2d3178; }
+.pill-deleted    { background:#3a1515; color:#fca5a5; border:1px solid #7f1d1d; }
+.pill-key_rotated{ background:#2a1f00; color:#fcd34d; border:1px solid #78600a; }
+.pill-object_added   { background:#07291a; color:#6ee7b7; border:1px solid #065f46; }
+.pill-object_removed { background:#2a1515; color:#fca5a5; border:1px solid #7f1d1d; }
+.pill-registry_assigned   { background:#072029; color:#7dd3fc; border:1px solid #0369a1; }
+.pill-registry_unassigned { background:#291a07; color:#fbd38d; border:1px solid #92400e; }
+
+/* ── Tables ──────────────────────────────────────────── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead th {
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.1s;
+}
+.data-table tbody tr:hover { background: var(--surface-2); }
+.data-table tbody td { padding: 10px 16px; font-size: 12px; color: var(--text-2); }
+.data-table tbody td.td-primary { color: var(--text-1); font-weight: 500; }
+
+/* ── Nav ─────────────────────────────────────────────── */
+.nav-item {
+  display: flex; flex-direction: column; align-items: center;
+  gap: 4px; padding: 12px 0; width: 100%;
+  color: var(--text-3); cursor: pointer;
+  border: none; background: transparent;
+  transition: color 0.15s; position: relative;
+}
+.nav-item:hover { color: var(--text-2); }
+.nav-item.active { color: var(--indigo-hi); }
+.nav-item.active::before {
+  content: ''; position: absolute; left: 0; top: 10px; bottom: 10px;
+  width: 2px; background: var(--indigo); border-radius: 0 2px 2px 0;
+}
+.nav-label { font-size: 9px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; }
+.nav-item svg { width: 18px; height: 18px; }
+
+/* ── Cards ───────────────────────────────────────────── */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.stat-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover { border-color: var(--border-hi); box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+.stat-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+}
+.stat-card.accent-indigo::before { background: linear-gradient(90deg, var(--indigo), transparent); }
+.stat-card.accent-emerald::before { background: linear-gradient(90deg, #10b981, transparent); }
+.stat-card.accent-amber::before  { background: linear-gradient(90deg, #f59e0b, transparent); }
+.stat-card.accent-red::before    { background: linear-gradient(90deg, #ef4444, transparent); }
+.stat-card.accent-blue::before   { background: linear-gradient(90deg, #3b82f6, transparent); }
+
+/* ── Drawer ──────────────────────────────────────────── */
+.drawer { transform: translateX(100%); transition: transform 0.2s cubic-bezier(0.4,0,0.2,1); }
+.drawer-open { transform: translateX(0); }
+.drawer-section { border-top: 1px solid var(--border); padding: 16px; }
+.drawer-section:first-child { border-top: none; }
+
+/* ── Combobox ────────────────────────────────────────── */
+.combo-list {
+  position: absolute; z-index: 200;
+  top: calc(100% + 4px); left: 0; right: 0;
+  background: var(--surface-2);
+  border: 1px solid var(--border-hi);
+  border-radius: 6px;
+  max-height: 220px; overflow-y: auto;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.combo-item {
+  display: flex; align-items: center; gap: 8px;
+  padding: 8px 12px; cursor: pointer;
+  font-size: 12px; color: var(--text-1);
+  transition: background 0.1s;
+}
+.combo-item:hover { background: var(--surface-3); }
+
+/* ── Animations ──────────────────────────────────────── */
+.fade-in { animation: fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+.slide-up { animation: slideUp 0.2s ease; }
+@keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .drawer, .fade-in, .slide-up { animation: none !important; transition: none !important; }
+}
+
+/* ── Misc ────────────────────────────────────────────── */
+.section-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 8px; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-3); font-size: 12px; }
+.badge-count { display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:var(--indigo-lo);color:var(--indigo-hi);border-radius:9px;font-size:10px;font-weight:600; }
+
+/* ── Bar chart (pure CSS) ────────────────────────────── */
+.bar-track { background: var(--surface-2); border-radius: 3px; height: 6px; flex: 1; overflow: hidden; }
+.bar-fill  { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+
+/* ── Themes ──────────────────────────────────────────── */
+[data-theme="midnight"] {
+  --bg:#020817; --surface-1:#0c1228; --surface-2:#111d3a; --surface-3:#1a2850;
+  --border:#1e3055; --border-hi:#2a4580;
+  --text-1:#dbe8ff; --text-2:#8aabcc; --text-3:#3a5a7a;
+  --indigo:#4f46e5; --indigo-hi:#818cf8; --indigo-lo:#1a1c50;
+}
+[data-theme="slate"] {
+  --bg:#0a0e14; --surface-1:#111620; --surface-2:#171e2c; --surface-3:#1e2739;
+  --border:#253041; --border-hi:#344257;
+  --text-1:#ccd6e0; --text-2:#7e94a8; --text-3:#3d5165;
+  --indigo:#7c86dd; --indigo-hi:#9daae8; --indigo-lo:#1a2035;
+}
+[data-theme="forest"] {
+  --bg:#080d09; --surface-1:#0d1710; --surface-2:#111e14; --surface-3:#17281a;
+  --border:#1e3024; --border-hi:#264533;
+  --text-1:#d4eddd; --text-2:#7aad8a; --text-3:#3a5e46;
+  --indigo:#34a853; --indigo-hi:#4cbe6a; --indigo-lo:#0d2e16;
+}
+[data-theme="contrast"] {
+  --bg:#000000; --surface-1:#0a0a0a; --surface-2:#111111; --surface-3:#1a1a1a;
+  --border:#2a2a2a; --border-hi:#404040;
+  --text-1:#ffffff; --text-2:#c0c0c0; --text-3:#606060;
+  --indigo:#7070ff; --indigo-hi:#9090ff; --indigo-lo:#1a1a3a;
+}
+
+/* ── Diff display ────────────────────────────────────── */
+.diff-row { display:flex; gap:8px; align-items:flex-start; flex-wrap:wrap; margin-top:4px; }
+.diff-field { font-size:10px; color:var(--text-3); font-weight:600; text-transform:uppercase; min-width:60px; flex-shrink:0; }
+.diff-from { font-size:11px; color:var(--danger); text-decoration:line-through; }
+.diff-to   { font-size:11px; color:var(--success); }
+.diff-added   { font-size:11px; color:var(--success); }
+.diff-removed { font-size:11px; color:var(--danger); }
+
+/* ── Settings tabs ───────────────────────────────────── */
+.stab { padding:6px 14px; border-radius:4px; font-size:11px; font-weight:500; border:none; cursor:pointer; font-family:'Fira Code',monospace; transition:all .15s; background:transparent; color:var(--text-3); }
+.stab.active { background:var(--surface-2); color:var(--text-1); }
+.stab:hover:not(.active) { color:var(--text-2); }
+
+/* ── Role pill ───────────────────────────────────────── */
+.role-admin { background:var(--indigo-lo); color:var(--indigo-hi); }
+.role-user  { background:rgba(16,185,129,0.12); color:#6ee7b7; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ LOGIN ══════════════ -->
+<div id="login-screen" style="min-height:100vh;display:flex;align-items:center;justify-content:center;">
+  <div class="card fade-in" style="width:360px;padding:36px;">
+    <div style="text-align:center;margin-bottom:28px;">
+      <div style="width:48px;height:48px;background:var(--indigo-lo);border:1px solid var(--indigo);border-radius:10px;display:flex;align-items:center;justify-content:center;margin:0 auto 16px;">
+        <svg width="24" height="24" fill="none" stroke="var(--indigo-hi)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+      </div>
+      <div style="font-size:18px;font-weight:600;color:var(--text-1);">Aegis</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:4px;letter-spacing:0.05em;text-transform:uppercase;">Admin Console</div>
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;letter-spacing:0.04em;text-transform:uppercase;">Username</label>
+      <input type="text" id="login-user" placeholder="Username" onkeydown="if(event.key==='Enter')doLogin()" style="height:38px;" autocomplete="username">
+    </div>
+    <div style="margin-bottom:12px;">
+      <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;letter-spacing:0.04em;text-transform:uppercase;">Password</label>
+      <input type="password" id="login-pw" placeholder="Password" onkeydown="if(event.key==='Enter')doLogin()" style="height:38px;" autocomplete="current-password">
+    </div>
+    <div id="login-err" style="display:none;font-size:11px;color:var(--danger);text-align:center;margin-bottom:10px;padding:8px;background:var(--danger-lo);border-radius:4px;border:1px solid rgba(239,68,68,0.3);"></div>
+    <button class="btn btn-primary" id="login-btn" onclick="doLogin()" style="width:100%;justify-content:center;height:38px;">Sign In</button>
+  </div>
+</div>
+
+<!-- ══════════════ APP ══════════════ -->
+<div id="app" style="display:none;height:100vh;flex-direction:column;">
+  <!-- Top bar -->
+  <header style="height:48px;background:var(--surface-1);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;gap:12px;flex-shrink:0;position:relative;z-index:20;">
+    <div style="display:flex;align-items:center;gap:8px;width:56px;flex-shrink:0;">
+      <div style="width:28px;height:28px;background:var(--indigo-lo);border:1px solid rgba(99,102,241,0.4);border-radius:6px;display:flex;align-items:center;justify-content:center;">
+        <svg width="14" height="14" fill="none" stroke="var(--indigo-hi)" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"/></svg>
+      </div>
+    </div>
+    <div style="position:relative;flex:1;max-width:420px;">
+      <svg style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;" width="13" height="13" fill="none" stroke="var(--text-3)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+      <input type="text" id="gsearch" placeholder="Search objects, registries, teams…" style="padding-left:30px;height:30px;font-size:11px;background:var(--surface-2);" oninput="gsearch(this.value)" onfocus="gsearch(this.value)">
+      <div id="gsearch-results" class="combo-list" style="display:none;"></div>
+    </div>
+    <div style="flex:1;"></div>
+    <div style="display:flex;align-items:center;gap:8px;">
+      <div id="header-role" style="font-size:10px;padding:2px 7px;border-radius:3px;background:var(--indigo-lo);color:var(--indigo-hi);font-weight:600;letter-spacing:0.04em;text-transform:uppercase;"></div>
+      <div id="header-user" style="font-size:11px;color:var(--text-2);"></div>
+      <button class="btn btn-ghost btn-sm" onclick="signOut()">Sign out</button>
+    </div>
+  </header>
+
+  <div style="display:flex;flex:1;overflow:hidden;">
+    <!-- Sidebar -->
+    <nav style="width:56px;background:var(--surface-1);border-right:1px solid var(--border);display:flex;flex-direction:column;align-items:center;padding:8px 0;flex-shrink:0;z-index:20;">
+      <button class="nav-item" id="nav-my-team" onclick="setView('my-team')" title="My Team" style="display:none;">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M17.982 18.725A7.488 7.488 0 0012 15.75a7.488 7.488 0 00-5.982 2.975m11.963 0a9 9 0 10-11.963 0m11.963 0A8.966 8.966 0 0112 21a8.966 8.966 0 01-5.982-2.275M15 9.75a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="nav-label">My Team</span>
+      </button>
+      <button class="nav-item" id="nav-dashboard"  onclick="setView('dashboard')"  title="Dashboard">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z"/></svg>
+        <span class="nav-label">Dash</span>
+      </button>
+      <button class="nav-item" id="nav-objects"    onclick="setView('objects')"    title="Objects">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>
+        <span class="nav-label">Objects</span>
+      </button>
+      <button class="nav-item" id="nav-registries" onclick="setView('registries')" title="Registries">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"/></svg>
+        <span class="nav-label">Regs</span>
+      </button>
+      <button class="nav-item" id="nav-teams"      onclick="setView('teams')"      title="Teams">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>
+        <span class="nav-label">Teams</span>
+      </button>
+      <button class="nav-item" id="nav-changelog"  onclick="setView('changelog')"  title="Change Log">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
+        <span class="nav-label">Log</span>
+      </button>
+      <button class="nav-item" id="nav-audit"      onclick="setView('audit')"      title="Audit Log">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
+        <span class="nav-label">Audit</span>
+      </button>
+      <div style="flex:1;"></div>
+      <button class="nav-item" id="nav-settings" onclick="setView('settings')" title="Settings">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.325.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.241-.438.613-.43.992a7.723 7.723 0 010 .255c-.008.378.137.75.43.991l1.004.827c.424.35.534.955.26 1.43l-1.298 2.247a1.125 1.125 0 01-1.369.491l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.281c-.09.543-.56.94-1.11.94h-2.594c-.55 0-1.019-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.369-.49l-1.297-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.43-.991a6.932 6.932 0 010-.255c.007-.38-.138-.751-.43-.992l-1.004-.827a1.125 1.125 0 01-.26-1.43l1.297-2.247a1.125 1.125 0 011.37-.491l1.216.456c.356.133.751.072 1.076-.124.072-.044.146-.086.22-.128.332-.183.582-.495.644-.869l.214-1.28z"/><path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+        <span class="nav-label">Settings</span>
+      </button>
+    </nav>
+
+    <!-- Main -->
+    <main id="main" style="flex:1;overflow:auto;background:var(--bg);"></main>
+  </div>
+</div>
+
+<!-- Drawer backdrop -->
+<div id="backdrop" onclick="closeDrawer()" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:30;backdrop-filter:blur(2px);"></div>
+<!-- Drawer panel -->
+<div id="drawer" class="drawer" style="position:fixed;top:0;right:0;height:100%;width:440px;background:var(--surface-1);border-left:1px solid var(--border);z-index:40;display:flex;flex-direction:column;box-shadow:-8px 0 32px rgba(0,0,0,0.5);">
+  <div id="drawer-body" style="flex:1;overflow-y:auto;"></div>
+</div>
+
+<!-- Modal overlay -->
+<div id="modal-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.7);z-index:50;display:none;align-items:center;justify-content:center;padding:16px;">
+  <div id="modal-box" class="card slide-up" style="width:100%;max-width:440px;padding:24px;"></div>
+</div>
+
+<!-- Toasts -->
+<div id="toasts" style="position:fixed;top:56px;right:16px;z-index:60;display:flex;flex-direction:column;gap:8px;width:280px;pointer-events:none;"></div>
+
+<script>
+// ═══════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════
+const S = {
+  session: null,   // { token, username, role, team_id, theme }
+  view: 'dashboard',
+  objects: [], registries: [], teams: [], users: [], settings: {},
+  audit:     { rows: [], total: 0, page: 1 },
+  changelog: { rows: [], total: 0, page: 1 },
+  filter: {
+    obj:       { q: '', vendor: 'all' },
+    audit:     { outcome: '', change_number: '', registry_id: '' },
+    changelog: { entity_type: '', action: '' },
+  },
+  page: { obj: 1, reg: 1, team: 1 },
+  settingsTab: 'general',
+};
+const PG = 50;
+
+const THEMES = ['default','midnight','slate','forest','contrast'];
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme === 'default' ? '' : theme);
+}
+
+// ═══════════════════════════════════════════════
+// Auth
+// ═══════════════════════════════════════════════
+async function doLogin() {
+  const username = g('login-user').value.trim();
+  const pw = g('login-pw').value;
+  if (!username || !pw) return;
+  const btn = g('login-btn'), err = g('login-err');
+  setBtn(btn, true, 'Signing in…');
+  err.style.display = 'none';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username, password: pw}),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) { showErr(err, 'Invalid credentials'); return; }
+    if (!r.ok)            { showErr(err, d.detail || 'Server error'); return; }
+    _initSession(d);
+    sessionStorage.setItem('aegis_session', JSON.stringify(d));
+    g('login-screen').style.display = 'none';
+    g('app').style.display = 'flex';
+    applyTheme(d.theme || 'default');
+    await loadAll();
+    setView(S.session.role === 'admin' ? 'dashboard' : 'my-team');
+  } finally { setBtn(btn, false, 'Sign In'); }
+}
+
+function _initSession(d) {
+  S.session = d;
+  g('header-user').textContent = d.username;
+  g('header-role').textContent = d.role;
+  g('header-role').className = `role-${d.role}`;
+  // Show/hide admin-only nav items
+  const adminOnly = ['nav-objects','nav-registries','nav-teams','nav-changelog','nav-audit'];
+  adminOnly.forEach(id => {
+    const el = g(id);
+    if (el) el.style.display = d.role === 'admin' ? '' : 'none';
+  });
+  const dashNav = g('nav-dashboard');
+  if (dashNav) dashNav.style.display = d.role === 'admin' ? '' : 'none';
+  const myTeamNav = g('nav-my-team');
+  if (myTeamNav) myTeamNav.style.display = d.role === 'user' ? '' : 'none';
+}
+
+function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+
+async function signOut() {
+  if (S.session?.token) {
+    await fetch('/api/logout', {method:'POST', headers:{'Authorization':'Bearer '+S.session.token}}).catch(()=>{});
+  }
+  sessionStorage.removeItem('aegis_session');
+  location.reload();
+}
+
+function ah() {
+  return S.session?.token ? {'Authorization': 'Bearer ' + S.session.token} : {};
+}
+
+async function api(method, path, body) {
+  const o = { method, headers: { ...ah(), 'Content-Type': 'application/json' } };
+  if (body !== undefined) o.body = JSON.stringify(body);
+  const r = await fetch(path, o);
+  if (r.status === 204) return null;
+  if (r.status === 401) { sessionStorage.removeItem('aegis_session'); location.reload(); return; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return d;
+}
+
+// ═══════════════════════════════════════════════
+// Data loading
+// ═══════════════════════════════════════════════
+async function loadAll() {
+  if (S.session?.role === 'admin') {
+    await Promise.all([loadObjs(), loadRegs(), loadTeams()]);
+  }
+}
+async function loadObjs()     { S.objects    = await api('GET','/admin/api/objects');    }
+async function loadRegs()     { S.registries = await api('GET','/admin/api/registries'); }
+async function loadTeams()    { S.teams      = await api('GET','/admin/api/teams');      }
+async function loadUsers()    { S.users      = await api('GET','/admin/api/users');      }
+async function loadSettings() { S.settings   = await api('GET','/admin/api/settings');   }
+async function loadAudit() {
+  const f = S.filter.audit;
+  const p = new URLSearchParams({page:S.audit.page,limit:PG});
+  if(f.outcome)       p.set('outcome',f.outcome);
+  if(f.change_number) p.set('change_number',f.change_number);
+  if(f.registry_id)   p.set('registry_id',f.registry_id);
+  const d = await api('GET','/admin/api/audit?'+p);
+  S.audit = {rows:d.rows, total:d.total, page:d.page};
+}
+async function loadChangelog() {
+  const f = S.filter.changelog;
+  const p = new URLSearchParams({page:S.changelog.page,limit:PG});
+  if(f.entity_type) p.set('entity_type',f.entity_type);
+  if(f.action)      p.set('action',f.action);
+  const d = await api('GET','/admin/api/changelog?'+p);
+  S.changelog = {rows:d.rows, total:d.total, page:d.page};
+}
+
+// ═══════════════════════════════════════════════
+// Navigation
+// ═══════════════════════════════════════════════
+function setView(v) {
+  S.view = v;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const n = document.getElementById('nav-'+v); if(n) n.classList.add('active');
+  closeDrawer();
+  if      (v==='audit')     loadAudit().then(renderAudit);
+  else if (v==='changelog') loadChangelog().then(renderChangelog);
+  else if (v==='settings')  loadSettings().then(()=>loadUsers()).then(renderSettings);
+  else if (v==='my-team')   renderMyTeam();
+  else render();
+}
+function render() {
+  ({dashboard:renderDash, objects:renderObjs, registries:renderRegs, teams:renderTeams}[S.view]||renderDash)();
+}
+
+// ═══════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════
+function g(id) { return document.getElementById(id); }
+function set(id, html) { const el=g(id); if(el) el.innerHTML=html; }
+function x(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;'); }
+function setBtn(b, dis, txt) { if(!b)return; b.disabled=dis; b.textContent=txt; }
+function vp(v) {
+  const cls = {cyberark:'pill-cyberark',vault:'pill-vault',aws:'pill-aws',conjur:'pill-conjur'}[v]||'';
+  return `<span class="pill ${cls}">${x(v)}</span>`;
+}
+function apill(a) {
+  const cls = `pill-${(a||'').replace(/[^a-z_]/g,'')}`;
+  const labels = {created:'Created',updated:'Updated',deleted:'Deleted',key_rotated:'Key Rotated',object_added:'Obj Added',object_removed:'Obj Removed',registry_assigned:'Reg Assigned',registry_unassigned:'Reg Removed'};
+  return `<span class="pill ${cls}">${x(labels[a]||a)}</span>`;
+}
+function epill(t) {
+  const colors = {object:'color:#a5b4fc',registry:'color:#7dd3fc',team:'color:#6ee7b7'};
+  return `<span style="font-size:10px;${colors[t]||'color:var(--text-2)'};font-weight:600;text-transform:uppercase;">${x(t)}</span>`;
+}
+const OC = {success:'color:#10b981',denied:'color:#f59e0b',error:'color:#ef4444'};
+
+function renderDiff(diff) {
+  if (!diff || !Object.keys(diff).length) return '';
+  return '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">' +
+    Object.entries(diff).map(([field, change]) => {
+      let inner = '';
+      if ('added'   in change) inner = `<span class="diff-added">+ ${x(change.added)}</span>`;
+      else if ('removed' in change) inner = `<span class="diff-removed">− ${x(change.removed)}</span>`;
+      else if ('from' in change && 'to' in change)
+        inner = `${change.from!=null?`<span class="diff-from">${x(String(change.from))}</span> `:''}<span class="diff-to">${x(String(change.to??''))}</span>`;
+      else if ('to' in change)  inner = `<span class="diff-to">${x(String(change.to??''))}</span>`;
+      else if ('from' in change) inner = `<span class="diff-from">${x(String(change.from??''))}</span>`;
+      return `<div class="diff-row"><span class="diff-field">${x(field)}</span>${inner}</div>`;
+    }).join('') + '</div>';
+}
+function pager(total, page, fn, perPage=PG) {
+  const pages = Math.ceil(total/perPage); if(pages<=1) return '';
+  const nums = Array.from({length:pages},(_,i)=>i+1).map(i =>
+    `<button onclick="(${fn})(${i})" style="padding:3px 9px;border-radius:4px;font-size:11px;border:1px solid ${i===page?'var(--indigo)':'var(--border)'};background:${i===page?'var(--indigo-lo)':'transparent'};color:${i===page?'var(--indigo-hi)':'var(--text-3)'};cursor:pointer;font-family:monospace;">${i}</button>`).join('');
+  return `<div style="display:flex;align-items:center;gap:6px;margin-top:16px;"><span style="font-size:11px;color:var(--text-3);">${total} total</span>${nums}</div>`;
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDash() {
+  const vendors = ['cyberark','vault','aws','conjur'];
+  const total = S.objects.length;
+  const vendorCounts = vendors.map(v=>({v, n:S.objects.filter(o=>o.vendor===v).length}));
+  const maxVC = Math.max(...vendorCounts.map(x=>x.n), 1);
+  const orphans = S.objects.filter(o=>o.registry_count===0).length;
+  const barColors = {cyberark:'#6366f1',vault:'#f97316',aws:'#f59e0b',conjur:'#10b981'};
+
+  set('main', `<div style="padding:24px;max-width:1200px;">
+    <div style="margin-bottom:24px;">
+      <div style="font-size:18px;font-weight:600;color:var(--text-1);">Dashboard</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Aegis overview</div>
+    </div>
+
+    <!-- Stat cards -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px;">
+      ${statCard('Objects',   total,      'indigo', iconDb(),      'Total secret objects')}
+      ${statCard('Registries',S.registries.length,'blue', iconLayers(),  'Named collections')}
+      ${statCard('Teams',     S.teams.length,'emerald', iconUsers(),  'Consumer teams')}
+      ${statCard('Orphans',   orphans,    'amber',  iconWarn(),    'Objects in no registry', orphans>0)}
+      ${statCard('Vendors',   vendors.filter(v=>S.objects.some(o=>o.vendor===v)).length, 'red', iconShield(), 'Active vault integrations')}
+    </div>
+
+    <!-- Row 2: vendor breakdown + recent changes -->
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-bottom:12px;">
+
+      <!-- Vendor breakdown -->
+      <div class="card" style="padding:20px;">
+        <div class="section-label" style="margin-bottom:16px;">Objects by Vendor</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          ${vendorCounts.map(({v,n})=>`
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                ${vp(v)}
+                <span style="font-size:12px;color:var(--text-2);font-weight:600;">${n}</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:${total?Math.round(n/maxVC*100):0}%;background:${barColors[v]};"></div></div>
+            </div>`).join('')}
+        </div>
+        ${total===0?`<div style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-3);">No objects yet</div>`:''}
+      </div>
+
+      <!-- Recent changes -->
+      <div class="card" style="padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="section-label">Recent Changes</div>
+          <button class="btn btn-ghost btn-sm" onclick="setView('changelog')">View all →</button>
+        </div>
+        <div id="dash-changelog" style="font-size:12px;color:var(--text-3);">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Row 3: recent audit -->
+    <div class="card" style="padding:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+        <div class="section-label">Recent Access Events</div>
+        <button class="btn btn-ghost btn-sm" onclick="setView('audit')">View all →</button>
+      </div>
+      <div id="dash-audit" style="font-size:12px;color:var(--text-3);">Loading…</div>
+    </div>
+  </div>`);
+
+  // Load recent data
+  api('GET','/admin/api/changelog?page=1&limit=8').then(d=>{
+    set('dash-changelog', d.rows.length ? `<div style="display:flex;flex-direction:column;gap:2px;">` +
+      d.rows.map(r=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          ${apill(r.action)}
+          ${epill(r.entity_type)}
+          <span style="color:var(--text-1);font-weight:500;">${x(r.entity_name)}</span>
+          ${r.detail?`<span style="color:var(--text-3);font-size:11px;">${x(r.detail)}</span>`:''}
+          <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+        </div>`).join('') + `</div>`
+      : `<div class="empty-state">No changes recorded yet</div>`);
+  }).catch(()=>set('dash-changelog','<div class="empty-state">Failed to load</div>'));
+
+  api('GET','/admin/api/audit?page=1&limit=6').then(d=>{
+    set('dash-audit', d.rows.length ? `
+      <table class="data-table">
+        <thead><tr><th>Time</th><th>Event</th><th>Outcome</th><th>Change #</th><th>Team</th><th>Registry</th><th>IP</th></tr></thead>
+        <tbody>${d.rows.map(r=>`<tr style="cursor:default;">
+          <td style="color:var(--text-3);font-size:11px;white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</td>
+          <td>${x(r.event)}</td>
+          <td style="${OC[r.outcome]||''};font-weight:600;">${x(r.outcome)}</td>
+          <td>${x(r.change_number||'—')}</td>
+          <td style="color:#6ee7b7;font-size:11px;">${x(r.team_name||'—')}</td>
+          <td>${x(r.registry_name||'—')}</td>
+          <td style="color:var(--text-3);">${x(r.source_ip||'—')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`
+      : `<div class="empty-state">No access events yet</div>`);
+  }).catch(()=>set('dash-audit','<div class="empty-state">Failed to load</div>'));
+}
+
+function statCard(label, value, accent, icon, sub, warn=false) {
+  return `<div class="stat-card accent-${accent}" style="cursor:default;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+      <div style="opacity:0.7;">${icon}</div>
+      ${warn&&value>0?`<div style="width:6px;height:6px;background:var(--warning);border-radius:50%;margin-top:2px;box-shadow:0 0 6px var(--warning);"></div>`:''}
+    </div>
+    <div style="font-size:28px;font-weight:700;color:var(--text-1);line-height:1;margin-bottom:4px;">${value}</div>
+    <div style="font-size:12px;font-weight:600;color:var(--text-1);">${x(label)}</div>
+    <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${x(sub)}</div>
+  </div>`;
+}
+function iconDb()     { return `<svg width="20" height="20" fill="none" stroke="var(--indigo-hi)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>`; }
+function iconLayers() { return `<svg width="20" height="20" fill="none" stroke="#3b82f6" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"/></svg>`; }
+function iconUsers()  { return `<svg width="20" height="20" fill="none" stroke="#10b981" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>`; }
+function iconWarn()   { return `<svg width="20" height="20" fill="none" stroke="#f59e0b" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>`; }
+function iconShield() { return `<svg width="20" height="20" fill="none" stroke="#ef4444" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>`; }
+
+// ═══════════════════════════════════════════════
+// OBJECTS
+// ═══════════════════════════════════════════════
+function renderObjs() {
+  const f = S.filter.obj;
+  let rows = S.objects.filter(o => {
+    const q = f.q.toLowerCase();
+    return (!q||o.name.toLowerCase().includes(q)||(o.path||'').toLowerCase().includes(q)||(o.auth_ref||'').toLowerCase().includes(q))
+      && (f.vendor==='all'||o.vendor===f.vendor);
+  });
+  const total = rows.length;
+  rows = rows.slice((S.page.obj-1)*PG, S.page.obj*PG);
+  const vendors = ['all','cyberark','vault','aws','conjur'];
+
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Objects <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.objects.length})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Atomic secret definitions — vendor, auth, and location</div>
+      </div>
+      <button class="btn btn-primary" onclick="showNewObjModal()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Object
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div style="position:relative;">
+        <svg style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;" width="12" height="12" fill="none" stroke="var(--text-3)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" placeholder="Search…" style="padding-left:28px;width:220px;height:32px;" value="${x(f.q)}" oninput="S.filter.obj.q=this.value;S.page.obj=1;renderObjs()">
+      </div>
+      <div style="display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:3px;">
+        ${vendors.map(v=>`<button onclick="S.filter.obj.vendor='${v}';S.page.obj=1;renderObjs()" style="padding:4px 10px;border-radius:3px;font-size:11px;border:none;cursor:pointer;font-family:monospace;transition:all .15s;background:${f.vendor===v?'var(--indigo)':'transparent'};color:${f.vendor===v?'#fff':'var(--text-3)'};">${v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="overflow:hidden;">
+      <table class="data-table">
+        <thead><tr>
+          <th>Name</th><th>Vendor</th><th>Auth Ref</th><th>Path</th><th>Platform</th><th>Safe</th><th style="text-align:center;">In Registries</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(o=>`
+            <tr onclick="openObjDrawer('${x(o.name)}')">
+              <td class="td-primary" style="color:var(--indigo-hi);">${x(o.name)}</td>
+              <td>${vp(o.vendor)}</td>
+              <td style="color:var(--text-3);font-size:11px;">${x(o.auth_ref||'')}</td>
+              <td class="truncate" style="max-width:160px;font-size:11px;" title="${x(o.path)}">${x(o.path)}</td>
+              <td style="font-size:11px;">${x(o.platform||'—')}</td>
+              <td style="font-size:11px;">${x(o.safe||'—')}</td>
+              <td style="text-align:center;">
+                ${o.registry_count>0?`<span class="badge-count">${o.registry_count}</span>`:`<span style="color:var(--text-3);font-size:11px;">—</span>`}
+              </td>
+              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm ${o.registry_count>0?'':'btn-del'}" style="${o.registry_count>0?'opacity:0.3;pointer-events:none;':''}" onclick="delObj('${x(o.name)}')" title="${o.registry_count>0?'Used by registries':'Delete'}">Delete</button>
+              </td>
+            </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state">No objects found</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(total, S.page.obj, p=>{S.page.obj=p;renderObjs();})}
+  </div>`);
+}
+
+function openObjDrawer(name) {
+  const o = S.objects.find(o=>o.name===name); if(!o) return;
+  S.drawer = {type:'obj',name};
+  renderObjDrawer(o,false);
+  showDrawer();
+}
+
+function renderObjDrawer(o, editing) {
+  const usedBy = S.registries.filter(r=>r.objects?.includes(o.name));
+  if (!editing) {
+    set('drawer-body',`
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(o.name)}</div>
+          <div style="margin-top:4px;">${vp(o.vendor)}</div>
+        </div>
+        <button onclick="closeDrawer()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;" aria-label="Close">✕</button>
+      </div>
+      <div class="drawer-section">
+        <div class="section-label">Details</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${drow('Auth Ref', o.auth_ref)}
+          ${drow('Path', o.path)}
+          ${o.platform?drow('Platform',o.platform):''}
+          ${o.safe?drow('Safe',o.safe):''}
+          ${drow('Created', o.created_at?.slice(0,10)||'—')}
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="section-label">Used by Registries <span class="badge-count" style="margin-left:6px;">${usedBy.length}</span></div>
+        ${usedBy.length ? usedBy.map(r=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <div style="width:6px;height:6px;background:var(--indigo);border-radius:50%;flex-shrink:0;"></div>
+            <span style="font-size:12px;color:var(--text-1);">${x(r.name)}</span>
+          </div>`).join('')
+        : `<div style="font-size:12px;color:var(--text-3);padding:8px 0;">Not assigned to any registry</div>`}
+      </div>
+      <div class="drawer-section">
+        <div class="section-label" style="margin-bottom:12px;">Change History</div>
+        <div id="obj-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
+      </div>
+      <div class="drawer-section" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" onclick="renderObjDrawer(S.objects.find(o=>o.name==='${x(o.name)}'),true)">Edit</button>
+        <button class="btn btn-danger ${usedBy.length?'':'btn-active'}" style="${usedBy.length?'opacity:0.35;pointer-events:none;':''}" onclick="delObj('${x(o.name)}')" title="${usedBy.length?'Remove from registries first':'Delete object'}">Delete</button>
+      </div>`);
+    // load per-item history
+    api('GET',`/admin/api/changelog?entity_id=${encodeURIComponent(o.name)}&entity_type=object&limit=10`).then(d=>{
+      set('obj-history', d.rows.length ? d.rows.map(r=>`
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${apill(r.action)}
+            <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+          </div>
+          ${renderDiff(r.diff)}
+        </div>`).join('')
+        : `<div style="color:var(--text-3);">No history</div>`);
+    });
+  } else {
+    const isCa = o.vendor==='cyberark', showSafe=o.vendor==='cyberark'||o.vendor==='conjur';
+    set('drawer-body',`
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+        <div style="font-size:14px;font-weight:600;">Edit: ${x(o.name)}</div>
+        <button onclick="closeDrawer()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
+      </div>
+      <div class="drawer-section" style="display:flex;flex-direction:column;gap:14px;">
+        ${fi('Vendor','ed-v','select',o.vendor,['cyberark','vault','aws','conjur'],'updEditV()')}
+        ${fi('Auth Ref','ed-ar','text',o.auth_ref||'')}
+        ${fi('Path','ed-p','text',o.path)}
+        <div id="ed-plat" style="${isCa?'':'display:none'}">${fi('Platform','ed-pl','text',o.platform||'')}</div>
+        <div id="ed-safe" style="${showSafe?'':'display:none'}">${fi('Safe','ed-sf','text',o.safe||'')}</div>
+      </div>
+      <div class="drawer-section" style="display:flex;gap:8px;">
+        <button class="btn btn-primary" id="save-o" onclick="saveObj('${x(o.name)}')">Save Changes</button>
+        <button class="btn btn-ghost" onclick="openObjDrawer('${x(o.name)}')">Cancel</button>
+      </div>`);
+  }
+}
+function updEditV() {
+  const v = g('ed-v').value;
+  g('ed-plat').style.display = v==='cyberark'?'':'none';
+  g('ed-safe').style.display = (v==='cyberark'||v==='conjur')?'':'none';
+}
+async function saveObj(name) {
+  const btn=g('save-o'); setBtn(btn,true,'Saving…');
+  try {
+    await api('PUT',`/admin/api/objects/${encodeURIComponent(name)}`,{
+      vendor:g('ed-v').value, auth_ref:g('ed-ar').value.trim(),
+      path:g('ed-p').value.trim(),
+      platform:g('ed-pl')?.value.trim()||null,
+      safe:g('ed-sf')?.value.trim()||null,
+    });
+    await loadObjs(); toast('Object updated','success');
+    openObjDrawer(name); renderObjs();
+  } catch(e) { toast(e.message,'error'); setBtn(btn,false,'Save Changes'); }
+}
+async function delObj(name) {
+  if(!await confirm(`Delete object "${name}"?`)) return;
+  try { await api('DELETE',`/admin/api/objects/${encodeURIComponent(name)}`); await loadObjs(); closeDrawer(); renderObjs(); toast('Object deleted','success'); }
+  catch(e) { toast(e.message,'error'); }
+}
+function showNewObjModal() {
+  modal(`
+    <div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Object</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${fi('Name','nm-n','text','')}
+      ${fi('Vendor','nm-v','select','cyberark',['cyberark','vault','aws','conjur'],'updNewV()')}
+      ${fi('Auth Ref','nm-ar','text','')}
+      ${fi('Path','nm-p','text','')}
+      <div id="nm-plat">${fi('Platform','nm-pl','text','')}</div>
+      <div id="nm-safe">${fi('Safe','nm-sf','text','')}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-co" onclick="createObj()">Create Object</button>
+      <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
+    </div>`);
+  updNewV();
+}
+function updNewV() {
+  const v = g('nm-v')?.value;
+  if(g('nm-plat')) g('nm-plat').style.display = v==='cyberark'?'':'none';
+  if(g('nm-safe'))  g('nm-safe').style.display  = (v==='cyberark'||v==='conjur')?'':'none';
+}
+async function createObj() {
+  const btn=g('btn-co'); setBtn(btn,true,'Creating…');
+  try {
+    const name=g('nm-n').value.trim(); if(!name){toast('Name required','error');return;}
+    await api('POST','/admin/api/objects',{name,vendor:g('nm-v').value,auth_ref:g('nm-ar').value.trim(),path:g('nm-p').value.trim(),platform:g('nm-pl')?.value.trim()||null,safe:g('nm-sf')?.value.trim()||null});
+    await loadObjs(); hideModal(); renderObjs(); toast('Object created','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create Object');}
+}
+
+// ═══════════════════════════════════════════════
+// REGISTRIES
+// ═══════════════════════════════════════════════
+function renderRegs() {
+  const rows = S.registries.slice((S.page.reg-1)*PG,S.page.reg*PG);
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Registries <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.registries.length})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Named collections of objects — each holds an API key</div>
+      </div>
+      <button class="btn btn-primary" onclick="showNewRegModal()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Registry
+      </button>
+    </div>
+    <div class="card" style="overflow:hidden;">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Objects</th><th>Teams (each with own key)</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          ${rows.length?rows.map(r=>`
+            <tr onclick="openRegDrawer('${r.id}')">
+              <td class="td-primary" style="color:var(--indigo-hi);">${x(r.name)}</td>
+              <td><span class="badge-count">${r.objects?.length||0}</span></td>
+              <td><span ${r.team_count>0?`class="badge-count" style="background:rgba(16,185,129,0.15);color:#6ee7b7;"`:''}>${r.team_count||'—'}</span></td>
+              <td style="font-size:11px;color:var(--text-3);">${r.created_at?.slice(0,10)||'—'}</td>
+              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm" style="${r.team_count>0?'opacity:0.3;pointer-events:none;':''}" onclick="delReg('${r.id}','${x(r.name)}')" title="${r.team_count>0?'Assigned to teams':'Delete'}">Delete</button>
+              </td>
+            </tr>`).join(''):
+          `<tr><td colspan="6"><div class="empty-state">No registries yet — create one to get started</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.registries.length,S.page.reg,p=>{S.page.reg=p;renderRegs();})}
+  </div>`);
+}
+
+function openRegDrawer(id) {
+  const r=S.registries.find(r=>r.id===id); if(!r) return;
+  S.drawer={type:'reg',id};
+  renderRegDrawer(r); showDrawer();
+}
+
+function renderRegDrawer(r) {
+  const teams = S.teams.filter(t=>t.registries?.some(tr=>tr.id===r.id));
+  const objs  = (r.objects||[]).map(n=>S.objects.find(o=>o.name===n)).filter(Boolean);
+  const avail = S.objects.filter(o=>!(r.objects||[]).includes(o.name));
+  set('drawer-body',`
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(r.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Registry</div>
+      </div>
+      <button onclick="closeDrawer()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="section-label">API Keys</div>
+        <span style="font-size:10px;color:var(--text-3);">— one per team assignment</span>
+      </div>
+      ${teams.length ? teams.map(t=>{
+        const regEntry = t.registries?.find(tr=>tr.id===r.id);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;margin-bottom:4px;">
+          <div>
+            <div style="font-size:11px;color:var(--text-1);font-weight:500;">${x(t.name)}</div>
+            <div style="font-family:monospace;font-size:11px;color:var(--text-3);margin-top:2px;">${x(regEntry?.key_preview||'—')}</div>
+          </div>
+          <button class="btn btn-amber btn-sm" onclick="rotateAssignmentKey('${t.id}','${r.id}','${x(t.name)}')">Rotate</button>
+        </div>`;
+      }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:6px 0;">No teams assigned — keys are issued when a team is assigned</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Objects <span class="badge-count" style="margin-left:6px;">${objs.length}</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:200px;overflow-y:auto;">
+        ${objs.length?objs.map(o=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;">
+            <div style="display:flex;align-items:center;gap:8px;">${vp(o.vendor)}<span style="font-size:12px;color:var(--text-1);">${x(o.name)}</span></div>
+            <button onclick="remObjFromReg('${r.id}','${x(o.name)}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+          </div>`).join('')
+        :`<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No objects assigned</div>`}
+      </div>
+      ${avail.length?`<div style="position:relative;">
+        <input type="text" id="robj-q" placeholder="Add object…" style="height:32px;font-size:11px;" oninput="filterRegObjs(this.value,'${r.id}')" onfocus="filterRegObjs(this.value,'${r.id}')">
+        <div id="robj-list" class="combo-list" style="display:none;"></div>
+      </div>`:`<div style="font-size:11px;color:var(--text-3);">All objects assigned</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <div class="section-label">Used by Teams <span class="badge-count" style="margin-left:6px;">${teams.length}</span></div>
+      ${teams.length?teams.map(t=>`<div style="font-size:12px;color:var(--text-1);padding:6px 0;border-bottom:1px solid var(--border);">${x(t.name)}</div>`).join('')
+        :`<div style="font-size:12px;color:var(--text-3);padding:6px 0;">No teams assigned</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <div class="section-label" style="margin-bottom:12px;">Change History</div>
+      <div id="reg-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+
+    <div class="drawer-section" style="display:flex;gap:8px;">
+      <button class="btn btn-danger btn-sm" style="${r.team_count>0?'opacity:0.35;pointer-events:none;':''}" onclick="delReg('${r.id}','${x(r.name)}')" title="${r.team_count>0?'Remove from teams first':'Delete registry'}">Delete Registry</button>
+    </div>`);
+
+  api('GET',`/admin/api/changelog?entity_id=${r.id}&entity_type=registry&limit=10`).then(d=>{
+    set('reg-history', d.rows.length ? d.rows.map(r=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${apill(r.action)}
+          <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+        </div>
+        ${renderDiff(r.diff)}
+      </div>`).join('') : `<div>No history</div>`);
+  });
+}
+
+function filterRegObjs(q,regId) {
+  const r=S.registries.find(r=>r.id===regId);
+  const avail=S.objects.filter(o=>!(r?.objects||[]).includes(o.name));
+  const hits=q?avail.filter(o=>o.name.toLowerCase().includes(q.toLowerCase())):avail;
+  const list=g('robj-list'); if(!list) return;
+  if(!hits.length){list.style.display='none';return;}
+  list.style.display='block';
+  list.innerHTML=hits.slice(0,20).map(o=>`<div class="combo-item" onclick="addObjToReg('${regId}','${x(o.name)}')">${vp(o.vendor)}<span>${x(o.name)}</span></div>`).join('');
+}
+async function addObjToReg(regId,name) {
+  try { await api('POST',`/admin/api/registries/${regId}/objects`,{object_name:name}); await Promise.all([loadObjs(),loadRegs()]); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); toast(`Added ${name}`,'success'); }
+  catch(e){toast(e.message,'error');}
+}
+async function remObjFromReg(regId,name) {
+  try { await api('DELETE',`/admin/api/registries/${regId}/objects/${encodeURIComponent(name)}`); await Promise.all([loadObjs(),loadRegs()]); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); toast(`Removed ${name}`,'success'); }
+  catch(e){toast(e.message,'error');}
+}
+async function rotateKey(regId) {
+  if(!await confirm('Rotate key? The current key stops working immediately.')) return;
+  const btn=g(`rbtn-${regId}`); setBtn(btn,true,'Rotating…');
+  try { const d=await api('POST',`/admin/api/registries/${regId}/rotate-key`); await loadRegs(); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); showKeyModal(d.key); }
+  catch(e){toast(e.message,'error');setBtn(btn,false,'Rotate Key');}
+}
+async function delReg(id,name) {
+  if(!await confirm(`Delete registry "${name}"?`)) return;
+  try { await api('DELETE',`/admin/api/registries/${id}`); await loadRegs(); closeDrawer(); renderRegs(); toast('Registry deleted','success'); }
+  catch(e){toast(e.message,'error');}
+}
+function showNewRegModal() {
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Registry</div>
+    <div style="margin-bottom:20px;">${fi('Name','nr-n','text','')}</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="btn-cr" onclick="createReg()">Create Registry</button>
+      <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
+    </div>`);
+}
+async function createReg() {
+  const btn=g('btn-cr');setBtn(btn,true,'Creating…');
+  try { const name=g('nr-n').value.trim(); if(!name){toast('Name required','error');return;} const d=await api('POST','/admin/api/registries',{name}); await loadRegs(); hideModal(); renderRegs(); showKeyModal(d.key); }
+  catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create Registry');}
+}
+
+// ═══════════════════════════════════════════════
+// TEAMS
+// ═══════════════════════════════════════════════
+function renderTeams() {
+  const rows=S.teams.slice((S.page.team-1)*PG,S.page.team*PG);
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Teams <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.teams.length})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Consumer teams — assigned to registries</div>
+      </div>
+      <button class="btn btn-primary" onclick="showNewTeamModal()">
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Team
+      </button>
+    </div>
+    <div class="card" style="overflow:hidden;">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Registries</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          ${rows.length?rows.map(t=>`
+            <tr onclick="openTeamDrawer('${t.id}')">
+              <td class="td-primary" style="color:var(--indigo-hi);">${x(t.name)}</td>
+              <td>${(t.registries||[]).length?
+                (t.registries||[]).map(r=>`<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;background:var(--indigo-lo);color:var(--indigo-hi);border:1px solid rgba(99,102,241,0.3);margin-right:4px;">${x(r.name)}</span>`).join('')
+                :`<span style="font-size:11px;color:var(--text-3);">—</span>`}
+              </td>
+              <td style="font-size:11px;color:var(--text-3);">${t.created_at?.slice(0,10)||'—'}</td>
+              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm" onclick="delTeam('${t.id}','${x(t.name)}')">Delete</button>
+              </td>
+            </tr>`).join(''):
+          `<tr><td colspan="4"><div class="empty-state">No teams yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.teams.length,S.page.team,p=>{S.page.team=p;renderTeams();})}
+  </div>`);
+}
+
+function openTeamDrawer(id) {
+  const t=S.teams.find(t=>t.id===id); if(!t) return;
+  S.drawer={type:'team',id};
+  renderTeamDrawer(t); showDrawer();
+}
+
+function renderTeamDrawer(t) {
+  const assigned=t.registries||[];
+  const avail=S.registries.filter(r=>!assigned.some(a=>a.id===r.id));
+  set('drawer-body',`
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(t.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Team</div>
+      </div>
+      <button onclick="closeDrawer()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div class="drawer-section">
+      <div class="section-label">Assigned Registries <span class="badge-count" style="margin-left:6px;">${assigned.length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;">
+        ${assigned.length?assigned.map(r=>`
+          <div style="padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:12px;color:var(--text-1);font-weight:500;">${x(r.name)}</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                <button class="btn btn-amber btn-sm" onclick="rotateAssignmentKey('${t.id}','${r.id}','${x(r.name)}')">Rotate Key</button>
+                <button onclick="remRegFromTeam('${t.id}','${r.id}','${x(r.name)}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;">
+              <svg width="11" height="11" fill="none" stroke="var(--text-3)" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg>
+              <span style="font-size:11px;font-family:monospace;color:var(--text-3);">${x(r.key_preview||'—')}</span>
+              <span style="font-size:10px;color:var(--text-3);">&nbsp;· ${(r.objects||[]).length} objects</span>
+            </div>
+          </div>`).join(''):`<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No registries assigned</div>`}
+      </div>
+      ${avail.length?`<div style="display:flex;gap:8px;align-items:center;">
+        <select id="t-reg-sel" style="height:32px;font-size:11px;flex:1;"><option value="">Select registry…</option>${avail.map(r=>`<option value="${r.id}">${x(r.name)}</option>`).join('')}</select>
+        <button class="btn btn-primary btn-sm" id="btn-asgn" onclick="asgnReg('${t.id}')">Assign</button>
+      </div>`:`<div style="font-size:11px;color:var(--text-3);">All registries assigned</div>`}
+    </div>
+    <div class="drawer-section">
+      <div class="section-label" style="margin-bottom:12px;">Change History</div>
+      <div id="team-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+    <div class="drawer-section">
+      <button class="btn btn-danger btn-sm" onclick="delTeam('${t.id}','${x(t.name)}')">Delete Team</button>
+    </div>`);
+
+  api('GET',`/admin/api/changelog?entity_id=${t.id}&entity_type=team&limit=10`).then(d=>{
+    set('team-history', d.rows.length ? d.rows.map(r=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${apill(r.action)}
+          <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+        </div>
+        ${renderDiff(r.diff)}
+      </div>`).join('') : `<div>No history</div>`);
+  });
+}
+
+async function asgnReg(teamId) {
+  const regId=g('t-reg-sel')?.value; if(!regId) return;
+  const btn=g('btn-asgn'); setBtn(btn,true,'…');
+  try {
+    const d = await api('POST',`/admin/api/teams/${teamId}/registries/${regId}`);
+    await loadTeams();
+    const t=S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t);
+    renderTeams();
+    if(d.new_key) showKeyModal(d.new_key.key, d.new_key.registry_name);
+    else toast('Registry assigned','success');
+  } catch(e){toast(e.message,'error');setBtn(btn,false,'Assign');}
+}
+async function rotateAssignmentKey(teamId, regId, regName) {
+  if(!await confirm(`Rotate key for "${regName}"? The current key stops working immediately.`)) return;
+  try {
+    const d = await api('POST',`/admin/api/teams/${teamId}/registries/${regId}/rotate-key`);
+    await loadTeams();
+    const t=S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t);
+    // Also refresh registry drawer if open
+    const r=S.registries.find(r=>r.id===regId); if(r&&S.drawer?.type==='reg') renderRegDrawer(r);
+    showKeyModal(d.key, regName);
+  } catch(e){toast(e.message,'error');}
+}
+async function remRegFromTeam(teamId,regId,regName) {
+  if(!await confirm(`Remove "${regName}" from this team?`)) return;
+  try { await api('DELETE',`/admin/api/teams/${teamId}/registries/${regId}`); await loadTeams(); const t=S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t); renderTeams(); toast('Removed','success'); }
+  catch(e){toast(e.message,'error');}
+}
+async function delTeam(id,name) {
+  if(!await confirm(`Delete team "${name}"?`)) return;
+  try { await api('DELETE',`/admin/api/teams/${id}`); await loadTeams(); closeDrawer(); renderTeams(); toast('Team deleted','success'); }
+  catch(e){toast(e.message,'error');}
+}
+function showNewTeamModal() {
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Team</div>
+    <div style="margin-bottom:20px;">${fi('Name','nt-n','text','')}</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="btn-ct" onclick="createTeam()">Create Team</button>
+      <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
+    </div>`);
+}
+async function createTeam() {
+  const btn=g('btn-ct');setBtn(btn,true,'Creating…');
+  try { const name=g('nt-n').value.trim(); if(!name){toast('Name required','error');return;} await api('POST','/admin/api/teams',{name}); await loadTeams(); hideModal(); renderTeams(); toast('Team created','success'); }
+  catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create Team');}
+}
+
+// ═══════════════════════════════════════════════
+// CHANGE LOG
+// ═══════════════════════════════════════════════
+function renderChangelog() {
+  const f=S.filter.changelog;
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Change Log <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.changelog.total})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Every admin mutation — global and per-item</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadChangelog().then(renderChangelog)">↻ Refresh</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;">
+      <select style="width:160px;height:32px;font-size:11px;" onchange="S.filter.changelog.entity_type=this.value;S.changelog.page=1;loadChangelog().then(renderChangelog)">
+        <option value="">All entities</option>
+        ${['object','registry','team'].map(v=>`<option value="${v}" ${f.entity_type===v?'selected':''}>${v[0].toUpperCase()+v.slice(1)}</option>`).join('')}
+      </select>
+      <select style="width:200px;height:32px;font-size:11px;" onchange="S.filter.changelog.action=this.value;S.changelog.page=1;loadChangelog().then(renderChangelog)">
+        <option value="">All actions</option>
+        ${['created','updated','deleted','key_rotated','object_added','object_removed','registry_assigned','registry_unassigned'].map(a=>`<option value="${a}" ${f.action===a?'selected':''}>${a}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="overflow:hidden;overflow-x:auto;">
+      <table class="data-table" style="min-width:700px;">
+        <thead><tr><th>Timestamp</th><th>Action</th><th>Entity Type</th><th>Name</th><th>Changes</th><th>By</th></tr></thead>
+        <tbody>
+          ${S.changelog.rows.length?S.changelog.rows.map(r=>`
+            <tr style="cursor:default;">
+              <td style="font-size:11px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,19).replace('T',' ')}</td>
+              <td>${apill(r.action)}</td>
+              <td>${epill(r.entity_type)}</td>
+              <td style="color:var(--text-1);font-weight:500;">${x(r.entity_name)}</td>
+              <td style="font-size:11px;">${renderDiff(r.diff)||`<span style="color:var(--text-3);">${x(r.detail||'')}</span>`}</td>
+              <td><span style="font-size:11px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span></td>
+            </tr>`).join(''):
+          `<tr><td colspan="6"><div class="empty-state">No changes recorded yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.changelog.total,S.changelog.page,p=>{S.changelog.page=p;loadChangelog().then(renderChangelog);})}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════════════
+function renderAudit() {
+  const f=S.filter.audit;
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Audit Log <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.audit.total})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">All developer /secrets endpoint access — with change number correlation</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadAudit().then(renderAudit)">↻ Refresh</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <select style="width:160px;height:32px;font-size:11px;" onchange="S.filter.audit.outcome=this.value;S.audit.page=1;loadAudit().then(renderAudit)">
+        <option value="">All outcomes</option>
+        ${['success','denied','error'].map(o=>`<option value="${o}" ${f.outcome===o?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="Change number…" style="width:180px;height:32px;font-size:11px;" value="${x(f.change_number)}" onchange="S.filter.audit.change_number=this.value;S.audit.page=1;loadAudit().then(renderAudit)">
+      <input type="text" placeholder="Registry ID…"   style="width:180px;height:32px;font-size:11px;" value="${x(f.registry_id)}"   onchange="S.filter.audit.registry_id=this.value;S.audit.page=1;loadAudit().then(renderAudit)">
+    </div>
+    <div class="card" style="overflow:hidden;overflow-x:auto;">
+      <table class="data-table" style="min-width:900px;">
+        <thead><tr><th>Timestamp</th><th>Event</th><th>Outcome</th><th>Change #</th><th>Team</th><th>Registry</th><th>Objects</th><th>IP</th><th>Error</th></tr></thead>
+        <tbody>
+          ${S.audit.rows.length?S.audit.rows.map(r=>{
+            const objs=r.objects||[];
+            const os=objs.length<=3?objs.join(', '):objs.slice(0,3).join(', ')+` +${objs.length-3}`;
+            return `<tr style="cursor:default;">
+              <td style="font-size:11px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,19).replace('T',' ')}</td>
+              <td style="font-size:11px;">${x(r.event)}</td>
+              <td style="font-weight:600;${OC[r.outcome]||''}">${x(r.outcome)}</td>
+              <td style="font-family:monospace;">${x(r.change_number||'—')}</td>
+              <td style="font-size:11px;color:#6ee7b7;">${x(r.team_name||'—')}</td>
+              <td>${x(r.registry_name||'—')}</td>
+              <td class="truncate" style="max-width:180px;font-size:11px;" title="${x(objs.join(', '))}">${x(os)||'—'}</td>
+              <td style="font-size:11px;color:var(--text-3);">${x(r.source_ip||'—')}</td>
+              <td class="truncate" style="max-width:140px;font-size:11px;color:var(--danger);" title="${x(r.error_detail||'')}">${x(r.error_detail||'')}</td>
+            </tr>`;}).join(''):
+          `<tr><td colspan="8"><div class="empty-state">No audit entries yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.audit.total,S.audit.page,p=>{S.audit.page=p;loadAudit().then(renderAudit);})}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// Global search
+// ═══════════════════════════════════════════════
+let _gst;
+function gsearch(q) {
+  clearTimeout(_gst);
+  _gst = setTimeout(()=>{
+    const box=g('gsearch-results');
+    if(!q.trim()){box.style.display='none';return;}
+    const lq=q.toLowerCase();
+    const oR=S.objects.filter(o=>o.name.toLowerCase().includes(lq)).slice(0,4).map(o=>
+      `<div class="combo-item" onclick="closeGsearch();setView('objects');setTimeout(()=>openObjDrawer('${x(o.name)}'),60)">${vp(o.vendor)}<span style="color:var(--text-3);font-size:10px;">obj</span><span>${x(o.name)}</span></div>`);
+    const rR=S.registries.filter(r=>r.name.toLowerCase().includes(lq)).slice(0,4).map(r=>
+      `<div class="combo-item" onclick="closeGsearch();setView('registries');setTimeout(()=>openRegDrawer('${r.id}'),60)"><span style="color:#7dd3fc;font-size:10px;">reg</span><span>${x(r.name)}</span></div>`);
+    const tR=S.teams.filter(t=>t.name.toLowerCase().includes(lq)).slice(0,4).map(t=>
+      `<div class="combo-item" onclick="closeGsearch();setView('teams');setTimeout(()=>openTeamDrawer('${t.id}'),60)"><span style="color:#6ee7b7;font-size:10px;">team</span><span>${x(t.name)}</span></div>`);
+    const all=[...oR,...rR,...tR];
+    if(!all.length){box.style.display='none';return;}
+    box.innerHTML=all.join(''); box.style.display='block';
+  },200);
+}
+function closeGsearch(){g('gsearch-results').style.display='none';g('gsearch').value='';}
+document.addEventListener('click',e=>{if(!e.target.closest('#gsearch')&&!e.target.closest('#gsearch-results'))g('gsearch-results').style.display='none';});
+
+// ═══════════════════════════════════════════════
+// Drawer / Modal
+// ═══════════════════════════════════════════════
+function showDrawer(){g('drawer').classList.add('drawer-open');g('backdrop').style.display='block';}
+function closeDrawer(){g('drawer').classList.remove('drawer-open');g('backdrop').style.display='none';S.drawer=null;}
+function modal(html){
+  const ov=g('modal-overlay');
+  g('modal-box').innerHTML=html;
+  ov.style.display='flex';
+}
+function hideModal(){g('modal-overlay').style.display='none';}
+function showKeyModal(key, context='') {
+  modal(`<div style="border:1px solid rgba(245,158,11,0.5);border-radius:8px;padding:20px;background:rgba(120,72,0,0.15);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <svg width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+      <div style="font-size:15px;font-weight:600;color:#f59e0b;">Save Your API Key${context?` — ${x(context)}`:''}</div>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:16px;">This key will <strong style="color:var(--text-1);">not</strong> be shown again. Copy it now and store it securely.</div>
+    <div style="background:var(--surface-2);border:1px solid var(--border-hi);border-radius:6px;padding:12px 14px;font-family:monospace;font-size:12px;color:var(--text-1);word-break:break-all;margin-bottom:10px;">${x(key)}</div>
+    <button class="btn btn-ghost btn-sm" onclick="clip('${x(key)}')" style="width:100%;justify-content:center;margin-bottom:16px;">Copy to clipboard</button>
+    <button class="btn btn-primary" onclick="hideModal()" style="width:100%;justify-content:center;">I've copied the key — Close</button>
+  </div>`);
+}
+function confirm(msg) {
+  return new Promise(res=>{
+    modal(`<div style="font-size:15px;font-weight:600;margin-bottom:10px;">Confirm Action</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:20px;line-height:1.6;">${x(msg)}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" onclick="hideModal();_cr(false)">Cancel</button>
+        <button class="btn btn-danger" onclick="hideModal();_cr(true)">Confirm</button>
+      </div>`);
+    window._cr=res;
+  });
+}
+
+// ═══════════════════════════════════════════════
+// Toasts
+// ═══════════════════════════════════════════════
+function toast(msg,type='success') {
+  const el=document.createElement('div');
+  const bg=type==='success'?'rgba(16,185,129,0.15)':type==='error'?'rgba(239,68,68,0.15)':'var(--surface-2)';
+  const border=type==='success'?'rgba(16,185,129,0.4)':type==='error'?'rgba(239,68,68,0.4)':'var(--border)';
+  const icon=type==='success'?'✓':type==='error'?'✕':'ℹ';
+  const ic=type==='success'?'#10b981':type==='error'?'#ef4444':'var(--text-2)';
+  el.style.cssText=`background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 14px;font-size:12px;color:var(--text-1);box-shadow:0 4px 16px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;pointer-events:auto;`;
+  el.className='fade-in';
+  el.innerHTML=`<span style="color:${ic};font-weight:700;">${icon}</span>${x(msg)}`;
+  g('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+// ═══════════════════════════════════════════════
+// Form helpers
+// ═══════════════════════════════════════════════
+function fi(label, id, type, val, opts, onchange='') {
+  const lbl=`<label for="${id}" style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;letter-spacing:0.04em;text-transform:uppercase;">${x(label)}</label>`;
+  if(type==='select') {
+    return `<div>${lbl}<select id="${id}" style="height:34px;" ${onchange?`onchange="${onchange}"`:''}>
+      ${(opts||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}
+    </select></div>`;
+  }
+  return `<div>${lbl}<input type="text" id="${id}" value="${x(val)}" style="height:34px;" ${onchange?`oninput="${onchange}"`:''} ${onchange?`onchange="${onchange}"`:''} autocomplete="off"></div>`;
+}
+function drow(label, val) {
+  return `<div style="display:flex;gap:12px;align-items:baseline;">
+    <span style="font-size:11px;color:var(--text-3);width:72px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em;">${x(label)}</span>
+    <span style="font-size:12px;color:var(--text-1);word-break:break-all;">${x(val||'—')}</span>
+  </div>`;
+}
+function clip(t){navigator.clipboard.writeText(t).then(()=>toast('Copied!','success')).catch(()=>toast('Copy failed','error'));}
+
+// ═══════════════════════════════════════════════
+// Settings view
+// ═══════════════════════════════════════════════
+function renderSettings() {
+  const t = S.settingsTab;
+  const tabs = [{k:'general',l:'General'},{k:'siem',l:'SIEM / Logging'},{k:'users',l:'Users'}];
+  set('main',`<div style="padding:24px;max-width:900px;">
+    <div style="margin-bottom:20px;">
+      <div style="font-size:18px;font-weight:600;color:var(--text-1);">Settings</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Runtime configuration — no restart required</div>
+    </div>
+    <div style="display:flex;gap:4px;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px;width:fit-content;margin-bottom:24px;">
+      ${tabs.map(({k,l})=>`<button class="stab ${t===k?'active':''}" onclick="S.settingsTab='${k}';renderSettings()">${l}</button>`).join('')}
+    </div>
+    <div id="settings-body"></div>
+  </div>`);
+  if(t==='general') renderSettingsGeneral();
+  else if(t==='siem') renderSettingsSiem();
+  else if(t==='users') renderSettingsUsers();
+}
+
+function renderSettingsGeneral() {
+  const s = S.settings;
+  const themeOptions = THEMES.map(th=>`<option value="${th}" ${(S.session?.theme||'default')===th?'selected':''}>${th[0].toUpperCase()+th.slice(1)}</option>`).join('');
+  set('settings-body',`
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card" style="padding:20px;">
+        <div class="section-label" style="margin-bottom:16px;">Access Control</div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <label style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;">Change Number Required</label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="s-cnr" ${s.change_number_required==='true'?'checked':''} style="width:auto;">
+                <span style="font-size:11px;color:var(--text-2);">Enforce X-Change-Number header on /secrets</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Rate Limit (req/min per key)</label>
+            <input type="number" id="s-rpm" value="${x(s.rate_limit_rpm||'60')}" style="height:34px;width:120px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Session TTL (hours)</label>
+            <input type="number" id="s-ttl" value="${x(s.session_ttl_hours||'8')}" style="height:34px;width:120px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Log Retention (days)</label>
+            <input type="number" id="s-ret" value="${x(s.log_retention_days||'90')}" style="height:34px;width:120px;">
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary btn-sm" onclick="saveGeneralSettings()">Save Changes</button>
+        </div>
+      </div>
+      <div class="card" style="padding:20px;">
+        <div class="section-label" style="margin-bottom:16px;">My Theme</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          ${THEMES.map(th=>`
+            <button onclick="previewTheme('${th}')" style="padding:8px 16px;border-radius:6px;font-size:12px;border:2px solid ${(S.session?.theme||'default')===th?'var(--indigo)':'var(--border)'};background:var(--surface-2);color:var(--text-1);cursor:pointer;font-family:monospace;transition:all .15s;">${th[0].toUpperCase()+th.slice(1)}</button>`
+          ).join('')}
+        </div>
+        <button class="btn btn-primary btn-sm" id="save-theme-btn" onclick="saveTheme()">Apply Theme</button>
+      </div>
+    </div>`);
+}
+
+let _previewTheme = null;
+function previewTheme(theme) {
+  _previewTheme = theme;
+  applyTheme(theme);
+  // update active border
+  document.querySelectorAll('[onclick^="previewTheme"]').forEach(btn => {
+    const t = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    btn.style.borderColor = t === theme ? 'var(--indigo)' : 'var(--border)';
+  });
+}
+async function saveTheme() {
+  const theme = _previewTheme || S.session?.theme || 'default';
+  const btn = g('save-theme-btn'); setBtn(btn,true,'Saving…');
+  try {
+    await api('PUT','/api/me/theme',{theme});
+    S.session.theme = theme;
+    sessionStorage.setItem('aegis_session', JSON.stringify(S.session));
+    applyTheme(theme);
+    toast(`Theme set to ${theme}`,'success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Apply Theme');}
+}
+async function saveGeneralSettings() {
+  const settings = {
+    change_number_required: g('s-cnr').checked ? 'true' : 'false',
+    rate_limit_rpm: g('s-rpm').value,
+    session_ttl_hours: g('s-ttl').value,
+    log_retention_days: g('s-ret').value,
+  };
+  try {
+    await api('PUT','/admin/api/settings',{settings});
+    S.settings = {...S.settings, ...settings};
+    toast('Settings saved','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+function renderSettingsSiem() {
+  const s = S.settings;
+  const dests = (s.siem_destinations||'stdout').split(',').map(d=>d.trim());
+  const destOptions = ['stdout','splunk','s3','datadog'];
+  set('settings-body',`
+    <div class="card" style="padding:20px;">
+      <div class="section-label" style="margin-bottom:16px;">Log Destinations</div>
+      <div style="display:flex;gap:12px;margin-bottom:20px;">
+        ${destOptions.map(d=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-2);">
+          <input type="checkbox" class="dest-cb" value="${d}" ${dests.includes(d)?'checked':''} style="width:auto;">
+          ${d[0].toUpperCase()+d.slice(1)}
+        </label>`).join('')}
+      </div>
+      <div class="section-label" style="margin-bottom:12px;">Splunk HEC</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+        <div>
+          <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">HEC URL</label>
+          <input type="text" id="s-splunk-url" value="${x(s.splunk_hec_url||'')}" placeholder="https://splunk:8088" style="height:34px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">HEC Token</label>
+          <input type="password" id="s-splunk-tok" value="${x(s.splunk_hec_token||'')}" placeholder="••••••••" style="height:34px;">
+        </div>
+      </div>
+      <div class="section-label" style="margin-bottom:12px;">S3</div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Bucket Name</label>
+        <input type="text" id="s-s3" value="${x(s.s3_log_bucket||'')}" placeholder="my-audit-logs" style="height:34px;">
+      </div>
+      <div class="section-label" style="margin-bottom:12px;">Datadog</div>
+      <div style="margin-bottom:20px;">
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">API Key</label>
+        <input type="password" id="s-dd" value="${x(s.dd_api_key||'')}" placeholder="••••••••" style="height:34px;">
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="saveSiemSettings()">Save Changes</button>
+    </div>`);
+}
+async function saveSiemSettings() {
+  const checked = [...document.querySelectorAll('.dest-cb:checked')].map(el=>el.value);
+  const settings = {
+    siem_destinations: checked.join(',') || 'stdout',
+    splunk_hec_url: g('s-splunk-url').value.trim(),
+    splunk_hec_token: g('s-splunk-tok').value.trim(),
+    s3_log_bucket: g('s-s3').value.trim(),
+    dd_api_key: g('s-dd').value.trim(),
+  };
+  try {
+    await api('PUT','/admin/api/settings',{settings});
+    S.settings = {...S.settings, ...settings};
+    toast('SIEM settings saved','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+function renderSettingsUsers() {
+  set('settings-body',`
+    <div class="card" style="overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div class="section-label">User Accounts <span class="badge-count" style="margin-left:6px;">${S.users.length}</span></div>
+        <button class="btn btn-primary btn-sm" onclick="showNewUserModal()">
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          New User
+        </button>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Team</th><th>Theme</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          ${S.users.length?S.users.map(u=>`
+            <tr style="cursor:default;">
+              <td class="td-primary">${x(u.username)}</td>
+              <td><span class="pill role-${u.role}">${x(u.role)}</span></td>
+              <td style="font-size:11px;color:var(--text-3);">${u.team_id?x(S.teams.find(t=>t.id===u.team_id)?.name||u.team_id):'—'}</td>
+              <td style="font-size:11px;color:var(--text-3);">${x(u.theme)}</td>
+              <td style="font-size:11px;color:var(--text-3);">${u.created_at?.slice(0,10)||'—'}</td>
+              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;display:flex;gap:6px;justify-content:flex-end;align-items:center;">
+                <button class="btn btn-ghost btn-sm" onclick="showEditUserModal('${u.id}')">Edit</button>
+                <button class="btn btn-danger btn-sm" style="${u.username==='admin'?'opacity:.3;pointer-events:none;':''}" onclick="deleteUser('${u.id}','${x(u.username)}')">Delete</button>
+              </td>
+            </tr>`).join(''):
+          `<tr><td colspan="6"><div class="empty-state">No users yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>`);
+}
+
+function showNewUserModal() {
+  const teamOpts = S.teams.map(t=>`<option value="${t.id}">${x(t.name)}</option>`).join('');
+  const themeOpts = THEMES.map(th=>`<option value="${th}">${th[0].toUpperCase()+th.slice(1)}</option>`).join('');
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">New User</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${fi('Username','nu-user','text','')}
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Password</label>
+        <input type="password" id="nu-pw" style="height:34px;" autocomplete="new-password">
+      </div>
+      ${fi('Role','nu-role','select','user',['admin','user'])}
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Team (user role)</label>
+        <select id="nu-team" style="height:34px;"><option value="">No team</option>${teamOpts}</select>
+      </div>
+      ${fi('Theme','nu-theme','select','default',THEMES)}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-cu" onclick="createUser()">Create User</button>
+      <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
+    </div>`);
+}
+async function createUser() {
+  const btn=g('btn-cu'); setBtn(btn,true,'Creating…');
+  try {
+    const username=g('nu-user').value.trim(); if(!username){toast('Username required','error');return;}
+    const password=g('nu-pw').value; if(!password){toast('Password required','error');return;}
+    await api('POST','/admin/api/users',{
+      username, password,
+      role: g('nu-role').value,
+      team_id: g('nu-team').value||null,
+      theme: g('nu-theme').value,
+    });
+    await loadUsers();
+    hideModal();
+    renderSettingsUsers();
+    toast('User created','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create User');}
+}
+function showEditUserModal(userId) {
+  const u = S.users.find(u=>u.id===userId); if(!u) return;
+  const teamOpts = S.teams.map(t=>`<option value="${t.id}" ${u.team_id===t.id?'selected':''}>${x(t.name)}</option>`).join('');
+  const themeOpts = THEMES.map(th=>`<option value="${th}" ${u.theme===th?'selected':''}>${th[0].toUpperCase()+th.slice(1)}</option>`).join('');
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">Edit: ${x(u.username)}</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${fi('Role','eu-role','select',u.role,['admin','user'])}
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Team</label>
+        <select id="eu-team" style="height:34px;"><option value="">No team</option>${teamOpts}</select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Theme</label>
+        <select id="eu-theme" style="height:34px;">${themeOpts}</select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">New Password (leave blank to keep)</label>
+        <input type="password" id="eu-pw" style="height:34px;" autocomplete="new-password" placeholder="••••••••">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-eu" onclick="updateUser('${userId}')">Save Changes</button>
+      <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
+    </div>`);
+}
+async function updateUser(userId) {
+  const btn=g('btn-eu'); setBtn(btn,true,'Saving…');
+  try {
+    const body = {
+      role: g('eu-role').value,
+      team_id: g('eu-team').value||null,
+      theme: g('eu-theme').value,
+    };
+    const pw=g('eu-pw').value; if(pw) body.password=pw;
+    await api('PUT',`/admin/api/users/${userId}`,body);
+    await loadUsers(); hideModal(); renderSettingsUsers(); toast('User updated','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Save Changes');}
+}
+async function deleteUser(userId, username) {
+  if(!await confirm(`Delete user "${username}"?`)) return;
+  try {
+    await api('DELETE',`/admin/api/users/${userId}`);
+    await loadUsers(); renderSettingsUsers(); toast('User deleted','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════════════
+// My Team view (user role)
+// ═══════════════════════════════════════════════
+async function renderMyTeam() {
+  set('main','<div style="padding:24px;"><div style="color:var(--text-3);font-size:12px;">Loading…</div></div>');
+  try {
+    const d = await api('GET','/api/my-team');
+    if(!d.team) {
+      set('main',`<div style="padding:24px;"><div class="empty-state">You are not assigned to a team yet.<br>Contact your administrator.</div></div>`);
+      return;
+    }
+    const allObjs = d.objects||[];
+    set('main',`<div style="padding:24px;max-width:900px;">
+      <div style="margin-bottom:24px;">
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">${x(d.team.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Your team's secrets access — read-only</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        ${(d.registries||[]).map(reg=>{
+          const regObjs = allObjs.filter(o=>reg.objects.includes(o.name));
+          return `<div class="card" style="padding:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+              <svg width="14" height="14" fill="none" stroke="var(--indigo-hi)" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"/></svg>
+              <span style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(reg.name)}</span>
+              <span class="badge-count">${regObjs.length} objects</span>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>Object</th><th>Vendor</th><th>Path</th></tr></thead>
+              <tbody>
+                ${regObjs.length?regObjs.map(o=>`
+                  <tr style="cursor:default;">
+                    <td class="td-primary">${x(o.name)}</td>
+                    <td>${vp(o.vendor)}</td>
+                    <td style="font-size:11px;color:var(--text-3);">${x(o.path)}</td>
+                  </tr>`).join(''):
+                `<tr><td colspan="3"><div class="empty-state">No objects in this registry</div></td></tr>`}
+              </tbody>
+            </table>
+          </div>`;
+        }).join('')}
+        ${!d.registries?.length?`<div class="empty-state">No registries assigned to your team yet.</div>`:''}
+      </div>
+    </div>`);
+  } catch(e) {
+    set('main',`<div style="padding:24px;"><div class="empty-state">Failed to load team data: ${x(e.message)}</div></div>`);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════
+(function boot(){
+  const saved = sessionStorage.getItem('aegis_session');
+  if(saved){
+    try {
+      const d = JSON.parse(saved);
+      fetch('/api/me', {headers:{'Authorization':'Bearer '+d.token}}).then(r=>{
+        if(r.ok) return r.json();
+        sessionStorage.removeItem('aegis_session');
+      }).then(me=>{
+        if(!me) return;
+        _initSession({...d, ...me});
+        applyTheme(me.theme || 'default');
+        g('login-screen').style.display='none';
+        g('app').style.display='flex';
+        loadAll().then(()=>setView(me.role==='admin'?'dashboard':'my-team'));
+      }).catch(()=>{});
+    } catch(e){}
+  }
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,48 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: aegis
+      POSTGRES_USER: broker
+      POSTGRES_PASSWORD: brokerpass
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U broker -d aegis"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  broker:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://broker:brokerpass@postgres/aegis
+      REDIS_URL: redis://redis:6379
+      AUTH_PATH: /config/auth.json
+      ADMIN_PASSWORD: changeme
+      # LOG_DESTINATIONS: stdout,splunk,s3,datadog
+      # SPLUNK_HEC_URL: https://splunk:8088
+      # SPLUNK_HEC_TOKEN: ...
+      # S3_LOG_BUCKET: my-audit-logs
+      # DD_API_KEY: ...
+      RATE_LIMIT_RPM: "60"
+    volumes:
+      - ./config:/config
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+volumes:
+  pg_data:
