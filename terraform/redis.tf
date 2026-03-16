@@ -20,6 +20,7 @@ resource "aws_elasticache_replication_group" "main" {
   at_rest_encryption_enabled = true
   transit_encryption_enabled = true
   auth_token                 = random_password.redis_auth.result
+  auth_token_update_strategy = "ROTATE"
   automatic_failover_enabled = false
 
   tags = { Name = "${local.name}-redis" }

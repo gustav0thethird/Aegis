@@ -9,18 +9,18 @@ resource "aws_db_subnet_group" "main" {
 }
 
 resource "aws_rds_cluster" "main" {
-  cluster_identifier      = "${local.name}-postgres"
-  engine                  = "aurora-postgresql"
-  engine_version          = "16.1"
-  database_name           = "aegis"
-  master_username         = "broker"
-  master_password         = random_password.db.result
-  db_subnet_group_name    = aws_db_subnet_group.main.name
-  vpc_security_group_ids  = [aws_security_group.rds.id]
-  storage_encrypted       = true
-  skip_final_snapshot     = false
+  cluster_identifier        = "${local.name}-postgres"
+  engine                    = "aurora-postgresql"
+  engine_version            = "16.1"
+  database_name             = "aegis"
+  master_username           = "broker"
+  master_password           = random_password.db.result
+  db_subnet_group_name      = aws_db_subnet_group.main.name
+  vpc_security_group_ids    = [aws_security_group.rds.id]
+  storage_encrypted         = true
+  skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name}-final-snapshot"
-  deletion_protection     = true
+  deletion_protection       = true
 
   tags = { Name = "${local.name}-aurora" }
 }
