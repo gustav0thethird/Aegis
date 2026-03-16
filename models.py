@@ -2,23 +2,27 @@
 models.py — SQLAlchemy ORM models.
 
 Schema:
-  objects          — atomic secret definitions (vendor + auth + location)
-  registries       — named collections of objects; own the API key
-  registry_objects — many-to-many: registry ↔ object
-  registry_keys    — API keys for registries (hashed); full history kept
-  teams            — metadata only; no key of their own
-  team_registries  — many-to-many: team ↔ registry
-  change_log       — immutable record of every admin mutation
-  audit_log        — immutable request log; fields snapshotted at request time
-  users            — operator accounts with role + optional team assignment
-  settings         — key/value config store (runtime-mutable settings)
+  objects            — atomic secret definitions (vendor + auth + location)
+  registries         — named collections of objects
+  registry_objects   — many-to-many: registry ↔ object
+  teams              — metadata only; no key of their own
+  team_registries    — many-to-many: team ↔ registry
+  team_registry_keys — API keys per team-registry assignment (hashed)
+  user_teams         — many-to-many: user ↔ team
+  policies           — access control rules per registry or team
+  webhooks           — per-team HTTP webhook config (URL, secret, event subscriptions)
+  webhook_log        — delivery history for webhook calls
+  change_log         — immutable record of every admin mutation
+  audit_log          — immutable request log; fields snapshotted at request time
+  users              — operator accounts with role; team membership via user_teams
+  settings           — key/value config store (runtime-mutable settings)
 """
 
 import uuid
 from datetime import datetime, timezone
 
 from sqlalchemy import (
-    BigInteger, Column, DateTime, ForeignKey, String, Text, ARRAY
+    BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Time, ARRAY
 )
 from sqlalchemy.dialects.postgresql import JSONB as _JSONB
 from sqlalchemy.dialects.postgresql import UUID
@@ -82,7 +86,9 @@ class TeamRegistryKey(Base):
     key_hash    = Column(Text, nullable=False, unique=True)   # SHA-256 hex; plaintext never stored
     key_preview = Column(Text, nullable=False)                # first 10 chars for UI display
     created_at  = Column(DateTime(timezone=True), nullable=False, default=_now)
+    expires_at  = Column(DateTime(timezone=True))             # null = no expiry; set from registry policy
     revoked_at  = Column(DateTime(timezone=True))             # null = active
+    suspended   = Column(Boolean, nullable=False, default=False)  # true = temporarily disabled (not revoked)
 
     team     = relationship("Team",     back_populates="keys")
     registry = relationship("Registry", back_populates="team_keys")
@@ -96,8 +102,27 @@ class Team(Base):
     created_at  = Column(DateTime(timezone=True), nullable=False, default=_now)
     created_by  = Column(Text, nullable=False, default="admin")
 
+    # Notification channels
+    slack_webhook_url    = Column(Text, nullable=True)
+    ms_teams_webhook_url = Column(Text, nullable=True)
+    discord_webhook_url  = Column(Text, nullable=True)
+
     registry_links = relationship("TeamRegistry",    back_populates="team", cascade="all, delete-orphan")
     keys           = relationship("TeamRegistryKey", back_populates="team", cascade="all, delete-orphan")
+    webhook        = relationship("Webhook",         back_populates="team", uselist=False, cascade="all, delete-orphan")
+    members        = relationship("UserTeam",        back_populates="team", cascade="all, delete-orphan")
+
+
+class UserTeam(Base):
+    """Many-to-many: user ↔ team membership."""
+    __tablename__ = "user_teams"
+
+    user_id    = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    team_id    = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"), primary_key=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    user = relationship("User", back_populates="team_memberships")
+    team = relationship("Team", back_populates="members")
 
 
 class TeamRegistry(Base):
@@ -110,6 +135,62 @@ class TeamRegistry(Base):
 
     team     = relationship("Team",     back_populates="registry_links")
     registry = relationship("Registry", back_populates="team_links")
+
+
+class Policy(Base):
+    """One row per entity (registry or team). Null fields inherit global settings."""
+    __tablename__ = "policies"
+
+    id              = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    entity_type     = Column(Text, nullable=False)              # registry | team
+    entity_id       = Column(UUID(as_uuid=True), nullable=False)
+    ip_allowlist    = Column(ARRAY(Text))                       # CIDRs; null = unrestricted
+    allowed_from    = Column(Time(timezone=False))              # UTC; null = unrestricted
+    allowed_to      = Column(Time(timezone=False))
+    cn_required     = Column(Boolean)                           # null = inherit global
+    rate_limit_rpm  = Column(Integer)                           # null = inherit global
+    max_key_days    = Column(Integer)                           # null = no expiry policy
+    created_at      = Column(DateTime(timezone=True), nullable=False, default=_now)
+    created_by      = Column(Text, nullable=False, default="admin")
+    updated_at      = Column(DateTime(timezone=True), nullable=False, default=_now)
+    updated_by      = Column(Text, nullable=False, default="admin")
+
+
+class Webhook(Base):
+    """Per-team HTTP webhook configuration."""
+    __tablename__ = "webhooks"
+
+    id         = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_id    = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"),
+                        nullable=False, unique=True)
+    url             = Column(Text, nullable=False)
+    secret          = Column(Text, nullable=True)               # HMAC-SHA256 signing secret; None when signing disabled
+    signing_enabled = Column(Boolean, nullable=False, default=False)
+    events          = Column(ARRAY(Text), nullable=False)       # subscribed event types
+    enabled         = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_now)
+    created_by = Column(Text, nullable=False, default="admin")
+
+    team = relationship("Team", back_populates="webhook")
+    logs = relationship("WebhookLog", back_populates="webhook", cascade="all, delete-orphan")
+
+
+class WebhookLog(Base):
+    """Delivery record for every webhook attempt."""
+    __tablename__ = "webhook_log"
+
+    id          = Column(BigInteger, primary_key=True, autoincrement=True)
+    webhook_id  = Column(UUID(as_uuid=True), ForeignKey("webhooks.id", ondelete="CASCADE"), nullable=False)
+    team_id     = Column(UUID(as_uuid=True), nullable=False)
+    event       = Column(Text, nullable=False)
+    payload     = Column(Text, nullable=False)   # JSON string sent
+    status_code = Column(Integer)
+    success     = Column(Boolean, nullable=False)
+    attempt     = Column(Integer, nullable=False, default=1)
+    error       = Column(Text)
+    fired_at    = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    webhook = relationship("Webhook", back_populates="logs")
 
 
 class ChangeLog(Base):
@@ -152,10 +233,11 @@ class User(Base):
     username      = Column(Text, nullable=False, unique=True)
     password_hash = Column(Text, nullable=False)
     role          = Column(Text, nullable=False, default="user")   # admin | user
-    team_id       = Column(UUID(as_uuid=True))                     # nullable; user role only
     theme         = Column(Text, nullable=False, default="default")
     created_at    = Column(DateTime(timezone=True), nullable=False, default=_now)
     created_by    = Column(Text, nullable=False, default="admin")
+
+    team_memberships = relationship("UserTeam", back_populates="user", cascade="all, delete-orphan")
 
 
 class Setting(Base):

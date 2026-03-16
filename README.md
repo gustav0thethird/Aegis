@@ -1,9 +1,12 @@
 # Aegis
 
 > **Vendor-agnostic secrets broker and PAM gateway.**
-> One API key per team. Any vault. Every action logged, attributed, and queryable.
+> Scoped API keys per team. Any vault. Every action logged, attributed, and queryable.
+> Teams self-manage their own webhooks, key rotation, and notifications — without filing tickets.
 
-Aegis is a thin, audited proxy that sits between your applications and your secrets infrastructure. Teams authenticate with a single scoped API key and receive exactly the secrets they are authorised to see — regardless of whether those secrets live in CyberArk, HashiCorp Vault, AWS Secrets Manager, or Conjur. Every fetch, every rotation, and every configuration change is written to an immutable log with structured before/after diffs and full account attribution.
+Aegis is a thin, audited proxy that sits between your applications and your secrets infrastructure. Teams authenticate with a scoped API key (one key per team-registry pair) and receive exactly the secrets they are authorised to see — regardless of whether those secrets live in CyberArk, HashiCorp Vault, AWS Secrets Manager, or Conjur. Every fetch, every rotation, and every configuration change is written to an immutable log with structured before/after diffs and full account attribution.
+
+Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Team members self-service their own webhook subscriptions, notification channels, and CI/CD key rotation via their own dashboard — the security team manages policy, not operations.
 
 ---
 
@@ -24,15 +27,24 @@ Aegis is a thin, audited proxy that sits between your applications and your secr
 - [API Reference](#api-reference)
   - [Secrets Endpoint](#secrets-endpoint)
   - [Authentication](#authentication)
+  - [User Self-Service API](#user-self-service-api)
   - [Objects](#objects)
   - [Registries](#registries)
   - [Teams](#teams)
   - [Users](#users)
-  - [Logs](#logs)
+  - [Policies](#policies)
+  - [Webhooks (Admin)](#webhooks-admin)
+  - [Logs and Exports](#logs-and-exports)
   - [Settings](#settings)
+  - [Metrics](#metrics)
 - [Admin Panel](#admin-panel)
+- [Team Dashboard](#team-dashboard)
+- [Team Self-Service Model](#team-self-service-model)
 - [Roles and Access Control](#roles-and-access-control)
 - [Key Management](#key-management)
+- [Policies](#policies-1)
+- [Webhooks and Notifications](#webhooks-and-notifications)
+- [Inbound Webhooks (CI/CD Integration)](#inbound-webhooks-cicd-integration)
 - [Audit and Change Logging](#audit-and-change-logging)
 - [SIEM Integration](#siem-integration)
 - [Rate Limiting](#rate-limiting)
@@ -41,6 +53,7 @@ Aegis is a thin, audited proxy that sits between your applications and your secr
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
 - [Health Check](#health-check)
+- [Project Structure](#project-structure)
 
 ---
 
@@ -54,6 +67,8 @@ Most organisations accumulate secrets sprawl over time: applications that talk d
 - Admins manage everything through a single panel. Objects can be migrated between vendors without touching application code — just update the object definition.
 - Every request is logged with the team identity, the registry accessed, the list of objects fetched, the source IP, and the ITSM change number. There is no way to fetch a secret without leaving a trace.
 - API keys are scoped to a specific team-registry assignment. If Team A and Team B both access the same registry, they use different keys. If either key is compromised, only that assignment needs to be rotated — the other team is unaffected.
+- Teams can belong to multiple groups of registries. A user can be a member of multiple teams. Multi-team membership is fully supported.
+- With the team self-service model, teams configure their own webhook subscriptions, CI/CD rotation triggers, and Slack/Teams/Discord notifications without any involvement from the security team.
 
 ---
 
@@ -69,27 +84,28 @@ Your Application                Aegis                    Upstream Vault
       │                            │  1. Hash key → lookup      │
       │                            │     team + registry        │
       │                            │                            │
-      │                            │  2. Enforce change number  │
+      │                            │  2. Enforce policy:        │
+      │                            │     change number, IP,     │
+      │                            │     time window, rate      │
       │                            │                            │
-      │                            │  3. Check rate limit       │
-      │                            │     (Redis counter)        │
-      │                            │                            │
-      │                            │  4. Fetch secrets per      │
+      │                            │  3. Fetch secrets per      │
       │                            │     vendor (CyberArk,      │
       │                            ├───────────────────────────►│
       │                            │◄───────────────────────────┤
       │                            │     Vault, AWS, Conjur)    │
       │                            │                            │
-      │                            │  5. Write audit log        │
+      │                            │  4. Write audit log        │
       │                            │     (team, registry,       │
       │                            │      objects, IP, CHG#)    │
       │                            │                            │
-      │                            │  6. Emit SIEM event        │
+      │                            │  5. Emit SIEM event        │
       │                            │     (stdout/Splunk/S3/DD)  │
       │                            │                            │
       │  { secret_name: value }    │                            │
       │◄───────────────────────────│                            │
 ```
+
+CI/CD pipelines can also trigger key rotations directly via an auto-generated inbound webhook URL — no admin intervention required.
 
 ---
 
@@ -106,11 +122,14 @@ graph TB
     subgraph Aegis["Aegis (FastAPI + Python)"]
         GW[GET /secrets]
         RL[Rate Limiter]
-        AUTH[Key Auth & RBAC]
+        AUTH[Key Auth & Policy]
         FETCH[Secret Fetcher]
         AUDIT[Audit Writer]
         SIEM_E[SIEM Emitter]
         ADMIN[Admin API + Panel]
+        DASH[Team Dashboard]
+        WH[Webhook Engine]
+        SCHED[Scheduler]
     end
 
     subgraph Session["Session Store"]
@@ -129,17 +148,23 @@ graph TB
     end
 
     subgraph SIEM["SIEM Destinations"]
-        STDOUT[stdout\nDocker log driver]
+        STDOUT[stdout]
         SP[Splunk HEC]
-        S3[AWS S3\ngzip + JSONL]
-        DD[Datadog\nLogs API]
+        S3[AWS S3\ngzip JSONL]
+        DD[Datadog]
+    end
+
+    subgraph Notify["Notifications"]
+        SL[Slack]
+        MST[MS Teams]
+        DIS[Discord]
     end
 
     A1 & A2 & A3 -->|X-API-Key + X-Change-Number| GW
     GW --> RL
     RL -->|counter check| REDIS
     RL --> AUTH
-    AUTH -->|key hash lookup| PG
+    AUTH -->|key hash lookup + policy| PG
     AUTH --> FETCH
     FETCH -->|vendor dispatch| CA & HV & AWS & CO
     FETCH --> AUDIT
@@ -149,6 +174,14 @@ graph TB
 
     ADMIN -->|session tokens| REDIS
     ADMIN -->|read/write| PG
+    DASH -->|session tokens| REDIS
+    DASH -->|read own team| PG
+
+    WH -->|HTTP webhook + retry| A1
+    WH --> SL & MST & DIS
+    SCHED -->|expiry checks| WH
+
+    A2 -->|POST /api/inbound/team-id| WH
 ```
 
 ---
@@ -184,6 +217,9 @@ erDiagram
     teams {
         uuid id PK
         text name
+        text slack_webhook_url
+        text ms_teams_webhook_url
+        text discord_webhook_url
         timestamptz created_at
         text created_by
     }
@@ -202,6 +238,7 @@ erDiagram
         text key_hash
         text key_preview
         timestamptz created_at
+        timestamptz expires_at
         timestamptz revoked_at
     }
 
@@ -210,8 +247,52 @@ erDiagram
         text username
         text password_hash
         text role
-        uuid team_id
         text theme
+        timestamptz created_at
+        text created_by
+    }
+
+    user_teams {
+        uuid user_id FK
+        uuid team_id FK
+        timestamptz created_at
+    }
+
+    webhooks {
+        uuid id PK
+        uuid team_id FK
+        text url
+        text secret
+        boolean signing_enabled
+        text[] events
+        boolean enabled
+        timestamptz created_at
+        text created_by
+    }
+
+    webhook_log {
+        bigint id PK
+        uuid webhook_id FK
+        uuid team_id
+        text event
+        text payload
+        integer status_code
+        boolean success
+        integer attempt
+        text error
+        timestamptz fired_at
+    }
+
+    policies {
+        uuid id PK
+        text entity_type
+        uuid entity_id
+        text[] ip_allowlist
+        time allowed_from
+        time allowed_to
+        boolean cn_required
+        integer rate_limit_rpm
+        integer max_key_days
         timestamptz created_at
         text created_by
     }
@@ -258,6 +339,10 @@ erDiagram
     registries ||--o{ team_registries : "assigned to"
     teams ||--o{ team_registry_keys : "holds"
     registries ||--o{ team_registry_keys : "scopes"
+    users ||--o{ user_teams : "member of"
+    teams ||--o{ user_teams : "has members"
+    teams ||--o| webhooks : "configures"
+    webhooks ||--o{ webhook_log : "logs"
 ```
 
 ---
@@ -283,8 +368,18 @@ sequenceDiagram
         Aegis-->>App: 401 Unauthorized
     end
 
-    Aegis->>DB: Read settings (change_number_required)
+    Aegis->>DB: Load policy (registry + team layers)
     alt Change number required but missing
+        Aegis->>DB: Write audit_log (secrets.blocked)
+        Aegis-->>App: 403 Forbidden
+    end
+
+    alt Source IP not in allowlist
+        Aegis->>DB: Write audit_log (secrets.blocked) + fire policy.violated webhook
+        Aegis-->>App: 403 Forbidden
+    end
+
+    alt Outside allowed time window
         Aegis->>DB: Write audit_log (secrets.blocked)
         Aegis-->>App: 403 Forbidden
     end
@@ -312,10 +407,13 @@ sequenceDiagram
 | Concept | Description |
 |---|---|
 | **Object** | A pointer to a single secret in an upstream vault. Stores the vendor, the `auth_ref` (which credential set in `auth.json` to use), and the vendor-specific path/safe/object name. Objects are vendor-agnostic from the application's perspective. |
-| **Registry** | A named collection of objects. The atomic unit of access control — teams are granted access to registries, not to individual objects. One registry might represent all secrets needed by a particular application or environment. |
-| **Team** | A logical grouping of applications or human operators that need the same set of secrets. A team has no credentials of its own — access is expressed through team-registry assignments. |
-| **Team-Registry Key** | A unique API key issued when a team is assigned a registry. A team with access to three registries has three separate keys. Every audit log entry traces back to an exact `(team, registry)` pair — not just a registry. |
-| **Auth Ref** | A string that maps to a credential block in `auth.json`. For example, `"prod"` might map to the production CyberArk installation. Multiple objects can share the same auth ref; changing the underlying credentials only requires updating `auth.json`. |
+| **Registry** | A named collection of objects. The atomic unit of access control — teams are granted access to registries, not to individual objects. One registry typically represents all secrets needed by a particular application or environment. |
+| **Team** | A logical grouping of applications or human operators that need the same set of secrets. Users may belong to multiple teams. Teams configure their own webhooks, notification channels, and CI/CD integrations independently. |
+| **Team ID** | A stable UUID identifying the team. Shown in both the admin panel and the team dashboard. Appears in all webhook payloads so external systems can route events. Use it to configure your inbound webhook URL. |
+| **Team-Registry Key** | A unique API key issued when a team is assigned a registry. A team with access to three registries has three separate keys. Every audit log entry traces back to an exact `(team, registry)` pair. |
+| **Auth Ref** | A string that maps to a credential block in `auth.json`. For example, `"prod"` might map to the production CyberArk installation. Changing the underlying credentials only requires updating `auth.json`. |
+| **Policy** | Per-registry or per-team access control rules: IP allowlist, time-of-day window, change-number enforcement, custom rate limit, and maximum key age. Registry policy takes precedence over team policy, which takes precedence over global settings. |
+| **Inbound Webhook** | An auto-generated URL per team (`POST /api/inbound/{team_id}`) that external CI/CD systems POST to in order to trigger Aegis actions (key rotation, ping). Authenticated with the team's HMAC signing secret. |
 | **Change Log** | An immutable, append-only record of every admin mutation. Each entry includes the entity type, the action, a JSONB diff showing exactly which fields changed and their before/after values, and the operator account that performed the action. |
 | **Audit Log** | An immutable, append-only record of every `/secrets` request. Captures outcome, team, registry, objects fetched, source IP, user agent, and ITSM change number. Fields are snapshotted at request time so they remain accurate even if the entity is later renamed or deleted. |
 
@@ -536,10 +634,10 @@ The following settings are stored in the `settings` table and can be changed liv
 |---|---|---|
 | `change_number_required` | `true` | Require `X-Change-Number` on every `/secrets` request. Set to `false` for non-ITIL environments. |
 | `rate_limit_rpm` | `60` | Requests per minute per API key. Enforced via Redis sliding window. |
-| `session_ttl_hours` | `8` | Admin session lifetime in hours. Applies to new sessions; existing sessions are not immediately invalidated. |
+| `session_ttl_hours` | `8` | Admin session lifetime in hours. |
 | `log_retention_days` | `90` | Number of days shown in audit log queries. Records are not deleted — this controls the display window. |
 | `siem_destinations` | `stdout` | Active SIEM output targets. Changes take effect on the next audit event. |
-| `splunk_hec_url` | — | Splunk HEC URL. Changes take effect immediately. |
+| `splunk_hec_url` | — | Splunk HEC URL. |
 | `splunk_hec_token` | — | Splunk HEC token. |
 | `s3_log_bucket` | — | S3 bucket for log shipping. |
 | `dd_api_key` | — | Datadog API key. |
@@ -559,7 +657,7 @@ The only endpoint your applications need to know about. Does not require an admi
 | Header | Required | Description |
 |---|---|---|
 | `X-API-Key` | Yes | Team-registry API key. Format: `sk_<base64url>` |
-| `X-Change-Number` | Configurable | ITSM change ticket reference (e.g. `CHG0012345`). Required by default; controlled by `change_number_required` setting. |
+| `X-Change-Number` | Configurable | ITSM change ticket reference (e.g. `CHG0012345`). Required by default; controlled by `change_number_required` setting and per-registry/team policy. |
 
 **Responses**
 
@@ -567,7 +665,7 @@ The only endpoint your applications need to know about. Does not require an admi
 |---|---|
 | `200` | Secrets fetched successfully |
 | `401` | API key missing, unknown, or revoked |
-| `403` | Change number required but not provided |
+| `403` | Change number required but not provided; IP not in allowlist; outside time window |
 | `429` | Rate limit exceeded for this key |
 | `500` | Upstream vault fetch failure |
 
@@ -594,8 +692,9 @@ curl https://aegis.internal/secrets \
 ### Authentication
 
 All `/admin/api/*` endpoints require an active session token with `role=admin`.
+User self-service endpoints (`/api/my-*`, `/api/inbound/*`) require any authenticated session.
 
-Two authentication methods are supported:
+Two authentication methods are supported for admin endpoints:
 
 **Session token (primary)**
 
@@ -623,11 +722,132 @@ curl https://aegis.internal/admin/api/objects \
 
 | Method | Path | Description |
 |---|---|---|
-| `POST` | `/api/login` | Authenticate. Body: `{ username, password }`. Returns `{ token, username, role, theme }`. |
+| `POST` | `/api/login` | Authenticate. Body: `{ username, password }`. Returns `{ token, username, role, team_ids, theme }`. |
 | `POST` | `/api/logout` | Invalidate current session token. |
-| `GET` | `/api/me` | Return current session info. |
+| `GET` | `/api/me` | Return current session info including `team_ids` array. |
 | `PUT` | `/api/me/theme` | Update personal theme. Body: `{ theme }`. |
-| `GET` | `/api/my-team` | *(user role only)* Read-only view of own team's registries and objects. |
+
+---
+
+### User Self-Service API
+
+Endpoints available to authenticated users with `role=user`. All scoped to the user's own team(s). Where a user belongs to multiple teams, pass `?team_id=<uuid>` to target a specific one; omit to default to the first team.
+
+#### Teams (read-only)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/my-teams` | All teams the user belongs to, with assigned registries, key previews, and expiry dates. |
+| `GET` | `/api/my-team` | Backward-compatible alias — returns the first team only. |
+
+**Response shape (per team):**
+
+```json
+{
+  "id":         "3fa85f64-5717-...",
+  "name":       "myapp",
+  "registries": [
+    {
+      "id":          "uuid",
+      "name":        "myapp-prod",
+      "key_preview": "sk_abc12345de",
+      "expires_at":  "2026-12-31T00:00:00+00:00",
+      "objects":     ["db_password", "api_key"]
+    }
+  ]
+}
+```
+
+#### Webhooks (self-service)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/my-webhook` | Get current webhook config + notification channels + inbound URL for the team. |
+| `PUT` | `/api/my-webhook` | Create or update outgoing webhook and/or notification channels. |
+| `DELETE` | `/api/my-webhook` | Remove outgoing webhook. |
+
+**PUT body:**
+
+```json
+{
+  "url":                 "https://your-service.example.com/webhook",
+  "enabled":             true,
+  "events":              ["key.expiring_soon", "key.rotated"],
+  "signing_enabled":     true,
+  "secret":              "optional-override-or-leave-null-to-auto-generate",
+  "slack_webhook_url":   "https://hooks.slack.com/services/...",
+  "ms_teams_webhook_url": "https://org.webhook.office.com/...",
+  "discord_webhook_url": "https://discord.com/api/webhooks/..."
+}
+```
+
+**GET response:**
+
+```json
+{
+  "team_id":   "3fa85f64-...",
+  "team_name": "myapp",
+  "webhook": {
+    "id":              "uuid",
+    "url":             "https://...",
+    "enabled":         true,
+    "events":          ["key.rotated"],
+    "signing_enabled": true,
+    "has_secret":      true
+  },
+  "notifications": {
+    "slack_webhook_url":    "https://hooks.slack.com/...",
+    "ms_teams_webhook_url": null,
+    "discord_webhook_url":  null
+  },
+  "inbound_url": "/api/inbound/3fa85f64-..."
+}
+```
+
+#### Metrics (self-service)
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/my-metrics` | Team-scoped JSON metrics: audit counts, key stats, recent activity. |
+| `GET` | `/api/my-metrics/prometheus` | Team-scoped Prometheus text metrics — wire into your own Grafana. |
+
+**JSON response:**
+
+```json
+{
+  "team_id":   "3fa85f64-...",
+  "team_name": "myapp",
+  "requests": {
+    "total":   1240,
+    "success": 1237,
+    "denied":  2,
+    "error":   1
+  },
+  "keys": {
+    "active":        3,
+    "revoked":       12,
+    "expiring_soon": 1
+  },
+  "recent_audit": [ ... ]
+}
+```
+
+**Prometheus format** (`/api/my-metrics/prometheus`):
+
+```
+aegis_team_audit_total{team="myapp",outcome="success"} 1237
+aegis_team_audit_total{team="myapp",outcome="denied"} 2
+aegis_team_keys_total{team="myapp",state="active"} 3
+aegis_team_keys_total{team="myapp",state="revoked"} 12
+```
+
+#### Inbound Webhook
+
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/api/inbound/{team_id}` | Receive an event from CI/CD. Authenticated with team's HMAC signing secret. |
+
+See [Inbound Webhooks (CI/CD Integration)](#inbound-webhooks-cicd-integration) for full documentation.
 
 ---
 
@@ -660,7 +880,7 @@ Objects are the atomic units — each represents a pointer to one secret in one 
 | `name` | All | Unique identifier for this object. Used as the key in the `/secrets` response. |
 | `vendor` | All | `cyberark` · `vault` · `aws` · `conjur` |
 | `auth_ref` | All | Key into `auth.json` for credentials to use when fetching this secret. |
-| `path` | Vault, AWS, Conjur | Secret path. For Vault: path within the KV mount. For AWS: secret name. For Conjur: variable path. |
+| `path` | Vault, AWS, Conjur | Secret path within the mount/service. |
 | `platform` | CyberArk | CyberArk platform ID. |
 | `safe` | CyberArk, Conjur | CyberArk safe name or Conjur safe name. |
 
@@ -684,12 +904,35 @@ A registry is a named collection of objects. Teams are granted access to registr
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/admin/api/teams` | List all teams with assigned registries and key previews. |
+| `GET` | `/admin/api/teams` | List all teams with assigned registries, key previews, members, and notification config. |
 | `POST` | `/admin/api/teams` | Create team. Body: `{ name }`. |
 | `DELETE` | `/admin/api/teams/{id}` | Delete team and revoke all keys. |
-| `POST` | `/admin/api/teams/{id}/registries/{reg_id}` | Assign registry to team. Returns `{ new_key: { key, registry_name } }` — the plaintext key is returned **once only**. |
+| `POST` | `/admin/api/teams/{id}/registries/{reg_id}` | Assign registry to team. Returns `{ new_key: { key, registry_name } }` — plaintext key returned **once only**. |
 | `DELETE` | `/admin/api/teams/{id}/registries/{reg_id}` | Revoke team access and invalidate all keys for this assignment. |
-| `POST` | `/admin/api/teams/{id}/registries/{reg_id}/rotate-key` | Rotate the API key for this team-registry assignment. Returns `{ key }` once only. |
+| `POST` | `/admin/api/teams/{id}/registries/{reg_id}/rotate-key` | Rotate the API key. Returns `{ key }` once only. Old key invalidated immediately. |
+| `GET` | `/admin/api/teams/{id}/members` | List team members (users assigned to this team). |
+| `POST` | `/admin/api/teams/{id}/members` | Add user to team. Body: `{ user_id }`. |
+| `DELETE` | `/admin/api/teams/{id}/members/{user_id}` | Remove user from team. |
+| `PUT` | `/admin/api/teams/{id}/notifications` | Save Slack/Teams/Discord notification URLs for the team. Body: `{ slack_webhook_url, ms_teams_webhook_url, discord_webhook_url }`. |
+
+**Team response shape:**
+
+```json
+{
+  "id":         "3fa85f64-5717-...",
+  "name":       "myapp",
+  "created_at": "2026-01-01T00:00:00+00:00",
+  "registries": [ ... ],
+  "members": [
+    { "id": "uuid", "username": "alice", "role": "user" }
+  ],
+  "notifications": {
+    "slack_webhook_url":    "https://hooks.slack.com/...",
+    "ms_teams_webhook_url": null,
+    "discord_webhook_url":  null
+  }
+}
+```
 
 ---
 
@@ -699,16 +942,62 @@ Operator accounts for the admin panel. Distinct from the application-facing API 
 
 | Method | Path | Description |
 |---|---|---|
-| `GET` | `/admin/api/users` | List all operator accounts. |
-| `POST` | `/admin/api/users` | Create user. Body: `{ username, password, role, team_id? }`. |
-| `PUT` | `/admin/api/users/{id}` | Update user. Any subset of `{ username, password, role, team_id }`. |
+| `GET` | `/admin/api/users` | List all operator accounts with team memberships. |
+| `POST` | `/admin/api/users` | Create user. Body: `{ username, password, role, team_ids? }`. |
+| `PUT` | `/admin/api/users/{id}` | Update user. Body: any subset of `{ username, password, role, team_ids }`. Supplying `team_ids` replaces all memberships atomically. |
 | `DELETE` | `/admin/api/users/{id}` | Delete user. |
 
-**Roles:** `admin` (full access) · `user` (read-only My Team view)
+**Roles:** `admin` (full access) · `user` (self-service team dashboard)
+
+Users may belong to zero, one, or many teams. A user with `role=user` can view and self-manage any team they are a member of.
 
 ---
 
-### Logs
+### Policies
+
+Access control rules per registry or team. Registry policy takes precedence over team policy, which takes precedence over global settings.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/api/registries/{id}/policy` | Get policy for a registry. |
+| `PUT` | `/admin/api/registries/{id}/policy` | Set policy for a registry. |
+| `GET` | `/admin/api/teams/{id}/policy` | Get policy for a team. |
+| `PUT` | `/admin/api/teams/{id}/policy` | Set policy for a team. |
+
+**Policy body:**
+
+```json
+{
+  "ip_allowlist":   ["10.0.0.0/8", "192.168.1.0/24"],
+  "allowed_from":   "08:00",
+  "allowed_to":     "18:00",
+  "cn_required":    true,
+  "rate_limit_rpm": 120,
+  "max_key_days":   90
+}
+```
+
+All fields are optional; `null` means inherit from the next level (team → global). The `max_key_days` field enforces automatic expiry on newly issued and rotated keys.
+
+---
+
+### Webhooks (Admin)
+
+Admins can manage any team's HTTP webhook configuration.
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/admin/api/teams/{id}/webhook` | Get the team's outgoing webhook config. |
+| `PUT` | `/admin/api/teams/{id}/webhook` | Create or update outgoing webhook. Body: `{ url, events, signing_enabled, secret, enabled }`. |
+| `DELETE` | `/admin/api/teams/{id}/webhook` | Remove webhook. |
+| `GET` | `/admin/api/teams/{id}/webhook/logs` | Delivery history for the team's webhook. |
+| `POST` | `/admin/api/teams/{id}/registries/{reg_id}/rotate-key` | Rotate key — triggers `key.rotated` webhook event if subscribed. |
+
+Teams can also self-manage their own webhooks via `PUT /api/my-webhook` without admin involvement.
+
+---
+
+### Logs and Exports
 
 #### Change Log
 
@@ -723,6 +1012,12 @@ GET /admin/api/changelog?page=1&limit=25&entity_type=object&action=updated
 | `entity_type` | Filter by `object` · `registry` · `team` · `user` · `settings` |
 | `action` | Filter by `created` · `updated` · `deleted` · `key_rotated` · `object_added` · `object_removed` · `registry_assigned` · `registry_unassigned` |
 
+```
+GET /admin/api/changelog/export
+```
+
+Streams a CSV file of the full change log (all pages). Response: `text/csv` with `Content-Disposition: attachment`.
+
 #### Audit Log
 
 ```
@@ -736,6 +1031,12 @@ GET /admin/api/audit?page=1&limit=25&outcome=denied&change_number=CHG123
 | `outcome` | Filter by `success` · `denied` · `error` |
 | `change_number` | Filter by exact ITSM change number |
 
+```
+GET /admin/api/audit/export
+```
+
+Streams a CSV file of the full audit log (all pages).
+
 ---
 
 ### Settings
@@ -747,21 +1048,71 @@ PUT  /admin/api/settings   Body: { "key": "value", ... }
 
 Only keys listed in `EDITABLE_SETTINGS` are accepted. Unknown keys return `400`.
 
+**Auth Backends**
+
+```
+GET  /admin/api/auth-backends
+POST /admin/api/auth-backends/{vendor}/{ref}/test
+```
+
+Returns all configured `auth.json` credential sets with secrets masked. The test endpoint verifies connectivity to the upstream vault.
+
+**Sessions**
+
+```
+GET    /admin/api/sessions
+DELETE /admin/api/sessions/{token_key}
+```
+
+Lists all active Redis sessions with user and expiry. `DELETE` immediately revokes a session.
+
+---
+
+### Metrics
+
+```
+GET /metrics
+```
+
+Prometheus-format metrics for the whole instance. Intended for scraping by your monitoring stack. No authentication (IP-restrict at your proxy).
+
+```
+GET /api/my-metrics/prometheus
+```
+
+Team-scoped Prometheus metrics. Requires user authentication. Returns only data for the requesting user's team.
+
+**Global metrics (`/metrics`):**
+
+```
+aegis_audit_total{outcome="success"} 48293
+aegis_audit_total{outcome="denied"} 142
+aegis_objects_total 412
+aegis_registries_total 87
+aegis_teams_total 104
+aegis_keys_total{state="active"} 312
+aegis_keys_total{state="revoked"} 891
+aegis_webhook_deliveries_total{result="success"} 5621
+aegis_webhook_deliveries_total{result="failure"} 34
+aegis_policy_violations_total 142
+```
+
 ---
 
 ## Admin Panel
 
-Aegis ships a dark, single-page admin panel at `/`. Built with vanilla JS and Tailwind CSS — no build step, no npm, no bundler. One HTML file. Zero client-side dependencies to audit or update.
+Aegis ships a dark, single-page admin panel at `/admin`. Built with vanilla JS and Tailwind CSS — no build step, no npm, no bundler. One HTML file. Fira Code monospace throughout.
 
 ### Dashboard
 
-- **Stat cards** — total object count, registry count, team count, and audit log event count
-- **Recent changes** — last 8 admin mutations with action pill, entity, name, performing account, and timestamp
+- **Stat cards** — objects, registries, teams, and audit event counts
+- **Expiring keys widget** — keys expiring within the next 30 days across all teams
+- **Recent changes** — last 8 admin mutations with action pill, entity, performing account, and timestamp
 - **Recent audit** — last 6 `/secrets` requests with outcome, change number, team, registry, and source IP
 
 ### Objects
 
-Full CRUD table. Each row shows the vendor pill, auth ref, and how many registries the object belongs to. Click any row to open a **detail drawer** with:
+Full CRUD table. Each row shows the vendor pill, auth ref, and registry membership count. Click any row to open a **detail drawer** with:
 - Edit form for all object fields
 - Registry membership list with quick-remove
 - Full change history with structured before/after diffs and account attribution
@@ -770,28 +1121,31 @@ Full CRUD table. Each row shows the vendor pill, auth ref, and how many registri
 
 Registry table with object count and team access list. Click a registry to open its drawer with:
 - Object membership management
-- Per-team key previews (first 10 characters) for all teams that have access
+- Per-team key previews for all teams that have access
 - Complete change history
 
 ### Teams
 
 Team table with registry assignments. Click a team to open its drawer with:
-- Registry assignment management
-- Per-registry key preview and **Rotate Key** button
-- On assignment: API key shown once in a modal — copy it, it will not be shown again
+- **Team UUID** displayed with a copy button (present in all webhook payloads)
+- Registry assignment management — assign/unassign registries, rotate keys
+- On assignment: API key shown once in a modal
+- **Members** — add/remove user membership; users may belong to multiple teams
+- **Notification channels** — configure Slack, MS Teams, and Discord webhook URLs per team
+- Outgoing HTTP webhook configuration
 - Complete change history
 
 ### Audit Log
 
-Full audit log table with filters for outcome and change number. Columns: timestamp, event, outcome, change number, team, registry, objects, source IP, user agent.
+Full audit log table with filters for outcome and change number. Columns: timestamp, event, outcome, change number, team, registry, objects, source IP, user agent. **Export to CSV** button streams the full log.
 
 ### Change Log
 
-Full change log table with filters for entity type and action. Columns: timestamp, action pill, entity type pill, entity name, field diffs (before → after), performing account.
+Full change log table with filters for entity type and action. Columns: timestamp, action pill, entity type, entity name, field diffs (before → after), performing account. **Export to CSV** button streams the full log.
 
 ### Settings
 
-Three-tab settings panel:
+Five-tab settings panel:
 
 **General**
 - Toggle change number enforcement
@@ -806,41 +1160,87 @@ Three-tab settings panel:
 - All changes take effect immediately without restart
 
 **Users**
-- Full user management: create, edit role, assign team, delete
+- Full user management: create, edit role, assign team memberships, delete
+- Multi-team assignment via checkbox list
 - Password changes for any account
+
+**Auth Backends**
+- Read-only view of all `auth.json` credential sets with secrets masked
+- Test connectivity button per backend
+
+**Sessions**
+- List all active Redis sessions with username, role, and expiry
+- Revoke individual sessions immediately
+
+---
+
+## Team Dashboard
+
+The team dashboard at `/dashboard` is available to users with `role=user`. It is a self-contained single-page application with three tabs:
+
+### Overview Tab
+
+- **Stat cards** — registries, active keys, expiring keys, total API requests
+- **Team ID** — the team UUID is displayed prominently with a copy button; shown for each team when a user belongs to multiple
+- **Registry cards** — one card per assigned registry showing:
+  - Key preview (first 10 characters) with active/expired/no-key status
+  - Expiry date badge if applicable
+  - Object table: name, vendor, path
+
+### Webhooks Tab
+
+Teams configure their own integrations here — no admin involvement required:
+
+- **Inbound webhook URL** — auto-generated based on team ID, with copy button and curl example
+- **Outgoing HTTP webhook** — configure endpoint URL, event subscriptions, HMAC signing, and secret
+- **Notification channels** — Slack, MS Teams, Discord webhook URLs
+
+### Activity Tab
+
+- Request summary: total, success, denied, error counts
+- Active/revoked/expiring key counts
+- Last 20 audit events for this team: timestamp, event, outcome, registry, source IP
+
+---
+
+## Team Self-Service Model
+
+Designed for environments with 100+ teams and a single security team. The security team manages the platform (objects, registries, policies, global settings). Individual teams manage their own operations.
+
+**What teams can do without admin involvement:**
+
+| Action | Endpoint |
+|---|---|
+| View assigned registries and key previews | `GET /api/my-teams` |
+| Configure outgoing webhook (event subscriptions) | `PUT /api/my-webhook` |
+| Configure Slack/Teams/Discord notifications | `PUT /api/my-webhook` |
+| View team-scoped audit and key metrics | `GET /api/my-metrics` |
+| Expose team metrics to own Grafana | `GET /api/my-metrics/prometheus` |
+| Trigger key rotation from CI/CD | `POST /api/inbound/{team_id}` |
+
+**What requires admin:**
+
+| Action | Why |
+|---|---|
+| Create/delete teams | Platform structure |
+| Assign registries to teams | Access control grant |
+| Create/modify objects | Secret pointer management |
+| Set policies (IP allowlist, time windows) | Security policy |
+| View cross-team audit data | Privacy/privilege boundary |
+| Manage users | Account lifecycle |
 
 ---
 
 ## Roles and Access Control
 
-```mermaid
-graph LR
-    subgraph Operator Roles
-        ADMIN[admin\nFull access]
-        USER[user\nRead-only — own team]
-    end
-
-    subgraph Views
-        DASH[Dashboard]
-        OBJ[Objects]
-        REG[Registries]
-        TEAM[Teams]
-        AL[Audit Log]
-        CL[Change Log]
-        SET[Settings]
-        MT[My Team]
-    end
-
-    ADMIN --> DASH & OBJ & REG & TEAM & AL & CL & SET
-    USER --> MT
-```
-
-| Role | Panel Access | API Access |
+| Role | Panel | API access |
 |---|---|---|
-| `admin` | All views | All `/admin/api/*` endpoints |
-| `user` | My Team (read-only) | `GET /api/my-team` only |
+| `admin` | Admin panel (`/admin`) — all views | All `/admin/api/*` endpoints |
+| `user` | Team dashboard (`/dashboard`) | `/api/my-*` endpoints for own teams only |
 
-Sessions are stored in Redis as opaque random tokens (`aegis:session:<token>`). The payload includes `user_id`, `username`, `role`, `team_id`, and `theme`. Sessions expire after the configured TTL and are invalidated immediately on logout.
+Sessions are stored in Redis as opaque random tokens (`aegis:session:<token>`). The session payload includes `user_id`, `username`, `role`, `team_ids` (array of UUIDs), and `theme`. Sessions expire after the configured TTL and are invalidated immediately on logout.
+
+Users can be members of zero, one, or many teams. A user's `team_ids` list in the session determines which teams they can read and self-manage. Team membership is managed by admins or by the team membership endpoints.
 
 There is no JWT. There is no refresh token. Session state lives entirely in Redis.
 
@@ -853,17 +1253,153 @@ API keys follow a strict lifecycle:
 ```mermaid
 stateDiagram-v2
     [*] --> Active: Team assigned to registry\n(key issued, shown once)
-    Active --> Revoked: Team unassigned from registry\nor team deleted
+    Active --> Revoked: Team unassigned\nor team deleted
     Active --> Active: Key rotated\n(new key issued, old key atomically revoked)
+    Active --> Expired: max_key_days reached\n(policy enforcement)
     Revoked --> [*]
+    Expired --> [*]
 ```
 
-- Keys are generated as `sk_` + 32 bytes of `secrets.token_urlsafe()`.
+- Keys are generated as `sk_` + 40 bytes of `secrets.token_urlsafe()` — 320 bits of cryptographic randomness.
 - Only the SHA-256 hex digest is stored in the database. The plaintext is never persisted.
-- The plaintext key is returned once: on assignment (`POST /admin/api/teams/{id}/registries/{reg_id}`) or on rotation (`POST .../rotate-key`). It cannot be retrieved again.
-- The admin panel displays only the first 10 characters (`key_preview`) for identification.
+- The plaintext key is returned exactly once: on assignment or rotation. It cannot be retrieved again. If lost, rotate it.
+- The admin panel and team dashboard display only the first 10 characters (`key_preview`) for identification.
 - Rotating a key atomically revokes the old key and issues a new one. There is no grace period — the old key stops working immediately.
 - A team with access to N registries has N independent keys. Compromising one key does not affect the others.
+- If a policy sets `max_key_days`, the key's `expires_at` is set at issuance. The scheduler checks daily and fires `key.expiring_soon` events 7 days before expiry.
+- CI/CD can trigger key rotation via `POST /api/inbound/{team_id}` without admin involvement.
+
+---
+
+## Policies
+
+Policies add fine-grained access control on top of the key authentication layer. They are per-entity (registry or team) and stack: registry policy takes precedence, then team policy, then global settings.
+
+| Policy field | Effect |
+|---|---|
+| `ip_allowlist` | CIDR list. Requests from IPs outside the list are rejected with `403` and a `policy.violated` webhook event. |
+| `allowed_from` / `allowed_to` | Time-of-day window (UTC). Requests outside the window are rejected with `403`. |
+| `cn_required` | Override global change-number enforcement for this registry or team. |
+| `rate_limit_rpm` | Override the global rate limit for this registry or team. |
+| `max_key_days` | Maximum age for keys issued under this registry or team. Enforced at key issuance and rotation. |
+
+Policy enforcement fires a `policy.violated` webhook event so teams are immediately notified of access violations — even if they originate from misconfigurations.
+
+---
+
+## Webhooks and Notifications
+
+Aegis fires events to teams for key lifecycle and policy events. Teams can configure these from their dashboard without admin involvement.
+
+### Events
+
+| Event | Trigger |
+|---|---|
+| `key.expiring_soon` | A team-registry key will expire within 7 days (checked daily by scheduler) |
+| `key.rotated` | A key was rotated (manual or CI/CD-triggered) |
+| `key.revoked` | A key was revoked without replacement (registry unassigned, team deleted) |
+| `policy.violated` | A request was blocked by an IP allowlist or time-window policy |
+
+### Outgoing HTTP Webhook
+
+Per-team endpoint receiving POSTed JSON events from Aegis.
+
+- Configurable: URL, subscribed events, HMAC-SHA256 signing, enabled/disabled
+- Retry: 3 attempts with 0/5/30 second backoff
+- Every delivery attempt logged in `webhook_log` with status code, success flag, error, and attempt number
+- If signing is enabled, Aegis adds `X-Aegis-Signature: sha256=<hex>` header
+
+**Payload structure:**
+
+```json
+{
+  "event":       "key.rotated",
+  "timestamp":   "2026-03-15T10:23:01.123Z",
+  "team":        { "id": "3fa85f64-...", "name": "myapp" },
+  "registry":    { "id": "uuid", "name": "myapp-prod" },
+  "new_key":     null,
+  "key_preview": "sk_abc12345de",
+  "reason":      null,
+  "detail":      null
+}
+```
+
+> `new_key` is populated only on `key.rotated` — the new plaintext key. This is the only way to receive the rotated key automatically. Handle this webhook endpoint with the same security rigour as the API key itself.
+
+### Notification Channels
+
+Best-effort delivery to Slack, MS Teams, and Discord. Each channel fires independently — one failure does not block the others. No retry.
+
+| Channel | Format |
+|---|---|
+| **Slack** | Block Kit message with attachment colour per event type |
+| **MS Teams** | MessageCard with themeColor per event type |
+| **Discord** | Embed with integer colour per event type |
+
+Colour scheme: `key.expiring_soon` → amber · `key.rotated` → indigo · `key.revoked` / `policy.violated` → red.
+
+Teams configure their channel URLs from the **Webhooks** tab in the team dashboard, or admins configure them via `PUT /admin/api/teams/{id}/notifications`.
+
+---
+
+## Inbound Webhooks (CI/CD Integration)
+
+Every team has an auto-generated inbound webhook URL based on their team ID:
+
+```
+POST /api/inbound/{team_id}
+Authorization: Bearer <signing_secret>
+Content-Type: application/json
+```
+
+This URL is displayed in the team dashboard's Webhooks tab — teams copy it and configure their CI/CD pipeline to POST to it. No admin involvement required.
+
+**Authentication:** the team's HMAC signing secret (configured via the Webhooks tab). HMAC signing must be enabled.
+
+### Supported actions
+
+**Ping** — verify connectivity:
+
+```bash
+curl -X POST https://aegis.internal/api/inbound/3fa85f64-... \
+  -H "Authorization: Bearer <signing_secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "ping"}'
+```
+
+```json
+{ "ok": true, "team": "myapp", "message": "pong" }
+```
+
+**rotate_key** — rotate the API key for a specific registry:
+
+```bash
+curl -X POST https://aegis.internal/api/inbound/3fa85f64-... \
+  -H "Authorization: Bearer <signing_secret>" \
+  -H "Content-Type: application/json" \
+  -d '{"action": "rotate_key", "registry_id": "f47ac10b-..."}'
+```
+
+```json
+{ "ok": true, "key_preview": "sk_newkey123", "new_key": "sk_newkey123..." }
+```
+
+The response includes the new plaintext key. If the team has a `key.rotated` outgoing webhook subscription, that fires simultaneously.
+
+### CI/CD pipeline example
+
+```yaml
+# GitHub Actions: rotate key after deploy
+- name: Rotate Aegis key
+  run: |
+    NEW_KEY=$(curl -s -X POST $AEGIS_INBOUND_URL \
+      -H "Authorization: Bearer $AEGIS_SIGNING_SECRET" \
+      -H "Content-Type: application/json" \
+      -d "{\"action\":\"rotate_key\",\"registry_id\":\"$REGISTRY_ID\"}" \
+      | jq -r .new_key)
+    echo "::add-mask::$NEW_KEY"
+    echo "AEGIS_KEY=$NEW_KEY" >> $GITHUB_ENV
+```
 
 ---
 
@@ -871,7 +1407,7 @@ stateDiagram-v2
 
 ### Audit Log
 
-Written on every `/secrets` request regardless of outcome. All fields are snapshotted at request time.
+Written on every `/secrets` request regardless of outcome. All fields are snapshotted at request time — renaming a team or registry does not alter historical entries.
 
 | Field | Type | Description |
 |---|---|---|
@@ -879,7 +1415,7 @@ Written on every `/secrets` request regardless of outcome. All fields are snapsh
 | `event` | `text` | `secrets.fetched` · `secrets.blocked` · `auth.failed` |
 | `outcome` | `text` | `success` · `denied` · `error` |
 | `change_number` | `text` | ITSM reference from `X-Change-Number` header |
-| `registry_id` | `uuid` | Registry UUID (snapshotted — survives registry deletion) |
+| `registry_id` | `uuid` | Registry UUID (snapshotted) |
 | `registry_name` | `text` | Registry name at time of request |
 | `team_id` | `uuid` | Team UUID |
 | `team_name` | `text` | Team name at time of request |
@@ -903,20 +1439,9 @@ Written on every admin mutation. The `diff` column captures exact field-level ch
 | `diff` | `jsonb` | `{ "field": { "from": old_value, "to": new_value } }` |
 | `performed_by` | `text` | Username of the operator who made the change |
 
-**Action types**
+**Action types:** `created` · `updated` · `deleted` · `key_rotated` · `object_added` · `object_removed` · `registry_assigned` · `registry_unassigned`
 
-| Action | Trigger |
-|---|---|
-| `created` | Entity created |
-| `updated` | Entity field(s) modified |
-| `deleted` | Entity deleted |
-| `key_rotated` | Team-registry API key rotated |
-| `object_added` | Object added to registry |
-| `object_removed` | Object removed from registry |
-| `registry_assigned` | Registry granted to team |
-| `registry_unassigned` | Registry access revoked from team |
-
-**Diff example**
+**Diff example:**
 
 ```json
 {
@@ -925,6 +1450,8 @@ Written on every admin mutation. The `diff` column captures exact field-level ch
   "path":     { "from": "secret/data/myapp/db", "to": null }
 }
 ```
+
+Both logs are exported to CSV via `GET /admin/api/audit/export` and `GET /admin/api/changelog/export`.
 
 ---
 
@@ -949,6 +1476,10 @@ Every `/secrets` request emits a structured JSON event. `stdout` is always on an
     "id":   "f47ac10b-58cc-4372-a567-0e02b2c3d479",
     "name": "myapp-prod"
   },
+  "team": {
+    "id":   "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+    "name": "myapp"
+  },
   "objects":      ["db_password", "api_key", "tls_cert_pass"],
   "key_preview":  "sk_abc12345de",
   "error_detail": null,
@@ -965,12 +1496,10 @@ Every `/secrets` request emits a structured JSON event. `stdout` is always on an
 |---|---|---|
 | **stdout** | Always on | One JSON line per event. Use with any Docker log driver (`json-file`, `fluentd`, `awslogs`, etc.). |
 | **Splunk HEC** | `splunk` | `POST` to HEC endpoint with `sourcetype: aegis`. Requires `splunk_hec_url` and `splunk_hec_token`. |
-| **AWS S3** | `s3` | Events are buffered in memory and flushed every 60 seconds as gzip-compressed JSONL. Key format: `{prefix}/YYYY/MM/DD/HH/{timestamp}Z.jsonl.gz`. Requires `s3_log_bucket`. Uses default boto3 credential chain. |
+| **AWS S3** | `s3` | Events buffered and flushed every 60 seconds as gzip-compressed JSONL. Key format: `{prefix}/YYYY/MM/DD/HH/{timestamp}Z.jsonl.gz`. |
 | **Datadog** | `datadog` | `POST` to Datadog Logs API. `ddsource: aegis`, `service: aegis`. Requires `dd_api_key`. |
 
 Adapter failures are logged as warnings and never surface to the application — a SIEM outage does not block secret delivery.
-
-All SIEM credentials changed via the Settings panel take effect on the next request. No restart required.
 
 ---
 
@@ -979,11 +1508,9 @@ All SIEM credentials changed via the Settings panel take effect on the next requ
 Aegis enforces per-key rate limiting using a Redis sliding window counter.
 
 - The limit is read from the `rate_limit_rpm` database setting on every request (with `RATE_LIMIT_RPM` env var as fallback).
-- The counter key is the `team_registry_keys.id` UUID — not the raw key hash — so rotating a key resets the counter.
+- Per-registry and per-team policies can override the global limit.
+- The counter key is the `team_registry_keys.id` UUID — rotating a key resets the counter.
 - When the limit is exceeded, Aegis returns `429 Too Many Requests` and writes a `secrets.blocked` audit event.
-- The remaining request count is available internally but not currently exposed in response headers.
-
-To adjust the limit per-team in the future, the rate limit module accepts the RPM as a parameter on each call and is not hardcoded at startup.
 
 ---
 
@@ -997,7 +1524,12 @@ Migration history:
   002 — Change log table
   003 — Users and settings tables (with default seed data)
   004 — JSONB diff column on change_log
-  005 — team_registry_keys table; adds team_id + team_name to audit_log
+  005 — team_registry_keys table; team_id + team_name on audit_log
+  006 — Policies, webhooks, webhook_log; expires_at on team_registry_keys
+  007 — signing_enabled on webhooks (HMAC optional)
+  008 — user_teams junction table (many-to-many users ↔ teams);
+        slack_webhook_url, ms_teams_webhook_url, discord_webhook_url on teams;
+        removes team_id from users
 ```
 
 ### Table summary
@@ -1007,10 +1539,14 @@ Migration history:
 | `objects` | Secret definitions — vendor, auth_ref, path, safe, platform |
 | `registries` | Named collections of objects |
 | `registry_objects` | Junction: registry ↔ object |
-| `teams` | Application/team metadata |
+| `teams` | Application/team metadata + notification channel URLs |
 | `team_registries` | Junction: team ↔ registry (access grants) |
-| `team_registry_keys` | Per-assignment API keys (SHA-256 hashed; full history preserved on rotation) |
-| `users` | Operator accounts with role, optional team assignment, and theme |
+| `team_registry_keys` | Per-assignment API keys (SHA-256 hashed; history preserved on rotation; optional expiry) |
+| `user_teams` | Junction: user ↔ team (many-to-many membership) |
+| `users` | Operator accounts with role and theme; no direct team column |
+| `webhooks` | Per-team outgoing HTTP webhook config (URL, secret, events, signing) |
+| `webhook_log` | Delivery history for every webhook attempt |
+| `policies` | Per-registry or per-team access control rules |
 | `settings` | Key/value runtime configuration |
 | `change_log` | Immutable admin mutation log with JSONB diffs |
 | `audit_log` | Immutable request log; fields snapshotted at request time |
@@ -1019,7 +1555,7 @@ Migration history:
 
 ## Themes
 
-Each operator account stores a personal theme preference in the database. Applied via a `data-theme` attribute on `<html>`.
+Each operator account stores a personal theme preference. Applied via a `data-theme` attribute on `<html>`.
 
 | Theme | Character |
 |---|---|
@@ -1029,7 +1565,7 @@ Each operator account stores a personal theme preference in the database. Applie
 | `forest` | Dark green accent |
 | `contrast` | Maximum contrast — near-black background, bright white accents |
 
-Preview and save from **Settings → General → Theme**.
+Preview and save from **Settings → General → Theme**. Does not affect the team dashboard (which uses a fixed dark theme).
 
 ---
 
@@ -1037,7 +1573,7 @@ Preview and save from **Settings → General → Theme**.
 
 ### API Key Security
 
-- Keys are generated using `secrets.token_urlsafe(32)` — 256 bits of cryptographic randomness.
+- Keys are generated using `secrets.token_urlsafe(40)` — 320 bits of cryptographic randomness.
 - Only the SHA-256 hex digest is stored. The plaintext is discarded after issuance.
 - There is no "reveal key" endpoint. If a key is lost, rotate it.
 - Key lookup is an indexed exact-match on the hash — constant time from the database's perspective.
@@ -1045,24 +1581,32 @@ Preview and save from **Settings → General → Theme**.
 
 ### Session Security
 
-- Admin sessions use `secrets.token_urlsafe(32)` tokens stored in Redis as `aegis:session:<token>`.
-- The session payload (`user_id`, `username`, `role`, `team_id`, `theme`) is stored server-side. Clients hold only the opaque token.
+- Admin and user sessions use `secrets.token_urlsafe(32)` tokens stored in Redis as `aegis:session:<token>`.
+- Session payload (`user_id`, `username`, `role`, `team_ids`, `theme`) is stored server-side. Clients hold only the opaque token.
 - No JWTs. No signing keys to rotate. No `alg:none` attacks.
 - Sessions are invalidated immediately on logout — the Redis key is deleted.
-- TTL is configurable (default 8 hours). Extending sessions requires re-login.
+- Admins can revoke any session from **Settings → Sessions**.
+- TTL is configurable (default 8 hours).
+
+### Inbound Webhook Security
+
+- Inbound webhook URLs are authenticated with the team's HMAC signing secret.
+- The secret is stored in the `webhooks` table (same as outgoing signing secret).
+- HMAC signing must be explicitly enabled — inbound webhooks are rejected if signing is not configured.
+- Comparison uses `hmac.compare_digest` — constant-time, not vulnerable to timing attacks.
 
 ### Integrity Guarantees
 
-- **Objects cannot be deleted while in use.** Deleting an object that belongs to any registry returns `409 Conflict`. This prevents silent access breakage.
+- **Objects cannot be deleted while in use.** Deleting an object that belongs to any registry returns `409 Conflict`.
 - **Audit and change log records are write-only.** There are no API endpoints that modify or delete log entries.
 - **All log fields are snapshotted.** Renaming or deleting a team or registry does not alter historical audit entries.
-- **Change numbers are enforced by default.** Every `/secrets` call must reference an approved ITSM change ticket. This enforcement is configurable but the setting change itself is logged.
-- **`auth.json` is never stored in the database.** Vault credentials live only on the filesystem, mounted as a Docker volume. They are excluded from version control.
+- **Change numbers are enforced by default.** Every `/secrets` call must reference an approved ITSM change ticket. This is configurable globally and per-registry/team via policy.
+- **`auth.json` is never stored in the database.** Vault credentials live only on the filesystem, mounted as a Docker volume.
 
 ### Passwords
 
-- Operator account passwords are hashed using bcrypt (via the `bcrypt` library directly — not `passlib`, which is incompatible with bcrypt ≥ 4 on Python 3.12).
-- The admin bootstrap password (`ADMIN_PASSWORD`) is only used on first startup to seed the initial account. It is not stored — only the bcrypt hash is persisted.
+- Operator account passwords are hashed using bcrypt (via the `bcrypt` library directly — not `passlib`).
+- The admin bootstrap password (`ADMIN_PASSWORD`) is only used on first startup to seed the initial account. Only the bcrypt hash is persisted.
 
 ---
 
@@ -1090,10 +1634,7 @@ docker compose up -d
 
 ### Rename the database without data loss
 
-If you need to rename the database (e.g. after changing `POSTGRES_DB` in compose):
-
 ```bash
-# Connect as superuser and rename in-place
 docker exec -it aegis-postgres-1 psql -U broker \
   -c "ALTER DATABASE old_name RENAME TO new_name;"
 
@@ -1101,7 +1642,7 @@ docker exec -it aegis-postgres-1 psql -U broker \
 docker compose up -d broker
 ```
 
-> Do **not** use `docker compose down -v` to rename — this destroys all data. The `ALTER DATABASE` approach is lossless.
+> Do **not** use `docker compose down -v` to rename — this destroys all data.
 
 ---
 
@@ -1111,9 +1652,13 @@ docker compose up -d broker
 GET /health
 ```
 
-Returns `200 OK` with `{"status": "ok"}`. No authentication required.
+Returns `200 OK` with `{"status": "ok"}`. No authentication required. Does not exercise the database or Redis — intentionally lightweight.
 
-Used by Docker Compose's `healthcheck` directive and by load balancers or uptime monitors. The endpoint does not exercise the database or Redis — it is intentionally lightweight.
+```
+GET /docs
+```
+
+Interactive OpenAPI documentation (Swagger UI). Linked from the Settings panel header in the admin panel.
 
 ---
 
@@ -1121,11 +1666,15 @@ Used by Docker Compose's `healthcheck` directive and by load balancers or uptime
 
 ```
 aegis/
-├── api.py              — FastAPI application, all routes, auth, session management
+├── api.py              — FastAPI application: all routes, auth, session management,
+│                         user self-service, inbound webhooks, metrics, SIEM exports
 ├── broker.py           — Secret fetcher: groups objects by vendor, dispatches to functions.py
 ├── functions.py        — Vendor-specific implementations (CyberArk, Vault, AWS, Conjur)
-├── models.py           — SQLAlchemy ORM models
+├── models.py           — SQLAlchemy ORM models (all 14 tables)
 ├── database.py         — Database session factory
+├── webhook.py          — Outgoing webhook delivery (HTTP + retry + HMAC signing)
+│                         + Slack, MS Teams, Discord notification formatters
+├── scheduler.py        — Background scheduler: key expiry checks, rotation events
 ├── rate_limit.py       — Redis-backed per-key rate limiter
 ├── siem.py             — SIEM adapters (stdout, Splunk, S3, Datadog)
 ├── apps.py             — Legacy compatibility shim
@@ -1133,12 +1682,15 @@ aegis/
 ├── registry.py         — Registry utilities
 ├── requirements.txt    — Python dependencies
 ├── Dockerfile          — Container image definition
-├── docker-compose.yml  — Local development stack
+├── docker-compose.yml  — Local development stack (Aegis + PostgreSQL + Redis)
 ├── alembic.ini         — Alembic configuration
 ├── alembic/
-│   └── versions/       — Database migration scripts (001–005)
+│   └── versions/       — Database migration scripts (001–008)
 ├── static/
-│   └── index.html      — Single-file admin panel (vanilla JS + Tailwind CDN)
+│   ├── index.html      — Admin panel (vanilla JS + Tailwind CDN, single file)
+│   ├── dashboard.html  — Team self-service dashboard (Overview | Webhooks | Activity tabs)
+│   ├── login.html      — Login page
+│   └── 404.html        — Branded 404 page
 └── config/
     ├── auth.json        — Vault credentials (gitignored)
     └── auth.json.example — Template for auth.json

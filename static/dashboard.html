@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aegis — My Team</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+/* ── Design tokens ────────────────────────────────────── */
+:root {
+  --bg:        #07090f;
+  --surface-1: #0d1117;
+  --surface-2: #131820;
+  --surface-3: #1a2130;
+  --border:    #1e2a3a;
+  --border-hi: #2a3f58;
+  --text-1:    #e2e8f0;
+  --text-2:    #94a3b8;
+  --text-3:    #4a5568;
+  --indigo:    #6366f1;
+  --indigo-hi: #818cf8;
+  --indigo-lo: #1e1f4a;
+  --success:   #10b981;
+  --warning:   #f59e0b;
+  --danger:    #ef4444;
+  --danger-lo: #3a1515;
+}
+* { font-family: 'Fira Code', monospace; box-sizing: border-box; }
+body { background: var(--bg); color: var(--text-1); margin: 0; }
+
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: var(--surface-1); }
+::-webkit-scrollbar-thumb { background: var(--border-hi); border-radius: 3px; }
+
+:focus-visible { outline: 2px solid var(--indigo); outline-offset: 2px; border-radius: 4px; }
+
+/* ── Typography ──────────────────────────────────────── */
+.text-xs  { font-size: 11px; line-height: 1.5; }
+.text-sm  { font-size: 12px; line-height: 1.5; }
+.text-md  { font-size: 13px; line-height: 1.6; }
+.text-lg  { font-size: 15px; line-height: 1.5; }
+.text-xl  { font-size: 18px; line-height: 1.4; }
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border-radius: 5px;
+  font-size: 12px; font-weight: 500;
+  font-family: 'Fira Code', monospace;
+  cursor: pointer; transition: all 0.15s;
+  border: none; white-space: nowrap;
+}
+.btn:disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+.btn-primary  { background: var(--indigo); color: #fff; }
+.btn-primary:hover  { background: var(--indigo-hi); box-shadow: 0 0 12px rgba(99,102,241,0.35); }
+.btn-ghost    { background: transparent; color: var(--text-2); border: 1px solid var(--border); }
+.btn-ghost:hover    { background: var(--surface-3); color: var(--text-1); border-color: var(--border-hi); }
+.btn-sm { padding: 4px 10px; font-size: 11px; }
+
+/* ── Pills ───────────────────────────────────────────── */
+.pill {
+  display: inline-flex; align-items: center;
+  padding: 2px 8px; border-radius: 4px;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+.pill-amber  { background: #2a1f00; color: #fcd34d; border: 1px solid #78600a; }
+.pill-red    { background: #3a1515; color: #fca5a5; border: 1px solid #7f1d1d; }
+.pill-green  { background: #07291a; color: #6ee7b7; border: 1px solid #065f46; }
+.pill-indigo { background: #1a1d4a; color: #a5b4fc; border: 1px solid #2d3178; }
+
+/* ── Tables ──────────────────────────────────────────── */
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table thead th {
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+.data-table tbody tr {
+  border-bottom: 1px solid var(--border);
+  transition: background 0.1s;
+}
+.data-table tbody tr:last-child { border-bottom: none; }
+.data-table tbody tr:hover { background: var(--surface-2); }
+.data-table tbody td { padding: 10px 16px; font-size: 12px; color: var(--text-2); }
+.data-table tbody td.td-primary { color: var(--text-1); font-weight: 500; }
+
+/* ── Cards ───────────────────────────────────────────── */
+.card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.stat-card {
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 20px;
+  position: relative;
+  overflow: hidden;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.stat-card:hover { border-color: var(--border-hi); box-shadow: 0 4px 24px rgba(0,0,0,0.4); }
+.stat-card::before {
+  content: ''; position: absolute;
+  top: 0; left: 0; right: 0; height: 1px;
+}
+.stat-card.accent-indigo::before { background: linear-gradient(90deg, var(--indigo), transparent); }
+.stat-card.accent-emerald::before { background: linear-gradient(90deg, #10b981, transparent); }
+.stat-card.accent-amber::before  { background: linear-gradient(90deg, #f59e0b, transparent); }
+.stat-card.accent-red::before    { background: linear-gradient(90deg, #ef4444, transparent); }
+
+/* ── Misc ────────────────────────────────────────────── */
+.section-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-3); margin-bottom: 8px; }
+.badge-count { display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;background:var(--indigo-lo);color:var(--indigo-hi);border-radius:9px;font-size:10px;font-weight:600; }
+.divider { border: none; border-top: 1px solid var(--border); margin: 0; }
+.empty-state { text-align: center; padding: 48px 24px; color: var(--text-3); font-size: 12px; }
+.truncate { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ── Animations ──────────────────────────────────────── */
+.fade-in { animation: fadeIn 0.15s ease; }
+@keyframes fadeIn { from { opacity:0; transform:translateY(-4px); } to { opacity:1; transform:translateY(0); } }
+.slide-up { animation: slideUp 0.2s ease; }
+@keyframes slideUp { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, .fade-in, .slide-up { animation: none !important; transition: none !important; }
+}
+
+/* ── Layout ──────────────────────────────────────────── */
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+
+/* ── Topbar ──────────────────────────────────────────── */
+#topbar {
+  height: 52px;
+  background: var(--surface-1);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center;
+  padding: 0 24px; gap: 12px;
+  position: sticky; top: 0; z-index: 50;
+  flex-shrink: 0;
+}
+.topbar-logo {
+  width: 30px; height: 30px;
+  background: var(--indigo-lo);
+  border: 1px solid rgba(99,102,241,0.4);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+}
+.topbar-logo svg { color: var(--indigo-hi); }
+
+/* ── Main content ────────────────────────────────────── */
+#main {
+  flex: 1;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+  padding: 32px 24px 64px;
+}
+
+/* ── Key preview token ───────────────────────────────── */
+.key-token {
+  display: inline-flex; align-items: center; gap: 6px;
+  background: var(--indigo-lo);
+  border: 1px solid rgba(99,102,241,0.3);
+  border-radius: 5px;
+  padding: 3px 10px;
+  font-size: 11px;
+  color: var(--indigo-hi);
+  letter-spacing: 0.04em;
+}
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- Top bar -->
+  <header id="topbar">
+    <div class="topbar-logo">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+    <span style="font-size:14px;font-weight:600;color:var(--text-1)">Aegis</span>
+    <span style="font-size:11px;color:var(--text-3);padding:2px 8px;border:1px solid var(--border);border-radius:4px;">User</span>
+    <span style="flex:1"></span>
+    <span style="font-size:11px;color:var(--text-3)">Signed in as <span id="topbar-name" style="color:var(--text-2);font-weight:500"></span></span>
+    <a href="/docs" target="_blank" class="btn btn-ghost btn-sm" style="text-decoration:none;">Docs</a>
+    <button class="btn btn-ghost btn-sm" onclick="signOut()">Sign out</button>
+  </header>
+
+  <!-- Page body -->
+  <main id="main" style="display:none">
+
+    <!-- Page header -->
+    <div style="margin-bottom:20px" class="fade-in">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:4px">
+        <h1 style="font-size:20px;font-weight:600;color:var(--text-1)" id="team-heading">My Team</h1>
+        <span id="team-badge" class="badge-count" style="display:none"></span>
+      </div>
+      <div id="team-id-row" style="display:none;align-items:center;gap:8px;margin-top:4px">
+        <span style="font-size:10px;color:var(--text-3)">Team ID:</span>
+        <code id="team-id-val" style="font-size:10px;color:var(--text-2);background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;"></code>
+        <button onclick="copyTeamId()" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;">copy</button>
+      </div>
+    </div>
+
+    <!-- Tabs -->
+    <div style="display:flex;gap:0;border-bottom:1px solid var(--border);margin-bottom:24px;">
+      <button id="tab-overview" onclick="switchTab('overview')" class="dash-tab dash-tab-active">Overview</button>
+      <button id="tab-webhooks" onclick="switchTab('webhooks')" class="dash-tab">Webhooks</button>
+      <button id="tab-activity" onclick="switchTab('activity')" class="dash-tab">Activity</button>
+    </div>
+
+    <!-- Error banner -->
+    <div id="err-banner" style="display:none;background:var(--danger-lo);border:1px solid rgba(239,68,68,0.3);border-radius:7px;padding:12px 16px;font-size:12px;color:var(--danger);margin-bottom:20px"></div>
+
+    <!-- ── Overview tab ── -->
+    <div id="pane-overview">
+      <!-- Stat cards -->
+      <div id="stats-row" style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:28px;display:none">
+        <div class="stat-card accent-indigo">
+          <div class="section-label">Registries</div>
+          <div style="font-size:28px;font-weight:600;color:var(--text-1);margin:6px 0 4px" id="stat-regs">—</div>
+          <div style="font-size:11px;color:var(--text-3)">assigned to your team</div>
+        </div>
+        <div class="stat-card accent-emerald">
+          <div class="section-label">Active Keys</div>
+          <div style="font-size:28px;font-weight:600;color:var(--success);margin:6px 0 4px" id="stat-keys">—</div>
+          <div style="font-size:11px;color:var(--text-3)">credentials available</div>
+        </div>
+        <div class="stat-card accent-amber">
+          <div class="section-label">Expiring Soon</div>
+          <div style="font-size:28px;font-weight:600;color:var(--warning);margin:6px 0 4px" id="stat-expiring">—</div>
+          <div style="font-size:11px;color:var(--text-3)">within 30 days</div>
+        </div>
+        <div class="stat-card">
+          <div class="section-label">Requests</div>
+          <div style="font-size:28px;font-weight:600;color:var(--text-1);margin:6px 0 4px" id="stat-requests">—</div>
+          <div style="font-size:11px;color:var(--text-3)">total API calls</div>
+        </div>
+      </div>
+      <!-- Registry cards -->
+      <div id="content">
+        <div style="text-align:center;padding:64px 24px;color:var(--text-3);font-size:12px">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ── Webhooks tab ── -->
+    <div id="pane-webhooks" style="display:none">
+      <div id="wh-content">
+        <div style="text-align:center;padding:64px 24px;color:var(--text-3);font-size:12px">Loading…</div>
+      </div>
+    </div>
+
+    <!-- ── Activity tab ── -->
+    <div id="pane-activity" style="display:none">
+      <div id="act-content">
+        <div style="text-align:center;padding:64px 24px;color:var(--text-3);font-size:12px">Loading…</div>
+      </div>
+    </div>
+
+  </main>
+</div>
+
+<style>
+.dash-tab {
+  background: none; border: none; cursor: pointer;
+  padding: 8px 16px; font-size: 12px; font-family: 'Fira Code', monospace;
+  color: var(--text-3); border-bottom: 2px solid transparent;
+  margin-bottom: -1px; transition: color 0.15s, border-color 0.15s;
+}
+.dash-tab:hover { color: var(--text-2); }
+.dash-tab-active { color: var(--indigo-hi) !important; border-bottom-color: var(--indigo) !important; }
+.wh-section { background: var(--surface-1); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 16px; }
+.wh-section-hd { padding: 14px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; }
+.wh-section-bd { padding: 16px; }
+.inbound-url-box {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px;
+  padding: 10px 14px; font-size: 12px; color: var(--indigo-hi);
+  display: flex; align-items: center; gap: 10px; margin-top: 8px;
+}
+.form-row { display: grid; grid-template-columns: 140px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
+.form-label { font-size: 11px; color: var(--text-3); }
+.form-input {
+  background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px;
+  color: var(--text-1); font-family: 'Fira Code', monospace; font-size: 12px;
+  padding: 6px 10px; width: 100%;
+}
+.form-input:focus { outline: 2px solid var(--indigo); border-color: transparent; }
+.checkbox-row { display: flex; flex-wrap: wrap; gap: 8px; margin: 4px 0; }
+.event-chip { display: flex; align-items: center; gap: 4px; }
+.event-chip input[type=checkbox] { accent-color: var(--indigo); }
+.event-chip label { font-size: 11px; color: var(--text-2); cursor: pointer; }
+.act-row { display: grid; grid-template-columns: 150px 140px 100px 1fr 80px; gap: 8px; padding: 8px 12px; font-size: 11px; border-bottom: 1px solid var(--border); align-items: center; }
+.act-row:last-child { border-bottom: none; }
+.act-hd { color: var(--text-3); font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; background: var(--surface-2); }
+</style>
+
+<script>
+const S = { token: null, username: null, role: null, teams: [], activeTeamId: null };
+
+// ── Boot ──────────────────────────────────────────────────────────────────
+(function boot() {
+  const saved = sessionStorage.getItem('aegis_session');
+  if (!saved) { window.location.href = '/login'; return; }
+
+  let d;
+  try { d = JSON.parse(saved); } catch (_) { window.location.href = '/login'; return; }
+
+  fetch('/api/me', { headers: { 'Authorization': 'Bearer ' + d.token } })
+    .then(r => {
+      if (!r.ok) { sessionStorage.removeItem('aegis_session'); window.location.href = '/login'; return null; }
+      return r.json();
+    })
+    .then(me => {
+      if (!me) return;
+      if (me.role === 'admin') { window.location.href = '/admin'; return; }
+
+      S.token    = d.token;
+      S.username = me.username;
+      S.role     = me.role;
+
+      document.getElementById('topbar-name').textContent = me.username;
+      document.getElementById('main').style.display = 'block';
+      loadTeam();
+    })
+    .catch(() => { window.location.href = '/login'; });
+})();
+
+// ── Tab switching ─────────────────────────────────────────────────────────
+let activeTab = 'overview';
+function switchTab(tab) {
+  ['overview','webhooks','activity'].forEach(t => {
+    document.getElementById('pane-' + t).style.display = t === tab ? '' : 'none';
+    document.getElementById('tab-' + t).classList.toggle('dash-tab-active', t === tab);
+  });
+  activeTab = tab;
+  if (tab === 'webhooks' && !S._whLoaded) loadWebhooks();
+  if (tab === 'activity' && !S._actLoaded) loadActivity();
+}
+
+// ── Load team data ────────────────────────────────────────────────────────
+async function loadTeam() {
+  try {
+    const r = await fetch('/api/my-teams', { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    S.teams = d.teams || [];
+    S.activeTeamId = S.teams[0]?.id || null;
+    render(S.teams);
+  } catch (e) {
+    showErr('Failed to load team data: ' + e.message);
+    document.getElementById('content').innerHTML = '';
+  }
+}
+
+function showErr(msg) {
+  const b = document.getElementById('err-banner');
+  b.textContent = msg;
+  b.style.display = 'block';
+}
+
+function copyTeamId() {
+  const val = document.getElementById('team-id-val').textContent;
+  navigator.clipboard.writeText(val).then(() => flash('Team ID copied'));
+}
+
+function flash(msg) {
+  const el = Object.assign(document.createElement('div'), {
+    textContent: msg,
+    style: 'position:fixed;bottom:20px;right:20px;background:var(--surface-3);border:1px solid var(--border-hi);color:var(--text-1);font-size:12px;padding:8px 16px;border-radius:6px;z-index:9999;animation:fadeIn .15s ease'
+  });
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2500);
+}
+
+// ── Render overview ───────────────────────────────────────────────────────
+function render(teams) {
+  const now  = Date.now();
+  const soon = 30 * 24 * 60 * 60 * 1000;
+
+  const allRegs    = teams.flatMap(t => t.registries || []);
+  const activeKeys = allRegs.filter(r => r.key_preview).length;
+  const expiring   = allRegs.filter(r => {
+    if (!r.expires_at) return false;
+    const ms = new Date(r.expires_at).getTime() - now;
+    return ms > 0 && ms < soon;
+  }).length;
+
+  if (teams.length === 1) {
+    document.getElementById('team-heading').textContent = teams[0].name;
+    const idRow = document.getElementById('team-id-row');
+    idRow.style.display = 'flex';
+    document.getElementById('team-id-val').textContent = teams[0].id;
+  } else if (teams.length > 1) {
+    document.getElementById('team-heading').textContent = 'My Teams';
+    const badge = document.getElementById('team-badge');
+    badge.textContent = teams.length;
+    badge.style.display = 'inline-flex';
+  }
+
+  document.getElementById('stat-regs').textContent     = allRegs.length;
+  document.getElementById('stat-keys').textContent     = activeKeys;
+  document.getElementById('stat-expiring').textContent = expiring;
+  document.getElementById('stat-requests').textContent = '…';
+  document.getElementById('stats-row').style.display   = 'grid';
+
+  // Load request count async
+  if (S.activeTeamId) {
+    fetch('/api/my-metrics?team_id=' + S.activeTeamId, { headers: { 'Authorization': 'Bearer ' + S.token } })
+      .then(r => r.ok ? r.json() : null)
+      .then(d => {
+        if (d) document.getElementById('stat-requests').textContent = d.requests?.total ?? '—';
+      }).catch(() => {});
+  }
+
+  if (!allRegs.length) {
+    document.getElementById('content').innerHTML =
+      `<div class="card"><div class="empty-state">No registries assigned to your team yet.<br>Contact your administrator.</div></div>`;
+    return;
+  }
+
+  document.getElementById('content').innerHTML = teams.map(team => {
+    const regs = team.registries || [];
+    if (!regs.length) return '';
+    const header = teams.length > 1
+      ? `<div style="margin-bottom:12px;">
+           <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);">${x(team.name)}</div>
+           <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+             <code style="font-size:10px;color:var(--text-3);background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;">${team.id}</code>
+             <button onclick="navigator.clipboard.writeText('${team.id}').then(()=>flash('ID copied'))" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;">copy</button>
+           </div>
+         </div>`
+      : '';
+    return header + regs.map(reg => buildRegCard(reg, now, soon)).join('');
+  }).join('');
+}
+
+// ── Webhooks tab ──────────────────────────────────────────────────────────
+const ALL_EVENTS = ['key.expiring_soon','key.rotated','key.revoked','policy.violated'];
+
+async function loadWebhooks() {
+  S._whLoaded = true;
+  const tid = S.activeTeamId;
+  if (!tid) {
+    document.getElementById('wh-content').innerHTML = `<div class="empty-state">No team assigned.</div>`;
+    return;
+  }
+  try {
+    const r = await fetch('/api/my-webhook?team_id=' + tid, { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderWebhooks(d);
+  } catch (e) {
+    document.getElementById('wh-content').innerHTML = `<div class="empty-state" style="color:var(--danger)">Failed: ${x(e.message)}</div>`;
+  }
+}
+
+function renderWebhooks(d) {
+  const wh   = d.webhook || {};
+  const notif = d.notifications || {};
+  const inboundUrl = window.location.origin + d.inbound_url;
+
+  document.getElementById('wh-content').innerHTML = `
+
+    <!-- Inbound webhook URL -->
+    <div class="wh-section">
+      <div class="wh-section-hd">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Inbound Webhook</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">Auto-generated URL for your CI/CD to trigger Aegis actions (key rotation, ping)</div>
+        </div>
+      </div>
+      <div class="wh-section-bd">
+        <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">POST to this URL with your signing secret as the Bearer token:</div>
+        <div class="inbound-url-box">
+          <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x(inboundUrl)}</code>
+          <button onclick="navigator.clipboard.writeText('${x(inboundUrl)}').then(()=>flash('URL copied'))" style="background:none;border:1px solid var(--border-hi);border-radius:4px;color:var(--text-2);cursor:pointer;font-size:10px;padding:3px 8px;font-family:'Fira Code',monospace;white-space:nowrap;">Copy URL</button>
+        </div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:10px">
+          Supported actions: <code style="color:var(--text-2)">ping</code>, <code style="color:var(--text-2)">rotate_key</code><br>
+          Requires signing secret to be set (see Outgoing Webhook section below).
+        </div>
+        <div style="margin-top:12px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:10px 12px;font-size:11px;color:var(--text-3);">
+          <div style="color:var(--text-2);margin-bottom:4px;font-weight:600;">Example — rotate a registry key from CI/CD:</div>
+          <code style="color:var(--indigo-hi);display:block;white-space:pre-wrap;">curl -X POST ${x(inboundUrl)} \\
+  -H "Authorization: Bearer &lt;signing_secret&gt;" \\
+  -H "Content-Type: application/json" \\
+  -d '{"action":"rotate_key","registry_id":"&lt;reg-uuid&gt;"}'</code>
+        </div>
+      </div>
+    </div>
+
+    <!-- Outgoing HTTP webhook -->
+    <div class="wh-section">
+      <div class="wh-section-hd">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Outgoing HTTP Webhook</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">Aegis POSTs signed events to your endpoint</div>
+        </div>
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+          <span style="font-size:11px;color:var(--text-3)">Enabled</span>
+          <input type="checkbox" id="wh-enabled" ${wh.enabled ? 'checked' : ''} style="accent-color:var(--indigo);width:14px;height:14px;">
+        </label>
+      </div>
+      <div class="wh-section-bd">
+        <div class="form-row">
+          <span class="form-label">Endpoint URL</span>
+          <input id="wh-url" class="form-input" placeholder="https://your-service.example.com/webhook" value="${x(wh.url||'')}">
+        </div>
+        <div class="form-row" style="align-items:start">
+          <span class="form-label" style="padding-top:4px">Subscribe to</span>
+          <div class="checkbox-row">
+            ${ALL_EVENTS.map(e => `
+              <div class="event-chip">
+                <input type="checkbox" id="ev-${e}" value="${e}" ${(wh.events||[]).includes(e)?'checked':''}>
+                <label for="ev-${e}">${e}</label>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="form-row">
+          <span class="form-label">HMAC Signing</span>
+          <label style="display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="wh-signing" ${wh.signing_enabled?'checked':''} style="accent-color:var(--indigo);width:14px;height:14px;">
+            <span style="font-size:11px;color:var(--text-2)">Sign requests (X-Aegis-Signature header)</span>
+          </label>
+        </div>
+        <div class="form-row">
+          <span class="form-label">Secret</span>
+          <input id="wh-secret" class="form-input" type="password" placeholder="${wh.has_secret ? '••••••••  (leave blank to keep)' : 'Auto-generated if signing enabled'}" value="">
+        </div>
+        <div style="display:flex;gap:8px;margin-top:4px">
+          <button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save Webhook</button>
+          ${wh.id ? `<button class="btn btn-ghost btn-sm" onclick="deleteWebhook()">Remove</button>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <!-- Notification channels -->
+    <div class="wh-section">
+      <div class="wh-section-hd">
+        <div>
+          <div style="font-size:13px;font-weight:600;color:var(--text-1)">Notification Channels</div>
+          <div style="font-size:11px;color:var(--text-3);margin-top:2px">Best-effort delivery — Slack, MS Teams, Discord</div>
+        </div>
+      </div>
+      <div class="wh-section-bd">
+        <div class="form-row">
+          <span class="form-label" style="display:flex;align-items:center;gap:5px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#e8b44e"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
+            Slack
+          </span>
+          <input id="notif-slack" class="form-input" placeholder="https://hooks.slack.com/services/…" value="${x(notif.slack_webhook_url||'')}">
+        </div>
+        <div class="form-row">
+          <span class="form-label" style="display:flex;align-items:center;gap:5px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="#5558AF"><path d="M24 12c0 6.627-5.373 12-12 12S0 18.627 0 12 5.373 0 12 0s12 5.373 12 12z"/><path fill="#fff" d="M10.154 13.5h-.677l-.247-.738H7.884L7.64 13.5H7l1.215-3.5h.725l1.214 3.5zm-1.106-1.284-.39-1.17-.39 1.17h.78zM14.077 13.5h-.63l-.03-.447c-.202.338-.544.507-.926.507-.917 0-1.463-.74-1.463-1.81 0-1.072.566-1.812 1.465-1.812.365 0 .694.152.895.44V10h.69v3.5zm-.69-1.75c0-.7-.283-1.122-.775-1.122-.492 0-.775.422-.775 1.122 0 .7.283 1.122.775 1.122.492 0 .775-.422.775-1.122zM16.077 13.5h-.69V10h.69v3.5zM17 13.5h-.69V10H17v3.5z"/></svg>
+            MS Teams
+          </span>
+          <input id="notif-teams" class="form-input" placeholder="https://your-org.webhook.office.com/…" value="${x(notif.ms_teams_webhook_url||'')}">
+        </div>
+        <div class="form-row">
+          <span class="form-label" style="display:flex;align-items:center;gap:5px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.1 18.08.114 18.1.133 18.11a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+            Discord
+          </span>
+          <input id="notif-discord" class="form-input" placeholder="https://discord.com/api/webhooks/…" value="${x(notif.discord_webhook_url||'')}">
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save Channels</button>
+      </div>
+    </div>
+  `;
+}
+
+async function saveWebhook() {
+  const tid = S.activeTeamId;
+  const url     = document.getElementById('wh-url')?.value.trim();
+  const enabled = document.getElementById('wh-enabled')?.checked ?? true;
+  const signing = document.getElementById('wh-signing')?.checked ?? false;
+  const secret  = document.getElementById('wh-secret')?.value.trim();
+  const events  = ALL_EVENTS.filter(e => document.getElementById('ev-'+e)?.checked);
+
+  const body = {
+    url: url || null,
+    enabled,
+    events,
+    signing_enabled: signing,
+    secret: secret || null,
+    slack_webhook_url:    document.getElementById('notif-slack')?.value.trim() || null,
+    ms_teams_webhook_url: document.getElementById('notif-teams')?.value.trim() || null,
+    discord_webhook_url:  document.getElementById('notif-discord')?.value.trim() || null,
+  };
+
+  try {
+    const r = await fetch('/api/my-webhook?team_id=' + tid, {
+      method: 'PUT',
+      headers: { 'Authorization': 'Bearer ' + S.token, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) throw new Error((await r.json()).detail || await r.text());
+    flash('Webhook settings saved');
+    S._whLoaded = false;
+    loadWebhooks();
+  } catch (e) {
+    showErr('Save failed: ' + e.message);
+  }
+}
+
+async function deleteWebhook() {
+  if (!confirm('Remove outgoing webhook?')) return;
+  try {
+    await fetch('/api/my-webhook?team_id=' + S.activeTeamId, {
+      method: 'DELETE',
+      headers: { 'Authorization': 'Bearer ' + S.token },
+    });
+    flash('Webhook removed');
+    S._whLoaded = false;
+    loadWebhooks();
+  } catch (e) {
+    showErr('Delete failed: ' + e.message);
+  }
+}
+
+// ── Activity tab ──────────────────────────────────────────────────────────
+async function loadActivity() {
+  S._actLoaded = true;
+  const tid = S.activeTeamId;
+  if (!tid) {
+    document.getElementById('act-content').innerHTML = `<div class="empty-state">No team assigned.</div>`;
+    return;
+  }
+  try {
+    const r = await fetch('/api/my-metrics?team_id=' + tid, { headers: { 'Authorization': 'Bearer ' + S.token } });
+    if (!r.ok) throw new Error(await r.text());
+    const d = await r.json();
+    renderActivity(d);
+  } catch (e) {
+    document.getElementById('act-content').innerHTML = `<div class="empty-state" style="color:var(--danger)">Failed: ${x(e.message)}</div>`;
+  }
+}
+
+function renderActivity(d) {
+  const req = d.requests || {};
+  const keys = d.keys || {};
+  const recent = d.recent_audit || [];
+
+  document.getElementById('act-content').innerHTML = `
+    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:24px">
+      <div class="stat-card accent-indigo">
+        <div class="section-label">Total Requests</div>
+        <div style="font-size:24px;font-weight:600;color:var(--text-1);margin:6px 0 4px">${req.total ?? 0}</div>
+        <div style="font-size:11px;color:var(--text-3)">${req.success ?? 0} success · ${req.denied ?? 0} denied · ${req.error ?? 0} error</div>
+      </div>
+      <div class="stat-card accent-emerald">
+        <div class="section-label">Active Keys</div>
+        <div style="font-size:24px;font-weight:600;color:var(--success);margin:6px 0 4px">${keys.active ?? 0}</div>
+        <div style="font-size:11px;color:var(--text-3)">${keys.expiring_soon ?? 0} expiring within 30 days</div>
+      </div>
+      <div class="stat-card accent-amber">
+        <div class="section-label">Revoked Keys</div>
+        <div style="font-size:24px;font-weight:600;color:var(--text-2);margin:6px 0 4px">${keys.revoked ?? 0}</div>
+        <div style="font-size:11px;color:var(--text-3)">historical</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border)">
+        <div style="font-size:12px;font-weight:600;color:var(--text-1)">Recent API Activity</div>
+      </div>
+      ${recent.length ? `
+        <div class="act-row act-hd">
+          <div>Timestamp</div><div>Event</div><div>Outcome</div><div>Registry</div><div>Source IP</div>
+        </div>
+        ${recent.map(e => `
+          <div class="act-row">
+            <div style="color:var(--text-3)">${e.timestamp ? e.timestamp.replace('T',' ').slice(0,19) : '—'}</div>
+            <div style="color:var(--text-2)">${x(e.event||'—')}</div>
+            <div><span class="pill ${e.outcome==='success'?'pill-green':e.outcome==='denied'?'pill-red':'pill-amber'}">${x(e.outcome||'—')}</span></div>
+            <div style="color:var(--text-2)">${x(e.registry_name||'—')}</div>
+            <div style="color:var(--text-3)">${x(e.source_ip||'—')}</div>
+          </div>`).join('')}
+      ` : `<div class="empty-state">No activity yet.</div>`}
+    </div>
+  `;
+}
+
+function buildRegCard(reg, now, soon) {
+  const objects = reg.objects || [];
+  const isExpiring = reg.expires_at && (() => {
+    const exp = new Date(reg.expires_at).getTime();
+    return exp > now && exp - now < soon;
+  })();
+  const isExpired = reg.expires_at && new Date(reg.expires_at).getTime() < now;
+
+  let expiryBadge = '';
+  if (isExpired) {
+    expiryBadge = `<span class="pill pill-red">Expired ${x(reg.expires_at.slice(0,10))}</span>`;
+  } else if (isExpiring) {
+    expiryBadge = `<span class="pill pill-amber">Expires ${x(reg.expires_at.slice(0,10))}</span>`;
+  }
+
+  const keyRow = reg.key_preview
+    ? `<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+         <span class="section-label" style="margin:0">API Key</span>
+         <span class="key-token">
+           <svg width="10" height="10" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+             <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+           </svg>
+           ${x(reg.key_preview)}••••
+         </span>
+         <span style="font-size:10px;color:var(--text-3)">Preview only — full key provided at issuance</span>
+         ${expiryBadge}
+       </div>`
+    : `<div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px">
+         <svg width="12" height="12" fill="none" stroke="var(--text-3)" stroke-width="2" viewBox="0 0 24 24">
+           <path d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636"/>
+         </svg>
+         <span style="font-size:11px;color:var(--text-3)">No active key — contact your administrator</span>
+       </div>`;
+
+  const objectsBlock = objects.length
+    ? `<table class="data-table">
+         <thead>
+           <tr>
+             <th>Object</th>
+             <th>Vendor</th>
+             <th>Path</th>
+           </tr>
+         </thead>
+         <tbody>
+           ${objects.map(o => {
+             // o can be a string (name only) or an object with fields
+             if (typeof o === 'string') {
+               return `<tr><td class="td-primary">${x(o)}</td><td>—</td><td>—</td></tr>`;
+             }
+             return `<tr>
+               <td class="td-primary">${x(o.name || o)}</td>
+               <td>${o.vendor ? `<span class="pill pill-indigo">${x(o.vendor)}</span>` : '—'}</td>
+               <td style="font-size:11px;color:var(--text-3)">${x(o.path || '—')}</td>
+             </tr>`;
+           }).join('')}
+         </tbody>
+       </table>`
+    : `<div class="empty-state" style="padding:20px">No objects in this registry.</div>`;
+
+  return `
+  <div class="card slide-up" style="margin-bottom:16px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px;border-bottom:1px solid var(--border)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <svg width="14" height="14" fill="none" stroke="var(--indigo-hi)" stroke-width="2" viewBox="0 0 24 24">
+          <rect x="2" y="3" width="20" height="5" rx="1"/><rect x="2" y="10" width="20" height="5" rx="1"/><rect x="2" y="17" width="20" height="5" rx="1"/>
+        </svg>
+        <span style="font-size:13px;font-weight:600;color:var(--text-1)">${x(reg.name)}</span>
+        <span class="badge-count">${objects.length} obj</span>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        ${!isExpired && !isExpiring && reg.expires_at ? `<span style="font-size:10px;color:var(--text-3)">exp ${reg.expires_at.slice(0,10)}</span>` : ''}
+        ${reg.key_preview ? `<span class="pill pill-green">Active</span>` : `<span class="pill pill-red">No Key</span>`}
+      </div>
+    </div>
+    ${keyRow}
+    ${objectsBlock}
+  </div>`;
+}
+
+// ── Escape HTML ───────────────────────────────────────────────────────────
+function x(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+// ── Sign out ──────────────────────────────────────────────────────────────
+async function signOut() {
+  try {
+    await fetch('/api/logout', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + S.token }
+    });
+  } catch (_) {}
+  sessionStorage.removeItem('aegis_session');
+  window.location.href = '/login';
+}
+</script>
+</body>
+</html>

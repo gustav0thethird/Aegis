@@ -1,0 +1,2274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aegis — Documentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:        #0d0f14;
+  --surface:   #13161d;
+  --surface-2: #1a1e28;
+  --border:    #1e2330;
+  --border-2:  #252a38;
+  --text-1:    #e2e8f0;
+  --text-2:    #94a3b8;
+  --text-3:    #64748b;
+  --indigo:    #6366f1;
+  --indigo-hi: #818cf8;
+  --indigo-lo: rgba(99,102,241,0.12);
+  --green:     #22c55e;
+  --green-lo:  rgba(34,197,94,0.1);
+  --amber:     #f59e0b;
+  --amber-lo:  rgba(245,158,11,0.1);
+  --red:       #ef4444;
+  --red-lo:    rgba(239,68,68,0.1);
+  --cyan:      #06b6d4;
+  --cyan-lo:   rgba(6,182,212,0.1);
+  --sidebar-w: 240px;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  font-family: 'Fira Code', monospace;
+  background: var(--bg);
+  color: var(--text-1);
+  font-size: 13px;
+  line-height: 1.6;
+  display: flex;
+  min-height: 100vh;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  width: var(--sidebar-w);
+  min-width: var(--sidebar-w);
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  position: fixed;
+  top: 0; left: 0; bottom: 0;
+  overflow-y: auto;
+  z-index: 10;
+  padding: 0 0 32px;
+}
+
+.sidebar-logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 20px 18px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-logo-icon {
+  width: 30px; height: 30px;
+  background: var(--indigo-lo);
+  border: 1px solid var(--indigo);
+  border-radius: 7px;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+
+.sidebar-logo-icon svg { color: var(--indigo); }
+
+.sidebar-logo-text { font-size: 14px; font-weight: 600; }
+.sidebar-logo-sub  { font-size: 10px; color: var(--text-3); letter-spacing: 0.04em; text-transform: uppercase; }
+
+.sidebar-section-label {
+  font-size: 10px;
+  color: var(--text-3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 16px 18px 6px;
+}
+
+.sidebar-link {
+  display: block;
+  padding: 6px 18px;
+  font-size: 12px;
+  color: var(--text-2);
+  text-decoration: none;
+  border-left: 2px solid transparent;
+  transition: color 0.12s, border-color 0.12s;
+  cursor: pointer;
+}
+
+.sidebar-link:hover { color: var(--text-1); }
+.sidebar-link.active { color: var(--indigo-hi); border-left-color: var(--indigo); }
+
+.sidebar-link.sub {
+  padding-left: 30px;
+  font-size: 11px;
+}
+
+.sidebar-footer {
+  position: absolute;
+  bottom: 0; left: 0; right: 0;
+  padding: 14px 18px;
+  border-top: 1px solid var(--border);
+  display: flex; gap: 10px;
+}
+
+.sidebar-footer a {
+  font-size: 11px;
+  color: var(--text-3);
+  text-decoration: none;
+  transition: color 0.12s;
+}
+
+.sidebar-footer a:hover { color: var(--indigo-hi); }
+
+/* ── Content ── */
+.content {
+  margin-left: var(--sidebar-w);
+  flex: 1;
+  max-width: 900px;
+  padding: 48px 48px 96px;
+}
+
+h1 { font-size: 28px; font-weight: 600; color: var(--text-1); margin-bottom: 8px; letter-spacing: -0.02em; }
+h2 { font-size: 20px; font-weight: 600; color: var(--text-1); margin: 48px 0 16px; padding-top: 8px; }
+h3 { font-size: 15px; font-weight: 600; color: var(--text-1); margin: 32px 0 10px; }
+h4 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 20px 0 8px; }
+
+p { color: var(--text-2); margin-bottom: 14px; }
+p:last-child { margin-bottom: 0; }
+
+a { color: var(--indigo-hi); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.lead {
+  font-size: 15px;
+  color: var(--text-2);
+  margin-bottom: 32px;
+  line-height: 1.7;
+}
+
+.divider {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 48px 0;
+}
+
+/* ── Code ── */
+code {
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 1px 6px;
+  color: var(--indigo-hi);
+}
+
+pre {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px 18px;
+  overflow-x: auto;
+  margin: 12px 0 20px;
+  position: relative;
+}
+
+pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--text-1);
+  font-size: 12px;
+  line-height: 1.65;
+}
+
+.copy-btn {
+  position: absolute;
+  top: 10px; right: 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-3);
+  font-family: 'Fira Code', monospace;
+  font-size: 10px;
+  padding: 3px 8px;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+
+.copy-btn:hover { color: var(--text-1); }
+
+/* ── Method badges ── */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+  margin-right: 6px;
+  vertical-align: middle;
+  font-family: 'Fira Code', monospace;
+}
+
+.badge-get    { background: var(--green-lo);  color: var(--green);  border: 1px solid rgba(34,197,94,.25); }
+.badge-post   { background: var(--cyan-lo);   color: var(--cyan);   border: 1px solid rgba(6,182,212,.25); }
+.badge-put    { background: var(--amber-lo);  color: var(--amber);  border: 1px solid rgba(245,158,11,.25); }
+.badge-patch  { background: var(--indigo-lo); color: var(--indigo-hi); border: 1px solid rgba(99,102,241,.25); }
+.badge-delete { background: var(--red-lo);    color: var(--red);    border: 1px solid rgba(239,68,68,.25); }
+.badge-event  { background: var(--indigo-lo); color: var(--indigo-hi); border: 1px solid rgba(99,102,241,.25); }
+
+/* ── Endpoint card ── */
+.endpoint {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 16px;
+  overflow: hidden;
+}
+
+.endpoint-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  cursor: pointer;
+  user-select: none;
+  border-bottom: 1px solid transparent;
+  transition: background 0.12s;
+}
+
+.endpoint-header:hover { background: var(--surface-2); }
+.endpoint-header.open  { border-bottom-color: var(--border); }
+
+.endpoint-path {
+  font-size: 13px;
+  color: var(--text-1);
+  font-family: 'Fira Code', monospace;
+  flex: 1;
+}
+
+.endpoint-desc {
+  font-size: 11px;
+  color: var(--text-3);
+}
+
+.endpoint-chevron {
+  color: var(--text-3);
+  font-size: 10px;
+  transition: transform 0.15s;
+}
+
+.endpoint-header.open .endpoint-chevron { transform: rotate(90deg); }
+
+.endpoint-body {
+  display: none;
+  padding: 16px;
+}
+
+.endpoint-body.open { display: block; }
+
+/* ── Tables ── */
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0 20px;
+  font-size: 12px;
+}
+
+th {
+  text-align: left;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-2);
+  vertical-align: top;
+}
+
+td:first-child { color: var(--text-1); font-family: 'Fira Code', monospace; }
+tr:last-child td { border-bottom: none; }
+
+/* ── Callout ── */
+.callout {
+  border-radius: 7px;
+  padding: 12px 16px;
+  margin: 16px 0;
+  font-size: 12px;
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.callout-info  { background: var(--indigo-lo); border: 1px solid rgba(99,102,241,.25); }
+.callout-warn  { background: var(--amber-lo);  border: 1px solid rgba(245,158,11,.25); }
+.callout-tip   { background: var(--green-lo);  border: 1px solid rgba(34,197,94,.25); }
+
+.callout-icon { font-size: 14px; flex-shrink: 0; }
+.callout p { margin: 0; color: var(--text-2); line-height: 1.5; }
+
+/* ── API Companion ── */
+.companion {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  margin-top: 16px;
+}
+
+.companion-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+.method-select {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-1);
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  padding: 4px 8px;
+  height: 32px;
+  width: 90px;
+  cursor: pointer;
+}
+
+.url-input {
+  flex: 1;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-1);
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  padding: 4px 10px;
+  height: 32px;
+  outline: none;
+  transition: border-color 0.12s;
+}
+
+.url-input:focus { border-color: var(--indigo); }
+
+.send-btn {
+  background: var(--indigo);
+  border: none;
+  border-radius: 5px;
+  color: #fff;
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  font-weight: 500;
+  padding: 0 16px;
+  height: 32px;
+  cursor: pointer;
+  transition: opacity 0.12s;
+  white-space: nowrap;
+}
+
+.send-btn:hover { opacity: 0.88; }
+.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.companion-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+}
+
+.ctab {
+  padding: 8px 16px;
+  font-size: 11px;
+  color: var(--text-3);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.12s;
+  user-select: none;
+}
+
+.ctab:hover { color: var(--text-1); }
+.ctab.active { color: var(--indigo-hi); border-bottom-color: var(--indigo); }
+
+.companion-panel {
+  display: none;
+  padding: 14px 16px;
+}
+
+.companion-panel.active { display: block; }
+
+.companion-textarea {
+  width: 100%;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  color: var(--text-1);
+  font-family: 'Fira Code', monospace;
+  font-size: 12px;
+  padding: 10px;
+  min-height: 100px;
+  resize: vertical;
+  outline: none;
+  line-height: 1.5;
+}
+
+.companion-textarea:focus { border-color: var(--indigo); }
+
+.header-row { display: flex; gap: 6px; margin-bottom: 6px; }
+.header-row input {
+  flex: 1; height: 30px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--text-1);
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  padding: 0 8px;
+  outline: none;
+}
+
+.header-row input:focus { border-color: var(--indigo); }
+
+.header-row button {
+  width: 28px; height: 30px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--red);
+  cursor: pointer;
+  font-size: 14px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+.add-header-btn {
+  background: none;
+  border: 1px dashed var(--border);
+  border-radius: 4px;
+  color: var(--text-3);
+  font-family: 'Fira Code', monospace;
+  font-size: 11px;
+  padding: 4px 10px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 4px;
+}
+
+.add-header-btn:hover { color: var(--text-1); border-color: var(--border-2); }
+
+.response-pane {
+  border-top: 1px solid var(--border);
+}
+
+.response-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.status-pill {
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.status-2xx { background: var(--green-lo); color: var(--green); }
+.status-4xx { background: var(--amber-lo); color: var(--amber); }
+.status-5xx { background: var(--red-lo); color: var(--red); }
+.status-xxx { background: var(--surface-2); color: var(--text-3); }
+
+.response-time { color: var(--text-3); }
+
+pre.response-body {
+  margin: 0;
+  border: none;
+  border-radius: 0;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+/* ── Lifecycle diagram ── */
+.lifecycle {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  margin: 20px 0;
+  flex-wrap: wrap;
+}
+
+.lc-step {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.lc-box {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 14px;
+  font-size: 11px;
+  color: var(--text-2);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.lc-box.active { border-color: var(--indigo); color: var(--indigo-hi); background: var(--indigo-lo); }
+.lc-arrow { color: var(--text-3); padding: 0 6px; font-size: 16px; }
+
+/* ── Misc ── */
+.tag {
+  display: inline-block;
+  font-size: 10px;
+  padding: 2px 7px;
+  border-radius: 10px;
+  margin: 2px;
+  font-weight: 500;
+}
+
+.tag-required { background: var(--red-lo); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
+.tag-optional { background: var(--surface-2); color: var(--text-3); border: 1px solid var(--border); }
+.tag-admin    { background: var(--amber-lo); color: var(--amber); border: 1px solid rgba(245,158,11,.2); }
+.tag-user     { background: var(--green-lo); color: var(--green); border: 1px solid rgba(34,197,94,.2); }
+
+.section { scroll-margin-top: 24px; }
+</style>
+</head>
+<body>
+
+<!-- ══════════════ SIDEBAR ══════════════ -->
+<nav class="sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-icon">
+      <svg width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+    <div>
+      <div class="sidebar-logo-text">Aegis</div>
+      <div class="sidebar-logo-sub">Docs v3</div>
+    </div>
+  </div>
+
+  <div class="sidebar-section-label">Overview</div>
+  <a class="sidebar-link" href="#introduction">Introduction</a>
+  <a class="sidebar-link" href="#quickstart">Quick Start</a>
+  <a class="sidebar-link" href="#authentication">Authentication</a>
+
+  <div class="sidebar-section-label">Concepts</div>
+  <a class="sidebar-link" href="#objects">Objects</a>
+  <a class="sidebar-link" href="#registries">Registries</a>
+  <a class="sidebar-link" href="#teams">Teams &amp; Keys</a>
+  <a class="sidebar-link" href="#policies">Policy Engine</a>
+  <a class="sidebar-link" href="#key-lifecycle">Key Lifecycle</a>
+  <a class="sidebar-link" href="#webhooks">Webhooks</a>
+  <a class="sidebar-link" href="#siem">SIEM / Audit</a>
+
+  <div class="sidebar-section-label">API Reference</div>
+  <a class="sidebar-link" href="#api-developer">Developer</a>
+  <a class="sidebar-link sub" href="#api-secrets">GET /secrets</a>
+  <a class="sidebar-link" href="#api-self-service">Self-Service</a>
+  <a class="sidebar-link sub" href="#api-my-teams">my-teams</a>
+  <a class="sidebar-link sub" href="#api-my-webhook">my-webhook</a>
+  <a class="sidebar-link sub" href="#api-my-metrics">my-metrics</a>
+  <a class="sidebar-link sub" href="#api-inbound">inbound webhook</a>
+  <a class="sidebar-link" href="#api-admin-objects">Objects</a>
+  <a class="sidebar-link" href="#api-admin-registries">Registries</a>
+  <a class="sidebar-link" href="#api-admin-teams">Teams</a>
+  <a class="sidebar-link sub" href="#api-admin-keys">Key Suspension</a>
+  <a class="sidebar-link" href="#api-admin-policies">Policies</a>
+  <a class="sidebar-link" href="#api-admin-webhooks">Webhooks</a>
+  <a class="sidebar-link" href="#api-admin-users">Users</a>
+  <a class="sidebar-link" href="#api-admin-settings">Settings</a>
+  <a class="sidebar-link" href="#api-admin-logs">Logs &amp; Metrics</a>
+
+  <div class="sidebar-section-label">API Companion</div>
+  <a class="sidebar-link" href="#companion">Request Tester</a>
+
+  <div class="sidebar-footer">
+    <a href="/admin">Admin Panel</a>
+    <span style="color:var(--border);">·</span>
+    <a href="/login">Sign In</a>
+  </div>
+</nav>
+
+<!-- ══════════════ CONTENT ══════════════ -->
+<main class="content">
+
+<!-- ── Introduction ── -->
+<section class="section" id="introduction">
+  <h1>Aegis Documentation</h1>
+  <p class="lead">Aegis is a vendor-agnostic secrets broker. Applications fetch credentials through a single authenticated API rather than connecting directly to CyberArk, HashiCorp Vault, AWS Secrets Manager, or Conjur. Access is governed by policy, every request is logged, and credentials are never cached.</p>
+
+  <div class="callout callout-info">
+    <span class="callout-icon">ℹ</span>
+    <p>Aegis stores <strong>no plaintext credentials</strong>. It stores object definitions (which secret to fetch and from where) and API keys (hashed with SHA-256). Plaintext keys are shown once at issuance and never again.</p>
+  </div>
+
+  <h3>Architecture</h3>
+  <div class="arch-diagram">
+
+    <!-- Row 1: callers -->
+    <div class="arch-row">
+      <div class="arch-col arch-callers">
+        <div class="arch-pill arch-pill-caller">
+          <span class="arch-pill-label">Application</span>
+          <span class="arch-pill-sub">Bearer sk_ key</span>
+        </div>
+        <div class="arch-pill arch-pill-caller">
+          <span class="arch-pill-label">CI/CD Pipeline</span>
+          <span class="arch-pill-sub">HMAC signed</span>
+        </div>
+      </div>
+
+      <div class="arch-arrows-in">
+        <div class="arch-arrow-line">
+          <span class="arch-arrow-label">GET /secrets</span>
+          <span class="arch-arr">→</span>
+        </div>
+        <div class="arch-arrow-line">
+          <span class="arch-arrow-label">POST /inbound/{id}</span>
+          <span class="arch-arr">→</span>
+        </div>
+      </div>
+
+      <!-- Centre: broker -->
+      <div class="arch-broker">
+        <div class="arch-broker-title">Aegis Broker</div>
+        <div class="arch-broker-tags">
+          <span class="arch-btag">Policy Engine</span>
+          <span class="arch-btag">Rate Limit</span>
+          <span class="arch-btag">IP / Time / CN</span>
+          <span class="arch-btag">Audit Log</span>
+          <span class="arch-btag">Change Log</span>
+        </div>
+      </div>
+
+      <div class="arch-arrows-out">
+        <div class="arch-arrow-line">
+          <span class="arch-arr">→</span>
+          <span class="arch-arrow-label">fetch secret</span>
+        </div>
+        <div class="arch-arrow-line arch-arrow-down">
+          <span class="arch-arr">↓</span>
+          <span class="arch-arrow-label">events</span>
+        </div>
+      </div>
+
+      <div class="arch-col arch-targets">
+        <div class="arch-pill arch-pill-backend">
+          <span class="arch-pill-label">CyberArk</span>
+        </div>
+        <div class="arch-pill arch-pill-backend">
+          <span class="arch-pill-label">HashiCorp Vault</span>
+        </div>
+        <div class="arch-pill arch-pill-backend">
+          <span class="arch-pill-label">AWS Secrets</span>
+        </div>
+        <div class="arch-pill arch-pill-backend">
+          <span class="arch-pill-label">Conjur</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Row 2: outputs -->
+    <div class="arch-row arch-row-outputs">
+      <div class="arch-col" style="grid-column: 3;">
+        <div class="arch-output-row">
+          <div class="arch-pill arch-pill-output">
+            <span class="arch-pill-label">stdout / S3 / SIEM</span>
+            <span class="arch-pill-sub">audit &amp; change logs</span>
+          </div>
+          <div class="arch-pill arch-pill-output">
+            <span class="arch-pill-label">Webhook Dispatcher</span>
+            <span class="arch-pill-sub">Slack · MS Teams · Discord</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <style>
+  .arch-diagram {
+    margin: 20px 0 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+  }
+  .arch-row {
+    display: grid;
+    grid-template-columns: 160px 110px 1fr 80px 140px;
+    align-items: center;
+    gap: 0;
+  }
+  .arch-row-outputs {
+    grid-template-columns: 160px 110px 1fr 80px 140px;
+    margin-top: 0;
+    padding-top: 0;
+  }
+  .arch-col { display: flex; flex-direction: column; gap: 8px; }
+  .arch-callers { align-items: flex-start; }
+  .arch-targets { align-items: flex-end; }
+
+  .arch-pill {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 8px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    font-size: 11px;
+    white-space: nowrap;
+  }
+  .arch-pill-label { color: var(--text-1); font-weight: 600; font-size: 11px; }
+  .arch-pill-sub   { color: var(--text-3); font-size: 10px; }
+
+  .arch-pill-caller  { border-color: var(--indigo); background: var(--indigo-lo); }
+  .arch-pill-caller .arch-pill-label { color: var(--indigo-hi); }
+
+  .arch-pill-backend { border-color: var(--border-2); background: var(--surface-2); padding: 6px 12px; }
+  .arch-pill-backend .arch-pill-label { color: var(--text-2); font-weight: 500; }
+
+  .arch-pill-output  { border-color: rgba(34,197,94,.3); background: var(--green-lo); }
+  .arch-pill-output .arch-pill-label { color: var(--green); }
+  .arch-pill-output .arch-pill-sub { color: var(--text-3); }
+
+  .arch-broker {
+    background: var(--surface-2);
+    border: 1px solid var(--border-2);
+    border-radius: 10px;
+    padding: 14px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    align-items: center;
+    text-align: center;
+  }
+  .arch-broker-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-1);
+    letter-spacing: -0.01em;
+  }
+  .arch-broker-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    justify-content: center;
+  }
+  .arch-btag {
+    font-size: 10px;
+    padding: 2px 8px;
+    border-radius: 10px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    color: var(--text-3);
+    white-space: nowrap;
+  }
+
+  .arch-arrows-in, .arch-arrows-out {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    align-items: center;
+    padding: 0 4px;
+  }
+  .arch-arrow-line {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+  }
+  .arch-arrow-label { font-size: 9px; color: var(--text-3); letter-spacing: 0.02em; white-space: nowrap; }
+  .arch-arr { color: var(--text-3); font-size: 14px; line-height: 1; }
+
+  .arch-output-row {
+    display: flex;
+    gap: 8px;
+    justify-content: center;
+    padding-top: 12px;
+    border-top: 1px dashed var(--border);
+    margin-top: 8px;
+  }
+  </style>
+</section>
+
+<hr class="divider">
+
+<!-- ── Quick Start ── -->
+<section class="section" id="quickstart">
+  <h2>Quick Start</h2>
+
+  <h3>1. Create an Object</h3>
+  <p>An <em>object</em> defines a secret: where it lives and how to fetch it.</p>
+  <pre><code>curl -X POST /admin/api/objects \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name":     "db_password",
+    "vendor":   "vault",
+    "auth_ref": "prod-vault",
+    "path":     "secret/data/myapp/db"
+  }'</code></pre>
+
+  <h3>2. Create a Registry</h3>
+  <p>A <em>registry</em> is a named collection of objects that can be granted to teams.</p>
+  <pre><code>curl -X POST /admin/api/registries \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -d '{"name": "production-db"}'</code></pre>
+
+  <h3>3. Add Objects to the Registry</h3>
+  <pre><code>curl -X POST /admin/api/registries/&lt;reg-id&gt;/objects \
+  -H "Authorization: Bearer &lt;admin-token&gt;" \
+  -d '{"object_name": "db_password"}'</code></pre>
+
+  <h3>4. Create a Team and Assign the Registry</h3>
+  <pre><code>curl -X POST /admin/api/teams -d '{"name": "backend"}' ...
+curl -X POST /admin/api/teams/&lt;team-id&gt;/registries/&lt;reg-id&gt; ...</code></pre>
+
+  <h3>5. Fetch Secrets</h3>
+  <p>Use the API key shown at assignment time. Include a change/ticket number for auditability.</p>
+  <pre><code>curl https://aegis.example.com/secrets \
+  -H "Authorization: Bearer sk_..." \
+  -H "X-Change-Number: CHG-0042"</code></pre>
+
+  <p>Response:</p>
+  <pre><code>{
+  "db_password": "hunter2",
+  "_meta": {
+    "registry": "production-db",
+    "fetched_at": "2026-03-15T09:00:00Z"
+  }
+}</code></pre>
+</section>
+
+<hr class="divider">
+
+<!-- ── Authentication ── -->
+<section class="section" id="authentication">
+  <h2>Authentication</h2>
+
+  <h3>Developer API key</h3>
+  <p>Applications authenticate with a per-team-registry API key. Keys are prefixed <code>sk_</code> and must be sent as a Bearer token:</p>
+  <pre><code>Authorization: Bearer sk_&lt;token&gt;</code></pre>
+  <p>Keys are generated when a team is assigned to a registry. A new key is issued on every rotation. The old key is immediately revoked.</p>
+
+  <h3>Admin session token</h3>
+  <p>The Admin Panel and Admin API use session tokens obtained by <code>POST /api/login</code>. Sessions expire after 8 hours (configurable).</p>
+  <pre><code>POST /api/login
+{"username": "admin", "password": "..."}
+→ {"token": "...", "role": "admin", ...}</code></pre>
+  <p>Pass the token as a Bearer header on all <code>/admin/api/*</code> calls.</p>
+
+  <h3>HTTP Basic (CI/CD)</h3>
+  <p>Admin API endpoints also accept HTTP Basic auth with username <code>admin</code> and the <code>ADMIN_PASSWORD</code> environment variable.</p>
+
+  <h3>Role matrix</h3>
+  <table>
+    <thead><tr><th>Route</th><th>admin</th><th>user</th><th>API key</th></tr></thead>
+    <tbody>
+      <tr><td>/secrets</td><td>—</td><td>—</td><td>✓</td></tr>
+      <tr><td>/api/me, /api/my-teams</td><td>✓</td><td>✓</td><td>—</td></tr>
+      <tr><td>/api/my-webhook (GET/PUT/DELETE)</td><td>✓</td><td>✓</td><td>—</td></tr>
+      <tr><td>/api/my-metrics, /api/my-metrics/prometheus</td><td>✓</td><td>✓</td><td>—</td></tr>
+      <tr><td>/api/inbound/{team_id} (inbound webhook)</td><td>—</td><td>—</td><td>— (HMAC signed)</td></tr>
+      <tr><td>/admin/api/*</td><td>✓</td><td>—</td><td>—</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-info">
+    <span class="callout-icon">ℹ</span>
+    <p>Self-service endpoints (<code>/api/my-*</code>) scope their responses to the authenticated user's team membership. Users belonging to multiple teams pass <code>?team_id=&lt;uuid&gt;</code> to select the active team; omitting it defaults to their first team.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Objects ── -->
+<section class="section" id="objects">
+  <h2>Objects</h2>
+  <p>An <em>object</em> is the atomic unit of a secret. It stores enough information for Aegis to locate and retrieve a credential from a backend, but never stores the credential itself.</p>
+
+  <table>
+    <thead><tr><th>Field</th><th>Type</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>name</td><td>string</td><td>Unique identifier. Used in responses and registry membership.</td></tr>
+      <tr><td>vendor</td><td>enum</td><td><code>cyberark</code> | <code>vault</code> | <code>aws</code> | <code>conjur</code></td></tr>
+      <tr><td>auth_ref</td><td>string</td><td>Key into <code>auth.json</code> for backend credentials.</td></tr>
+      <tr><td>path</td><td>string</td><td>Secret path / object name / ARN.</td></tr>
+      <tr><td>platform</td><td>string?</td><td>CyberArk platform ID (optional).</td></tr>
+      <tr><td>safe</td><td>string?</td><td>CyberArk safe / Conjur namespace (optional).</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<hr class="divider">
+
+<!-- ── Registries ── -->
+<section class="section" id="registries">
+  <h2>Registries</h2>
+  <p>A <em>registry</em> is a named collection of objects. Teams are granted access to entire registries (not individual objects). This allows you to group related secrets and rotate access at the registry level.</p>
+
+  <div class="callout callout-tip">
+    <span class="callout-icon">✓</span>
+    <p>Group secrets by environment and service, e.g. <code>prod-db</code>, <code>staging-db</code>, <code>prod-cache</code>. Each team gets a separate API key per registry.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Teams ── -->
+<section class="section" id="teams">
+  <h2>Teams &amp; API Keys</h2>
+  <p>A <em>team</em> represents a consumer of secrets — a service, CI pipeline, or application. Teams are assigned to registries; each assignment produces a unique API key.</p>
+
+  <h3>User membership</h3>
+  <p>Operator accounts (<code>role: user</code>) belong to one or more teams via the <code>user_teams</code> junction table. Team members can log in to the team dashboard to manage their own webhooks, notification channels, and view their audit activity. Admins manage team membership via <code>POST /admin/api/teams/{id}/members/{user_id}</code>.</p>
+
+  <h3>Team ID</h3>
+  <p>Every team has a stable UUID. Team members can see their team ID on the dashboard (with a copy button). This ID is used as the path for the inbound webhook URL (<code>/api/inbound/{team_id}</code>) and as the <code>?team_id=</code> parameter for self-service API calls.</p>
+
+  <h3>Key lifecycle</h3>
+  <p>When a team is assigned to a registry, Aegis generates a <code>sk_</code>-prefixed key, stores only its SHA-256 hash, and shows the plaintext exactly once. There is no way to retrieve it again — rotate instead.</p>
+
+  <h3>Key suspension</h3>
+  <p>Admins can temporarily suspend a key without revoking it. A suspended key is rejected at <code>/secrets</code> with <code>401</code> (indistinguishable from a revoked key to the caller) but can be re-enabled without issuing a new key. Use this for incident response when you need to block a team immediately without burning their key.</p>
+
+  <h3>Multiple registries</h3>
+  <p>A team can be assigned to multiple registries. Each assignment has its own key, so a compromise of one key does not expose other secrets.</p>
+</section>
+
+<hr class="divider">
+
+<!-- ── Policies ── -->
+<section class="section" id="policies">
+  <h2>Policy Engine</h2>
+  <p>Policies constrain <code>GET /secrets</code> access. They can be set at the registry level (applies to all teams accessing that registry) or the team level (applies to that team for all its registries). Team policies are checked first; then registry policies.</p>
+
+  <table>
+    <thead><tr><th>Policy field</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>ip_allowlist</td><td>CIDR blocks the request source IP must match. Empty = unrestricted.</td></tr>
+      <tr><td>allowed_from / allowed_to</td><td>UTC time window. Requests outside the window are blocked.</td></tr>
+      <tr><td>cn_required</td><td>If true, requests must include a client certificate with a matching CN.</td></tr>
+      <tr><td>rate_limit_rpm</td><td>Maximum requests per minute from this team. Enforced via Redis.</td></tr>
+      <tr><td>max_key_days</td><td>Registry-only. API keys expire after this many days and are auto-rotated.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout callout-warn">
+    <span class="callout-icon">⚠</span>
+    <p>Policy violations fire a <code>policy.violated</code> webhook event if a webhook is configured for the team.</p>
+  </div>
+
+  <h3>Global settings</h3>
+  <p>Global defaults (configurable via <code>PUT /admin/api/settings</code>) are used when no registry or team policy is set:</p>
+  <table>
+    <thead><tr><th>Setting key</th><th>Default</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td>cn_required</td><td>false</td><td>Require client certificate globally</td></tr>
+      <tr><td>rate_limit_rpm</td><td>60</td><td>Global rate limit per team</td></tr>
+      <tr><td>session_ttl_hours</td><td>8</td><td>Admin session expiry</td></tr>
+      <tr><td>key_warning_days</td><td>7</td><td>Days before expiry to send <code>key.expiring_soon</code> event</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<hr class="divider">
+
+<!-- ── Key Lifecycle ── -->
+<section class="section" id="key-lifecycle">
+  <h2>Key Lifecycle</h2>
+
+  <div class="lifecycle">
+    <div class="lc-step">
+      <div class="lc-box active">Issued</div>
+      <span class="lc-arrow">→</span>
+    </div>
+    <div class="lc-step">
+      <div class="lc-box">Active</div>
+      <span class="lc-arrow">→</span>
+    </div>
+    <div class="lc-step">
+      <div class="lc-box" style="border-color:var(--amber);color:var(--amber);background:var(--amber-lo);">Suspended</div>
+      <span class="lc-arrow">↔</span>
+    </div>
+    <div class="lc-step">
+      <div class="lc-box">Active</div>
+      <span class="lc-arrow">→</span>
+    </div>
+    <div class="lc-step">
+      <div class="lc-box">Expiring Soon</div>
+      <span class="lc-arrow">→</span>
+    </div>
+    <div class="lc-step">
+      <div class="lc-box">Revoked</div>
+    </div>
+  </div>
+
+  <p><strong>Issued:</strong> Key is generated when a team is assigned to a registry. Plaintext shown once.</p>
+  <p><strong>Active:</strong> Key is valid. Every <code>GET /secrets</code> validates the hash.</p>
+  <p><strong>Suspended:</strong> Admin has temporarily disabled the key via <code>PATCH /admin/api/keys/{key_id}/suspend</code>. Requests are rejected with <code>401</code> (same as revoked — no information leak). The key can be re-enabled without rotation. Useful for incident response.</p>
+  <p><strong>Expiring soon:</strong> Within <code>key_warning_days</code> of <code>expires_at</code>, Aegis fires <code>key.expiring_soon</code> webhook. At most once per 23 hours.</p>
+  <p><strong>Auto-rotated:</strong> When <code>expires_at</code> is reached (checked daily by the scheduler), the old key is revoked and a new one is issued. A <code>key.rotated</code> webhook is fired containing the new plaintext key — your endpoint must persist it.</p>
+  <p><strong>Revoked:</strong> Key is permanently invalid. Revocation happens on manual rotation or when a team is unassigned from a registry.</p>
+
+  <div class="callout callout-warn">
+    <span class="callout-icon">⚠</span>
+    <p>For auto-rotation to deliver the new key, ensure the <code>key.rotated</code> webhook event is subscribed and the endpoint is reachable. If delivery fails, the key is still rotated — you will need to rotate manually from the admin panel to get a new plaintext.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Webhooks ── -->
+<section class="section" id="webhooks">
+  <h2>Webhooks &amp; Notifications</h2>
+  <p>Each team can have one outgoing webhook endpoint. Aegis will POST JSON to that URL when subscribed events occur. Delivery is attempted up to 3 times (immediately, then after 5s, then 30s). Teams can also receive human-readable alerts via Slack, MS Teams, or Discord notification channels.</p>
+
+  <h3>Outgoing webhooks (machine-to-machine)</h3>
+  <p>Outgoing webhooks deliver structured JSON events to an HTTP endpoint of your choice. Configure them in the admin panel (admin-only) or via the team self-service dashboard (<code>PUT /api/my-webhook</code>).</p>
+
+  <h3>Notification channels (human alerts)</h3>
+  <p>Teams can configure up to three notification channels for human-readable alerts on key events:</p>
+  <table>
+    <thead><tr><th>Channel</th><th>Format</th><th>Field</th></tr></thead>
+    <tbody>
+      <tr><td>Slack</td><td>Block Kit message with <code>key.rotated</code> / <code>key.expiring_soon</code> details</td><td><code>slack_webhook_url</code></td></tr>
+      <tr><td>MS Teams</td><td>Adaptive Card MessageCard</td><td><code>ms_teams_webhook_url</code></td></tr>
+      <tr><td>Discord</td><td>Embed with colour-coded event type</td><td><code>discord_webhook_url</code></td></tr>
+    </tbody>
+  </table>
+  <p>Notification channel URLs are set per team via <code>PUT /admin/api/teams/{id}/notifications</code> (admin) or the team dashboard Webhooks tab (team self-service).</p>
+
+  <h3>Events</h3>
+  <table>
+    <thead><tr><th>Event</th><th>When</th><th>Notable payload fields</th></tr></thead>
+    <tbody>
+      <tr><td><code>key.expiring_soon</code></td><td>Key will expire within <code>key_warning_days</code></td><td>registry, key_preview, detail</td></tr>
+      <tr><td><code>key.rotated</code></td><td>Key was rotated (scheduled or manual)</td><td>registry, <strong>new_key</strong>, key_preview, reason</td></tr>
+      <tr><td><code>key.revoked</code></td><td>Key revoked without replacement (team unassigned)</td><td>registry, key_preview</td></tr>
+      <tr><td><code>policy.violated</code></td><td>Request blocked by a policy rule</td><td>detail (reason for block)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Payload schema</h3>
+  <pre><code>{
+  "event":      "key.rotated",
+  "timestamp":  "2026-03-15T09:00:00.000Z",
+  "team":       { "id": "...", "name": "backend" },
+  "registry":   { "id": "...", "name": "production-db" },
+  "new_key":    "sk_...",        // key.rotated only — persist immediately
+  "key_preview": "sk_abc123...",
+  "reason":     "scheduled_expiry",
+  "detail":     null
+}</code></pre>
+
+  <h3>HMAC signing (optional)</h3>
+  <p>When signing is enabled for a webhook, Aegis adds an <code>X-Aegis-Signature</code> header:</p>
+  <pre><code>X-Aegis-Signature: sha256=&lt;hex-digest&gt;</code></pre>
+  <p>Verify it in your endpoint:</p>
+  <pre><code>import hmac, hashlib
+
+def verify(payload_bytes: bytes, secret: str, signature_header: str) -> bool:
+    expected = "sha256=" + hmac.new(
+        secret.encode(), payload_bytes, hashlib.sha256
+    ).hexdigest()
+    return hmac.compare_digest(expected, signature_header)</code></pre>
+
+  <div class="callout callout-info">
+    <span class="callout-icon">ℹ</span>
+    <p>Signing is <strong>opt-in</strong>. Without it, Aegis still POSTs the event with <code>X-Aegis-Event</code> header — suitable for internal endpoints on private networks. Enable signing for public-facing endpoints.</p>
+  </div>
+
+  <h3>Inbound webhooks (CI/CD → Aegis)</h3>
+  <p>Aegis also accepts inbound webhook calls from CI/CD pipelines. Each team has a stable inbound URL based on their team ID:</p>
+  <pre><code>POST /api/inbound/{team_id}</code></pre>
+  <p>Requests must be HMAC-SHA256 signed using the team's webhook signing secret (same secret as the outgoing webhook). Supported actions:</p>
+  <table>
+    <thead><tr><th>action</th><th>Description</th><th>Response</th></tr></thead>
+    <tbody>
+      <tr><td><code>ping</code></td><td>Connectivity check</td><td><code>{"ok": true, "action": "ping"}</code></td></tr>
+      <tr><td><code>rotate_key</code></td><td>Trigger key rotation for a specific registry</td><td>New plaintext key + preview</td></tr>
+    </tbody>
+  </table>
+  <pre><code># Ping from a CI pipeline
+curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
+  -H "Content-Type: application/json" \
+  -H "X-Aegis-Signature: sha256=&lt;hmac&gt;" \
+  -d '{"action": "ping"}'
+
+# Rotate key for a registry
+curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
+  -H "Content-Type: application/json" \
+  -H "X-Aegis-Signature: sha256=&lt;hmac&gt;" \
+  -d '{"action": "rotate_key", "registry_id": "&lt;reg-id&gt;"}'</code></pre>
+
+  <div class="callout callout-warn">
+    <span class="callout-icon">⚠</span>
+    <p>The inbound webhook requires an active webhook with <code>signing_enabled: true</code>. Requests with missing or invalid signatures return <code>401</code>.</p>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── SIEM ── -->
+<section class="section" id="siem">
+  <h2>SIEM &amp; Audit</h2>
+  <p>Every <code>GET /secrets</code> call is written to the <strong>audit log</strong>. Fields are snapshotted at request time so audit records remain accurate even after entities are renamed or deleted.</p>
+
+  <p>Audit events are emitted to configured <strong>log destinations</strong> (set via <code>LOG_DESTINATIONS</code> env var):</p>
+  <table>
+    <thead><tr><th>Destination</th><th>Description</th></tr></thead>
+    <tbody>
+      <tr><td><code>stdout</code></td><td>JSON lines to container stdout (default)</td></tr>
+      <tr><td><code>s3</code></td><td>Batched to S3 bucket (configure via <code>LOG_S3_BUCKET</code>, <code>LOG_S3_PREFIX</code>)</td></tr>
+      <tr><td><code>siem</code></td><td>Forward to a SIEM HTTP endpoint (<code>LOG_SIEM_URL</code>)</td></tr>
+    </tbody>
+  </table>
+
+  <p>The <strong>change log</strong> records every admin mutation (create/update/delete of objects, registries, teams, users, settings). Both logs are immutable — there is no delete endpoint.</p>
+</section>
+
+<hr class="divider">
+
+<!-- ══════════════ API REFERENCE ══════════════ -->
+
+<!-- ── Developer API ── -->
+<section class="section" id="api-developer">
+  <h2>API Reference — Developer</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/health</span>
+      <span class="endpoint-desc">Health check</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns 200 with <code>{"ok": true}</code>. No authentication required. Use for load-balancer health probes.</p>
+    </div>
+  </div>
+
+  <div class="endpoint" id="api-secrets">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/secrets</span>
+      <span class="endpoint-desc">Fetch secrets for an authenticated team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p><strong>Auth:</strong> Bearer API key (<code>sk_...</code>)</p>
+      <h4>Request headers</h4>
+      <table>
+        <thead><tr><th>Header</th><th>Required</th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>Authorization</td><td><span class="tag tag-required">required</span></td><td>Bearer sk_...</td></tr>
+          <tr><td>X-Change-Number</td><td><span class="tag tag-required">required</span></td><td>Change/ticket reference for audit trail</td></tr>
+          <tr><td>X-Forwarded-For</td><td><span class="tag tag-optional">optional</span></td><td>Client IP (used for IP allowlist policy)</td></tr>
+          <tr><td>X-TLS-Client-CN</td><td><span class="tag tag-optional">optional</span></td><td>Client certificate CN (used for cn_required policy)</td></tr>
+        </tbody>
+      </table>
+      <h4>Response <code>200 OK</code></h4>
+      <pre><code>{
+  "db_password": "hunter2",
+  "api_key":     "abc123",
+  "_meta": {
+    "registry":   "production-db",
+    "fetched_at": "2026-03-15T09:00:00Z"
+  }
+}</code></pre>
+      <h4>Error codes</h4>
+      <table>
+        <thead><tr><th>Status</th><th>Reason</th></tr></thead>
+        <tbody>
+          <tr><td>401</td><td>Invalid or revoked API key</td></tr>
+          <tr><td>403</td><td>Policy violation (IP, time window, CN, rate limit)</td></tr>
+          <tr><td>409</td><td>X-Change-Number missing or invalid</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── User Self-Service API ── -->
+<section class="section" id="api-self-service">
+  <h2>User Self-Service API</h2>
+  <p>These endpoints are available to any authenticated operator (both <span class="tag tag-admin">admin</span> and <span class="tag tag-user">user</span> roles). They are scoped to the caller's team membership. Users belonging to multiple teams pass <code>?team_id=&lt;uuid&gt;</code>; omitting it defaults to their first team.</p>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/api/me</span>
+      <span class="endpoint-desc">Current user profile</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <pre><code>{
+  "id":       "uuid",
+  "username": "alice",
+  "role":     "user",
+  "theme":    "default"
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint" id="api-my-teams">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/api/my-teams</span>
+      <span class="endpoint-desc">Teams the current user belongs to</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns all teams the authenticated user is a member of, including their registry assignments and active key metadata.</p>
+      <pre><code>[{
+  "id":         "uuid",
+  "name":       "backend",
+  "created_at": "...",
+  "registries": [{
+    "id":           "uuid",
+    "name":         "production-db",
+    "key_preview":  "sk_abc123...",
+    "key_id":       "uuid",
+    "key_suspended": false,
+    "expires_at":   null,
+    "objects":      ["db_password"]
+  }]
+}]</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint" id="api-my-webhook">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/api/my-webhook</span>
+      <span class="endpoint-desc">Get webhook config for current team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query: <code>?team_id=&lt;uuid&gt;</code> (optional — defaults to first team).</p>
+      <pre><code>{
+  "id":              "uuid",
+  "url":             "https://example.com/hooks/aegis",
+  "events":          ["key.rotated", "key.expiring_soon"],
+  "enabled":         true,
+  "signing_enabled": true,
+  "inbound_url":     "https://aegis.example.com/api/inbound/&lt;team-id&gt;",
+  "slack_webhook_url":    null,
+  "ms_teams_webhook_url": null,
+  "discord_webhook_url":  null,
+  "created_at": "..."
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/api/my-webhook</span>
+      <span class="endpoint-desc">Create or update webhook for current team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query: <code>?team_id=&lt;uuid&gt;</code> (optional). Upserts the webhook config. All fields are optional.</p>
+      <pre><code>{
+  "url":                  "https://example.com/hooks/aegis",
+  "events":               ["key.rotated", "key.expiring_soon"],
+  "enabled":              true,
+  "signing_enabled":      true,
+  "slack_webhook_url":    "https://hooks.slack.com/services/...",
+  "ms_teams_webhook_url": "https://outlook.office.com/webhook/...",
+  "discord_webhook_url":  "https://discord.com/api/webhooks/..."
+}</code></pre>
+      <p>When <code>signing_enabled</code> is first set to <code>true</code>, the response includes <code>new_secret</code> (shown once). Store it — this is the secret used to authenticate inbound webhook calls and to verify outgoing webhook signatures.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/api/my-webhook</span>
+      <span class="endpoint-desc">Remove webhook for current team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query: <code>?team_id=&lt;uuid&gt;</code> (optional). Returns <code>204</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint" id="api-my-metrics">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/api/my-metrics</span>
+      <span class="endpoint-desc">Team-scoped metrics (JSON)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query: <code>?team_id=&lt;uuid&gt;</code> (optional). Returns secret fetch counts, success/deny rates, and recent events for the authenticated team.</p>
+      <pre><code>{
+  "team_id":    "uuid",
+  "team_name":  "backend",
+  "period":     "30d",
+  "total":      1420,
+  "success":    1398,
+  "denied":     18,
+  "errors":     4,
+  "last_fetch": "2026-03-15T08:55:00Z"
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/api/my-metrics/prometheus</span>
+      <span class="endpoint-desc">Team-scoped metrics (Prometheus exposition)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query: <code>?team_id=&lt;uuid&gt;</code> (optional). Returns metrics in Prometheus text exposition format. Suitable for scraping by a team's own Prometheus or Grafana instance.</p>
+      <pre><code># HELP aegis_secrets_total Total secret fetches
+# TYPE aegis_secrets_total counter
+aegis_secrets_total{team="backend",outcome="success"} 1398
+aegis_secrets_total{team="backend",outcome="denied"} 18
+aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint" id="api-inbound">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/api/inbound/{team_id}</span>
+      <span class="endpoint-desc">Inbound webhook — CI/CD → Aegis</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p><strong>Auth:</strong> HMAC-SHA256 signature in <code>X-Aegis-Signature: sha256=&lt;hex&gt;</code> header, signed with the team's webhook secret. Requires <code>signing_enabled: true</code>.</p>
+      <h4>Body</h4>
+      <table>
+        <thead><tr><th>Field</th><th></th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>action</td><td><span class="tag tag-required">required</span></td><td><code>ping</code> | <code>rotate_key</code></td></tr>
+          <tr><td>registry_id</td><td><span class="tag tag-optional">optional</span></td><td>Required for <code>rotate_key</code></td></tr>
+        </tbody>
+      </table>
+      <h4>ping</h4>
+      <pre><code>POST /api/inbound/&lt;team-id&gt;
+{"action": "ping"}
+→ {"ok": true, "action": "ping"}</code></pre>
+      <h4>rotate_key</h4>
+      <pre><code>POST /api/inbound/&lt;team-id&gt;
+{"action": "rotate_key", "registry_id": "&lt;reg-uuid&gt;"}
+→ {
+  "ok":          true,
+  "action":      "rotate_key",
+  "new_key":     "sk_...",
+  "key_preview": "sk_abc123..."
+}</code></pre>
+      <div class="callout callout-warn">
+        <span class="callout-icon">⚠</span>
+        <p>The new plaintext key is returned once in the response body. Store it immediately.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Objects API ── -->
+<section class="section" id="api-admin-objects">
+  <h2>Admin API — Objects</h2>
+  <p>All admin endpoints require <span class="tag tag-admin">admin</span> session token or HTTP Basic.</p>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/objects</span>
+      <span class="endpoint-desc">List all objects</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns array of all secret objects sorted by name.</p>
+      <pre><code>[{
+  "name":     "db_password",
+  "vendor":   "vault",
+  "auth_ref": "prod-vault",
+  "path":     "secret/data/myapp/db",
+  "platform": null,
+  "safe":     null,
+  "created_at": "...",
+  "created_by": "admin"
+}]</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/objects</span>
+      <span class="endpoint-desc">Create an object</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <table>
+        <thead><tr><th>Field</th><th></th><th>Description</th></tr></thead>
+        <tbody>
+          <tr><td>name</td><td><span class="tag tag-required">required</span></td><td>Unique identifier (slug)</td></tr>
+          <tr><td>vendor</td><td><span class="tag tag-required">required</span></td><td>cyberark | vault | aws | conjur</td></tr>
+          <tr><td>auth_ref</td><td><span class="tag tag-required">required</span></td><td>Key in auth.json</td></tr>
+          <tr><td>path</td><td><span class="tag tag-required">required</span></td><td>Secret path / ARN</td></tr>
+          <tr><td>platform</td><td><span class="tag tag-optional">optional</span></td><td>CyberArk platform ID</td></tr>
+          <tr><td>safe</td><td><span class="tag tag-optional">optional</span></td><td>CyberArk safe / Conjur namespace</td></tr>
+        </tbody>
+      </table>
+      <p>Returns <code>201</code> with the created object.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/objects/{name}</span>
+      <span class="endpoint-desc">Update an object</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Same body as POST. All fields are replaced.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/objects/{name}</span>
+      <span class="endpoint-desc">Delete an object</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>204</code>. Fails with <code>409</code> if the object is referenced by a registry.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Registries API ── -->
+<section class="section" id="api-admin-registries">
+  <h2>Admin API — Registries</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/registries</span>
+      <span class="endpoint-desc">List registries</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <pre><code>[{
+  "id":   "uuid",
+  "name": "production-db",
+  "objects": ["db_password", "api_key"],
+  "created_at": "..."
+}]</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/registries</span>
+      <span class="endpoint-desc">Create a registry</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Body: <code>{"name": "production-db"}</code>. Returns <code>201</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/registries/{id}</span>
+      <span class="endpoint-desc">Delete a registry</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>204</code>. Cascades to team assignments and their keys.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/registries/{id}/objects</span>
+      <span class="endpoint-desc">Add object to registry</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Body: <code>{"object_name": "db_password"}</code>. Returns <code>201</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/registries/{id}/objects/{name}</span>
+      <span class="endpoint-desc">Remove object from registry</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>204</code>. Does not delete the object itself.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Teams API ── -->
+<section class="section" id="api-admin-teams">
+  <h2>Admin API — Teams</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/teams</span>
+      <span class="endpoint-desc">List teams with their registry assignments</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <pre><code>[{
+  "id":   "uuid",
+  "name": "backend",
+  "created_at": "...",
+  "registries": [{
+    "id":            "uuid",
+    "name":          "production-db",
+    "key_preview":   "sk_abc123...",
+    "key_id":        "uuid",          // for suspension toggle
+    "key_suspended": false,
+    "expires_at":    "2026-06-15T00:00:00Z",  // null if no expiry
+    "objects":       ["db_password"]
+  }]
+}]</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/teams/{team_id}/registries/{reg_id}</span>
+      <span class="endpoint-desc">Assign registry to team — issues API key</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>201</code> with the <strong>plaintext API key</strong> — store it now, it will not be shown again.</p>
+      <pre><code>{
+  "key":     "sk_...",
+  "preview": "sk_abc123...",
+  "expires_at": null
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/teams/{team_id}/registries/{reg_id}/rotate-key</span>
+      <span class="endpoint-desc">Rotate the API key for a team-registry assignment</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Revokes the current key immediately and issues a new one. Returns the new plaintext key once.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/teams/{team_id}/registries/{reg_id}</span>
+      <span class="endpoint-desc">Unassign registry from team — revokes key</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>204</code>. Fires <code>key.revoked</code> webhook.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/members/{user_id}</span>
+      <span class="endpoint-desc">Add a user to a team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>201</code>. The user will have access to the team dashboard and self-service endpoints scoped to this team.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/members/{user_id}</span>
+      <span class="endpoint-desc">Remove a user from a team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Returns <code>204</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/notifications</span>
+      <span class="endpoint-desc">Set notification channel URLs for a team</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Configure Slack, MS Teams, and/or Discord notification channels. All fields are optional; set to <code>null</code> to clear.</p>
+      <pre><code>{
+  "slack_webhook_url":    "https://hooks.slack.com/services/...",
+  "ms_teams_webhook_url": "https://outlook.office.com/webhook/...",
+  "discord_webhook_url":  "https://discord.com/api/webhooks/..."
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Key Suspension API ── -->
+<section class="section" id="api-admin-keys">
+  <h2>Admin API — Key Suspension</h2>
+  <p>Suspend or re-enable a team's API key without revoking it. A suspended key returns <code>401</code> at <code>/secrets</code>, indistinguishable from a revoked key. It can be re-enabled at any time without rotation.</p>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-patch">PATCH</span>
+      <span class="endpoint-path">/admin/api/keys/{key_id}/suspend</span>
+      <span class="endpoint-desc">Toggle key suspension (enable ↔ disable)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Toggles <code>suspended</code> on the key. No body required.</p>
+      <pre><code>{
+  "key_id":      "uuid",
+  "suspended":   true,
+  "key_preview": "sk_abc123..."
+}</code></pre>
+      <p>The mutation is recorded in the change log. The team's webhook fires no event for suspension — this is intentional (avoid alerting an attacker that their key was blocked).</p>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Policies API ── -->
+<section class="section" id="api-admin-policies">
+  <h2>Admin API — Policies</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/registries/{id}/policy</span>
+      <span class="endpoint-desc">Get registry policy</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Returns policy object or <code>{}</code> if none set.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/registries/{id}/policy</span>
+      <span class="endpoint-desc">Set registry policy (upsert)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <pre><code>{
+  "ip_allowlist":   ["10.0.0.0/8", "192.168.1.0/24"],
+  "allowed_from":   "08:00",   // HH:MM UTC
+  "allowed_to":     "20:00",
+  "cn_required":    true,
+  "rate_limit_rpm": 120,
+  "max_key_days":   90         // registry policy only
+}</code></pre>
+      <p>All fields are optional. Null clears the constraint (inherits global default).</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/registries/{id}/policy</span>
+      <span class="endpoint-desc">Clear registry policy</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Returns <code>204</code>.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/policy</span>
+      <span class="endpoint-desc">Get team policy</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Returns policy object or <code>{}</code> if none set. Same schema, no <code>max_key_days</code>.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/policy</span>
+      <span class="endpoint-desc">Set team policy (upsert)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Same body as registry policy, omit <code>max_key_days</code>.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/policy</span>
+      <span class="endpoint-desc">Clear team policy</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Returns <code>204</code>.</p></div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Webhooks API ── -->
+<section class="section" id="api-admin-webhooks">
+  <h2>Admin API — Webhooks</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/webhook</span>
+      <span class="endpoint-desc">Get webhook config</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <pre><code>{
+  "id":              "uuid",
+  "url":             "https://example.com/hooks/aegis",
+  "events":          ["key.rotated", "key.expiring_soon"],
+  "enabled":         true,
+  "signing_enabled": false,
+  "created_at":      "..."
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/webhook</span>
+      <span class="endpoint-desc">Create or update webhook (upsert)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <h4>Body</h4>
+      <pre><code>{
+  "url":             "https://example.com/hooks/aegis",
+  "events":          ["key.rotated", "key.expiring_soon"],
+  "enabled":         true,
+  "signing_enabled": true   // set to true to get HMAC signing
+}</code></pre>
+      <p>When <code>signing_enabled</code> is first set to <code>true</code>, the response includes <code>new_secret</code> (shown once).</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/webhook/regenerate-secret</span>
+      <span class="endpoint-desc">Rotate signing secret</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Only available when <code>signing_enabled = true</code>. Immediately invalidates the old secret. Returns <code>{"new_secret": "..."}</code>.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/webhook/test</span>
+      <span class="endpoint-desc">Send a test event</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Delivers a <code>key.rotated</code> event with placeholder data. Useful for verifying endpoint connectivity and signature verification logic.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/webhook/log</span>
+      <span class="endpoint-desc">Webhook delivery history</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query params: <code>page</code> (default 1), <code>limit</code> (default 25).</p>
+      <pre><code>{
+  "items": [{
+    "id":          1,
+    "event":       "key.rotated",
+    "status_code": 200,
+    "success":     true,
+    "attempt":     1,
+    "error":       null,
+    "fired_at":    "..."
+  }],
+  "total": 42,
+  "page":  1
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/teams/{id}/webhook</span>
+      <span class="endpoint-desc">Remove webhook</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Returns <code>204</code>. Clears config and all delivery logs.</p></div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Users API ── -->
+<section class="section" id="api-admin-users">
+  <h2>Admin API — Users</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/users</span>
+      <span class="endpoint-desc">List all operator accounts</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <pre><code>[{
+  "id":       "uuid",
+  "username": "alice",
+  "role":     "user",      // admin | user
+  "teams":    [{"id": "uuid", "name": "backend"}],
+  "created_at": "..."
+}]</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-post">POST</span>
+      <span class="endpoint-path">/admin/api/users</span>
+      <span class="endpoint-desc">Create a user</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Creates an operator account. Team membership is managed separately via <code>POST /admin/api/teams/{id}/members/{user_id}</code>.</p>
+      <pre><code>{
+  "username": "alice",
+  "password": "...",
+  "role":     "user"    // admin | user
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/users/{id}</span>
+      <span class="endpoint-desc">Update user</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Same body as POST (all fields optional). Password is only changed if non-empty.</p></div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-delete">DELETE</span>
+      <span class="endpoint-path">/admin/api/users/{id}</span>
+      <span class="endpoint-desc">Delete a user</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body"><p>Returns <code>204</code>. Cannot delete your own account.</p></div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Settings API ── -->
+<section class="section" id="api-admin-settings">
+  <h2>Admin API — Settings</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/settings</span>
+      <span class="endpoint-desc">Get all settings</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <pre><code>{
+  "cn_required":      "false",
+  "rate_limit_rpm":   "60",
+  "session_ttl_hours": "8",
+  "key_warning_days": "7"
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-put">PUT</span>
+      <span class="endpoint-path">/admin/api/settings</span>
+      <span class="endpoint-desc">Update settings (partial update)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Send only the keys you want to change. Unknown keys are ignored.</p>
+      <pre><code>{ "key_warning_days": "14", "rate_limit_rpm": "120" }</code></pre>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ── Logs API ── -->
+<section class="section" id="api-admin-logs">
+  <h2>Admin API — Logs &amp; Metrics</h2>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/changelog</span>
+      <span class="endpoint-desc">Change log (admin mutations)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query params: <code>page</code>, <code>limit</code>, <code>entity_type</code>, <code>action</code>, <code>q</code> (search).</p>
+      <pre><code>{
+  "items": [{
+    "id":          1,
+    "timestamp":   "2026-03-15T09:00:00Z",
+    "action":      "updated",
+    "entity_type": "team",
+    "entity_id":   "uuid",
+    "entity_name": "backend",
+    "detail":      "Key suspended",
+    "diff":        {"suspended": {"from": false, "to": true}},
+    "performed_by": "admin"
+  }],
+  "total": 120,
+  "page":  1
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/changelog/export</span>
+      <span class="endpoint-desc">Export change log as CSV</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Same query params as <code>/admin/api/changelog</code>. Returns <code>text/csv</code> with all matching records. No pagination limit.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/audit</span>
+      <span class="endpoint-desc">Audit log (secret fetches)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Query params: <code>page</code>, <code>limit</code>, <code>event</code>, <code>outcome</code>, <code>registry_name</code>, <code>team_name</code>, <code>q</code>.</p>
+      <pre><code>{
+  "items": [{
+    "id":            1,
+    "timestamp":     "2026-03-15T09:00:00Z",
+    "event":         "secrets.fetched",
+    "outcome":       "success",
+    "change_number": "CHG-0042",
+    "registry_name": "production-db",
+    "team_name":     "backend",
+    "objects":       ["db_password"],
+    "key_preview":   "sk_abc123...",
+    "source_ip":     "10.0.1.5",
+    "user_agent":    "curl/8.4.0"
+  }],
+  "total": 14200,
+  "page":  1
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/audit/export</span>
+      <span class="endpoint-desc">Export audit log as CSV</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Same query params as <code>/admin/api/audit</code>. Returns <code>text/csv</code>. No pagination limit.</p>
+    </div>
+  </div>
+
+  <div class="endpoint">
+    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+      <span class="badge badge-get">GET</span>
+      <span class="endpoint-path">/admin/api/metrics</span>
+      <span class="endpoint-desc">Global metrics summary (JSON)</span>
+      <span class="endpoint-chevron">▶</span>
+    </div>
+    <div class="endpoint-body">
+      <p>Aggregate statistics across all teams and registries. Useful for dashboard stat cards.</p>
+      <pre><code>{
+  "total_fetches":   14200,
+  "success":         14050,
+  "denied":          130,
+  "errors":          20,
+  "active_keys":     87,
+  "expiring_soon":   3,
+  "teams":           42,
+  "registries":      18,
+  "objects":         210
+}</code></pre>
+    </div>
+  </div>
+</section>
+
+<hr class="divider">
+
+<!-- ══════════════ API COMPANION ══════════════ -->
+<section class="section" id="companion">
+  <h2>API Companion</h2>
+  <p>Send requests to the live Aegis instance. Auth headers are pre-filled from your session.</p>
+
+  <div class="companion">
+    <!-- toolbar -->
+    <div class="companion-toolbar">
+      <select class="method-select" id="cp-method">
+        <option>GET</option>
+        <option>POST</option>
+        <option>PUT</option>
+        <option>DELETE</option>
+      </select>
+      <input class="url-input" id="cp-url" type="text" value="/admin/api/ping" placeholder="/admin/api/ping">
+      <button class="send-btn" id="cp-send" onclick="companionSend()">Send</button>
+    </div>
+
+    <!-- tabs -->
+    <div class="companion-tabs">
+      <div class="ctab active" onclick="companionTab('headers')">Headers</div>
+      <div class="ctab" onclick="companionTab('body')">Body</div>
+    </div>
+
+    <!-- headers panel -->
+    <div class="companion-panel active" id="cp-panel-headers">
+      <div id="cp-headers-list"></div>
+      <button class="add-header-btn" onclick="addHeaderRow()">+ Add header</button>
+    </div>
+
+    <!-- body panel -->
+    <div class="companion-panel" id="cp-panel-body">
+      <textarea class="companion-textarea" id="cp-body" placeholder='{"key": "value"}'></textarea>
+    </div>
+
+    <!-- response -->
+    <div class="response-pane" id="cp-response" style="display:none;">
+      <div class="response-meta">
+        <span class="status-pill" id="cp-status-pill">—</span>
+        <span class="response-time" id="cp-time"></span>
+        <span style="flex:1;"></span>
+        <button onclick="copyResponse()" style="background:none;border:none;color:var(--text-3);font-family:'Fira Code',monospace;font-size:11px;cursor:pointer;">Copy</button>
+      </div>
+      <pre class="response-body"><code id="cp-response-body"></code></pre>
+    </div>
+  </div>
+</section>
+
+</main>
+
+<script>
+// ── Sidebar active state on scroll ──────────────────────────────────────────
+const sections = document.querySelectorAll('.section[id]');
+const sidebarLinks = document.querySelectorAll('.sidebar-link[href]');
+
+const observer = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      const id = e.target.id;
+      sidebarLinks.forEach(l => {
+        l.classList.toggle('active', l.getAttribute('href') === '#' + id);
+      });
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+
+sections.forEach(s => observer.observe(s));
+
+// ── Copy buttons ─────────────────────────────────────────────────────────────
+document.querySelectorAll('pre').forEach(pre => {
+  if (pre.classList.contains('response-body')) return;
+  const btn = document.createElement('button');
+  btn.className = 'copy-btn';
+  btn.textContent = 'copy';
+  btn.onclick = () => {
+    navigator.clipboard.writeText(pre.querySelector('code')?.textContent || pre.textContent);
+    btn.textContent = 'copied!';
+    setTimeout(() => btn.textContent = 'copy', 1500);
+  };
+  pre.appendChild(btn);
+});
+
+// ── Endpoint accordion ──────────────────────────────────────────────────────
+function toggleEndpoint(header) {
+  const body = header.nextElementSibling;
+  const open = body.classList.toggle('open');
+  header.classList.toggle('open', open);
+}
+
+// ── API Companion ───────────────────────────────────────────────────────────
+let _token = null;
+
+// Try to pull token from sessionStorage
+try {
+  const s = JSON.parse(sessionStorage.getItem('aegis_session') || '{}');
+  _token = s.token || null;
+} catch (_) {}
+
+function companionTab(tab) {
+  document.querySelectorAll('.ctab').forEach((t, i) => {
+    t.classList.toggle('active', t.textContent.toLowerCase().includes(tab));
+  });
+  document.getElementById('cp-panel-headers').classList.toggle('active', tab === 'headers');
+  document.getElementById('cp-panel-body').classList.toggle('active', tab === 'body');
+}
+
+// Seed default headers
+function buildDefaultHeaders() {
+  const list = document.getElementById('cp-headers-list');
+  list.innerHTML = '';
+  const defaults = [
+    ['Authorization', _token ? `Bearer ${_token}` : ''],
+    ['Content-Type',  'application/json'],
+  ];
+  defaults.forEach(([k, v]) => addHeaderRow(k, v));
+}
+
+function addHeaderRow(key = '', value = '') {
+  const list = document.getElementById('cp-headers-list');
+  const row = document.createElement('div');
+  row.className = 'header-row';
+  row.innerHTML = `
+    <input type="text" placeholder="Header-Name" value="${key}">
+    <input type="text" placeholder="value" value="${value}">
+    <button onclick="this.parentElement.remove()">×</button>
+  `;
+  list.appendChild(row);
+}
+
+function getHeaders() {
+  const rows = document.querySelectorAll('#cp-headers-list .header-row');
+  const h = {};
+  rows.forEach(row => {
+    const [k, v] = row.querySelectorAll('input');
+    if (k.value.trim()) h[k.value.trim()] = v.value.trim();
+  });
+  return h;
+}
+
+async function companionSend() {
+  const btn    = document.getElementById('cp-send');
+  const method = document.getElementById('cp-method').value;
+  const url    = document.getElementById('cp-url').value.trim();
+  const body   = document.getElementById('cp-body').value.trim();
+
+  btn.disabled    = true;
+  btn.textContent = 'Sending…';
+
+  const respPane = document.getElementById('cp-response');
+  respPane.style.display = 'none';
+
+  const start = Date.now();
+  try {
+    const opts = { method, headers: getHeaders() };
+    if (body && method !== 'GET' && method !== 'DELETE') opts.body = body;
+
+    const r   = await fetch(url, opts);
+    const ms  = Date.now() - start;
+    const txt = await r.text();
+
+    let pretty = txt;
+    try { pretty = JSON.stringify(JSON.parse(txt), null, 2); } catch (_) {}
+
+    const pill = document.getElementById('cp-status-pill');
+    pill.textContent = r.status;
+    pill.className = 'status-pill ' + (r.status < 300 ? 'status-2xx' : r.status < 500 ? 'status-4xx' : 'status-5xx');
+
+    document.getElementById('cp-time').textContent = `${ms}ms`;
+    document.getElementById('cp-response-body').textContent = pretty;
+    respPane.style.display = 'block';
+  } catch (err) {
+    const pill = document.getElementById('cp-status-pill');
+    pill.textContent = 'Error';
+    pill.className = 'status-pill status-5xx';
+    document.getElementById('cp-time').textContent = '';
+    document.getElementById('cp-response-body').textContent = err.message;
+    respPane.style.display = 'block';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Send';
+  }
+}
+
+function copyResponse() {
+  const txt = document.getElementById('cp-response-body').textContent;
+  navigator.clipboard.writeText(txt);
+}
+
+// Enter key on URL field sends
+document.getElementById('cp-url').addEventListener('keydown', e => {
+  if (e.key === 'Enter') companionSend();
+});
+
+// Init companion
+buildDefaultHeaders();
+</script>
+</body>
+</html>
