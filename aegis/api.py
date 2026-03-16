@@ -70,13 +70,13 @@ from pydantic import BaseModel
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
-from database import get_db, SessionLocal
-from models import AuditLog, ChangeLog, Object, Policy, Registry, RegistryObject, Setting, Team, TeamRegistry, TeamRegistryKey, User, UserTeam, Webhook, WebhookLog
-from broker import fetch_secrets, load_auth
-from siem import build_event, emit, start_s3_flush_thread
-import rate_limit
-import webhook as wh
-import scheduler
+from aegis.database import get_db, SessionLocal
+from aegis.models import AuditLog, ChangeLog, Object, Policy, Registry, RegistryObject, Setting, Team, TeamRegistry, TeamRegistryKey, User, UserTeam, Webhook, WebhookLog
+from aegis.broker import fetch_secrets, load_auth
+from aegis.siem import build_event, emit, start_s3_flush_thread
+from aegis import rate_limit
+from aegis import webhook as wh
+from aegis import scheduler
 
 logger = logging.getLogger("aegis")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

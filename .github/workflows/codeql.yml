@@ -1,0 +1,31 @@
+name: Bandit
+
+on:
+  push:
+    branches: [main, "feature/**", "fix/**", "chore/**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 2 * * 0"  # every Sunday at 02:00 UTC
+
+jobs:
+  bandit:
+    name: Security scan
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Bandit
+        run: pip install bandit
+
+      - name: Run Bandit
+        run: bandit -r aegis/ -ll
+        # -ll → flag medium severity and above (low is too noisy for a first pass)

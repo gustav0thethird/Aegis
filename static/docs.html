@@ -909,7 +909,7 @@ curl -X POST /admin/api/teams/&lt;team-id&gt;/registries/&lt;reg-id&gt; ...</cod
     <tbody>
       <tr><td>name</td><td>string</td><td>Unique identifier. Used in responses and registry membership.</td></tr>
       <tr><td>vendor</td><td>enum</td><td><code>cyberark</code> | <code>vault</code> | <code>aws</code> | <code>conjur</code></td></tr>
-      <tr><td>auth_ref</td><td>string</td><td>Key into <code>auth.json</code> for backend credentials.</td></tr>
+      <tr><td>auth_ref</td><td>string</td><td>Named reference key into <code>auth.json</code>. Format: <code>{"vendor": {"ref_name": {config}}}</code> — e.g. <code>"prod"</code> resolves to <code>auth.json["vault"]["prod"]</code>.</td></tr>
       <tr><td>path</td><td>string</td><td>Secret path / object name / ARN.</td></tr>
       <tr><td>platform</td><td>string?</td><td>CyberArk platform ID (optional).</td></tr>
       <tr><td>safe</td><td>string?</td><td>CyberArk safe / Conjur namespace (optional).</td></tr>
@@ -1161,7 +1161,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
       <span class="endpoint-chevron">▶</span>
     </div>
     <div class="endpoint-body">
-      <p>Returns 200 with <code>{"ok": true}</code>. No authentication required. Use for load-balancer health probes.</p>
+      <p>Returns 200 with <code>{"status": "ok", "db": "ok", "redis": "ok"}</code>. No authentication required. Use for load-balancer health probes.</p>
     </div>
   </div>
 
@@ -1434,7 +1434,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
         <tbody>
           <tr><td>name</td><td><span class="tag tag-required">required</span></td><td>Unique identifier (slug)</td></tr>
           <tr><td>vendor</td><td><span class="tag tag-required">required</span></td><td>cyberark | vault | aws | conjur</td></tr>
-          <tr><td>auth_ref</td><td><span class="tag tag-required">required</span></td><td>Key in auth.json</td></tr>
+          <tr><td>auth_ref</td><td><span class="tag tag-required">required</span></td><td>Named ref in auth.json — e.g. <code>"prod"</code> resolves to <code>auth.json[vendor]["prod"]</code></td></tr>
           <tr><td>path</td><td><span class="tag tag-required">required</span></td><td>Secret path / ARN</td></tr>
           <tr><td>platform</td><td><span class="tag tag-optional">optional</span></td><td>CyberArk platform ID</td></tr>
           <tr><td>safe</td><td><span class="tag tag-optional">optional</span></td><td>CyberArk safe / Conjur namespace</td></tr>

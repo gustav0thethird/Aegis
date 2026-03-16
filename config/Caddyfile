@@ -1,0 +1,22 @@
+{$AEGIS_DOMAIN} {
+    tls {$TLS_EMAIL}
+
+    reverse_proxy broker:8080 {
+        health_uri     /health
+        health_interval 10s
+    }
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options    nosniff
+        X-Frame-Options           DENY
+        Referrer-Policy           strict-origin-when-cross-origin
+        -Server
+    }
+
+    log {
+        output stdout
+        format json
+    }
+}

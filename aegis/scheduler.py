@@ -15,9 +15,9 @@ from datetime import datetime, timezone, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
 
-from database import SessionLocal
-from models import Policy, Setting, Team, TeamRegistry, TeamRegistryKey, WebhookLog
-import webhook as wh
+from aegis.database import SessionLocal
+from aegis.models import Policy, Setting, Team, TeamRegistry, TeamRegistryKey, WebhookLog
+from aegis import webhook as wh
 
 logger = logging.getLogger("aegis.scheduler")
 
