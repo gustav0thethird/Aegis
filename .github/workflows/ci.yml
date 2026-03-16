@@ -54,5 +54,8 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt -r requirements-dev.txt
 
+      - name: Create auth.json for tests
+        run: cp config/auth.json.example config/auth.json
+
       - name: Run tests
         run: pytest tests/ -v --tb=short
