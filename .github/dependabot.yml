@@ -6,10 +6,6 @@ updates:
     schedule:
       interval: "weekly"
     versioning-strategy: increase
-    labels:
-      - dependencies
-      - python
-      - automerge
     commit-message:
       prefix: "build(deps)"
     groups:
@@ -21,10 +17,6 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    labels:
-      - dependencies
-      - docker
-      - automerge
     commit-message:
       prefix: "build(deps)"
 
@@ -32,10 +24,6 @@ updates:
     directory: "/terraform"
     schedule:
       interval: "weekly"
-    labels:
-      - dependencies
-      - terraform
-      - automerge
     commit-message:
       prefix: "build(deps)"
 
@@ -43,9 +31,5 @@ updates:
     directory: "/"
     schedule:
       interval: "weekly"
-    labels:
-      - dependencies
-      - github-actions
-      - automerge
     commit-message:
       prefix: "build(deps)"
