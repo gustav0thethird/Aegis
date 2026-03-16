@@ -57,6 +57,8 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
 - [Health Check](#health-check)
+- [Development and Testing](#development-and-testing)
+- [Terraform (AWS)](#terraform-aws)
 - [Project Structure](#project-structure)
 
 ---
@@ -510,6 +512,9 @@ curl http://localhost:8080/secrets \
   "db_password": "correct-horse-battery-staple"
 }
 ```
+
+> For single-server production deployment see [`docs/deploy-local.md`](docs/deploy-local.md).
+> For AWS / hybrid deployment see [`docs/deploy-cloud-hybrid.md`](docs/deploy-cloud-hybrid.md).
 
 ---
 

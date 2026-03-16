@@ -178,21 +178,25 @@ registered team and registry.
   registry policy and pass the client certificate CN via `X-TLS-Client-CN`.
 - **IP allowlist**: restrict which CIDR blocks can call `/secrets` via the registry or team policy.
   In a cloud deployment, this is typically your application subnet range.
-- **Audit log forwarding**: set `LOG_DESTINATIONS=stdout,siem` and forward CloudWatch / container logs
-  to your on-prem SIEM. Every fetch is logged with team, registry, change number, and source IP.
+- **Audit log forwarding**: set `LOG_DESTINATIONS=stdout,splunk` (or `s3`, `datadog`) and forward
+  CloudWatch / container logs to your on-prem SIEM. Every fetch is logged with team, registry,
+  change number, and source IP.
 
 ### Example: Vault on-prem, Aegis on AWS
 
 ```json
 // config/auth.json
 {
-  "prod-vault": {
-    "type": "vault",
-    "url": "https://vault.internal.example.com",
-    "token": "s.xxxxxxxxxxxx"
+  "vault": {
+    "prod": {
+      "addr":  "https://vault.internal.example.com",
+      "token": "s.xxxxxxxxxxxx"
+    }
   }
 }
 ```
+
+Objects referencing this backend use `vendor: vault, auth_ref: prod`.
 
 Vault lives on-prem. Aegis lives in ECS. The VPN handles routing.
 Applications in AWS call `GET /secrets` — they never touch Vault directly.

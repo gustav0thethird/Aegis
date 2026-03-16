@@ -23,7 +23,7 @@ make dev
 ```
 
 On first boot the broker automatically runs `alembic upgrade head` before starting.
-Postgres, Redis, pgBouncer, and a Prometheus-compatible metrics exporter all start alongside it.
+Postgres, Redis, and a Prometheus-compatible postgres-exporter all start alongside it.
 
 ### Access
 
@@ -66,7 +66,7 @@ For a single VPS or bare-metal host — no Kubernetes required. TLS is handled a
 
 ```bash
 # 1. Clone and configure
-git clone https://github.com/gustav0thethird/secrets-broker.git
+git clone <your-repo-url>
 cd secrets-broker
 make env
 nano .env   # fill in everything, especially:
