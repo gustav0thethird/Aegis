@@ -30,6 +30,18 @@ tmp/
 # Alembic local
 alembic/versions/__pycache__/
 
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.backup
+terraform/*.tfvars
+terraform/override.tf
+terraform/override.tf.json
+terraform/*_override.tf
+terraform/*_override.tf.json
+terraform/.terraformrc
+terraform/terraform.rc
+
 # OS
 .DS_Store
 Thumbs.db
