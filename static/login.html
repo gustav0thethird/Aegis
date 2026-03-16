@@ -1,0 +1,236 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aegis — Sign In</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d0f14;
+    --surface:  #13161d;
+    --border:   #1e2330;
+    --text-1:   #e2e8f0;
+    --text-2:   #94a3b8;
+    --text-3:   #64748b;
+    --indigo:   #6366f1;
+    --indigo-lo: rgba(99,102,241,0.12);
+    --danger:   #ef4444;
+    --danger-lo: rgba(239,68,68,0.08);
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    font-family: 'Fira Code', monospace;
+    color: var(--text-1);
+    font-size: 13px;
+  }
+
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 36px;
+    width: 360px;
+  }
+
+  .logo-wrap {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .logo-icon {
+    width: 48px;
+    height: 48px;
+    background: var(--indigo-lo);
+    border: 1px solid var(--indigo);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 14px;
+  }
+
+  .logo-icon svg { color: var(--indigo); }
+
+  .logo-title {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-1);
+    letter-spacing: -0.02em;
+  }
+
+  .logo-sub {
+    font-size: 11px;
+    color: var(--text-3);
+    margin-top: 4px;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .field { margin-bottom: 14px; }
+
+  label {
+    display: block;
+    font-size: 11px;
+    color: var(--text-3);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    margin-bottom: 6px;
+  }
+
+  input {
+    width: 100%;
+    height: 38px;
+    background: #0d0f14;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text-1);
+    font-family: 'Fira Code', monospace;
+    font-size: 13px;
+    padding: 0 12px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+
+  input:focus { border-color: var(--indigo); }
+
+  .err {
+    display: none;
+    font-size: 11px;
+    color: var(--danger);
+    text-align: center;
+    padding: 8px;
+    background: var(--danger-lo);
+    border: 1px solid rgba(239,68,68,0.3);
+    border-radius: 4px;
+    margin-bottom: 12px;
+  }
+
+  button {
+    width: 100%;
+    height: 38px;
+    background: var(--indigo);
+    border: none;
+    border-radius: 6px;
+    color: #fff;
+    font-family: 'Fira Code', monospace;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity 0.15s;
+    margin-top: 4px;
+  }
+
+  button:hover { opacity: 0.9; }
+  button:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  .footer {
+    text-align: center;
+    margin-top: 20px;
+    font-size: 11px;
+    color: var(--text-3);
+  }
+
+  .footer a {
+    color: var(--indigo);
+    text-decoration: none;
+  }
+</style>
+</head>
+<body>
+
+<div class="card">
+  <div class="logo-wrap">
+    <div class="logo-icon">
+      <svg width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+    </div>
+    <div class="logo-title">Aegis</div>
+    <div class="logo-sub">Secrets Broker</div>
+  </div>
+
+  <div class="field">
+    <label for="u">Username</label>
+    <input id="u" type="text" placeholder="username" autocomplete="username"
+           onkeydown="if(event.key==='Enter')login()">
+  </div>
+  <div class="field">
+    <label for="p">Password</label>
+    <input id="p" type="password" placeholder="••••••••" autocomplete="current-password"
+           onkeydown="if(event.key==='Enter')login()">
+  </div>
+
+  <div class="err" id="err"></div>
+
+  <button id="btn" onclick="login()">Sign In</button>
+
+  <div class="footer">
+    <a href="/docs">API docs</a> &nbsp;·&nbsp; Aegis v2
+  </div>
+</div>
+
+<script>
+async function login() {
+  const u   = document.getElementById('u').value.trim();
+  const p   = document.getElementById('p').value;
+  const btn = document.getElementById('btn');
+  const err = document.getElementById('err');
+
+  if (!u || !p) return;
+
+  btn.disabled    = true;
+  btn.textContent = 'Signing in…';
+  err.style.display = 'none';
+
+  try {
+    const r = await fetch('/api/login', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify({username: u, password: p}),
+    });
+    const d = await r.json();
+    if (!r.ok) {
+      err.textContent   = d.detail || 'Invalid credentials';
+      err.style.display = 'block';
+      return;
+    }
+    sessionStorage.setItem('aegis_session', JSON.stringify(d));
+    window.location.href = d.role === 'admin' ? '/admin' : '/dashboard';
+  } catch (e) {
+    err.textContent   = 'Connection error';
+    err.style.display = 'block';
+  } finally {
+    btn.disabled    = false;
+    btn.textContent = 'Sign In';
+  }
+}
+
+// If already logged in, redirect straight through
+const saved = sessionStorage.getItem('aegis_session');
+if (saved) {
+  try {
+    const s = JSON.parse(saved);
+    if (s.token) {
+      fetch('/api/me', {headers: {'Authorization': `Bearer ${s.token}`}})
+        .then(r => r.ok ? r.json() : null)
+        .then(me => { if (me) window.location.href = me.role === 'admin' ? '/admin' : '/dashboard'; })
+        .catch(() => {});
+    }
+  } catch (_) {}
+}
+</script>
+</body>
+</html>

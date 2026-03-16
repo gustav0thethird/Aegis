@@ -9,3 +9,4 @@ alembic
 psycopg2-binary
 redis
 bcrypt
+apscheduler
