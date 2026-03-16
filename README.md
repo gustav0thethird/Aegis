@@ -1792,6 +1792,8 @@ secrets-broker/
 │   ├── deploy-local.md         — Local Docker Compose deployment guide
 │   └── deploy-cloud-hybrid.md  — Cloud / hybrid deployment guide
 ├── static/
+│   ├── assets/
+│   │   └── Aegis-logo.png
 │   ├── index.html              — Admin panel (vanilla JS + Tailwind CDN, single file)
 │   ├── dashboard.html          — Team self-service dashboard (Overview | Webhooks | Activity tabs)
 │   ├── docs.html               — Interactive OpenAPI documentation (Swagger UI)
