@@ -47,39 +47,39 @@ class TestCheckHours:
         assert _check_hours(None, time(18, 0)) is True
 
     def test_within_window(self):
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(14)
             assert _check_hours(time(9, 0), time(18, 0)) is True
 
     def test_outside_window(self):
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(20)
             assert _check_hours(time(9, 0), time(18, 0)) is False
 
     def test_at_window_start_boundary(self):
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(9)
             assert _check_hours(time(9, 0), time(18, 0)) is True
 
     def test_at_window_end_boundary(self):
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(18)
             assert _check_hours(time(9, 0), time(18, 0)) is True
 
     def test_overnight_window_within_before_midnight(self):
         # 22:00-06:00, now 23:30 → allowed
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(23, 30)
             assert _check_hours(time(22, 0), time(6, 0)) is True
 
     def test_overnight_window_within_after_midnight(self):
         # 22:00-06:00, now 03:00 → allowed
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(3)
             assert _check_hours(time(22, 0), time(6, 0)) is True
 
     def test_overnight_window_outside(self):
         # 22:00-06:00, now 12:00 → denied
-        with patch("api.datetime") as mock_dt:
+        with patch("aegis.api.datetime") as mock_dt:
             mock_dt.now.return_value = self._mock_now(12)
             assert _check_hours(time(22, 0), time(6, 0)) is False

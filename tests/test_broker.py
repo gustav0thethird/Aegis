@@ -4,7 +4,7 @@ No database or network required; external calls are mocked.
 """
 
 import pytest
-from unittest.mock import patch, call
+from unittest.mock import patch
 
 from aegis.broker import _auth_cfg, fetch_secrets
 
@@ -52,21 +52,21 @@ class TestAuthCfg:
 class TestFetchSecrets:
     def test_vault_routing(self):
         objects = [_obj("db_pass", "vault", path="secret/db_pass")]
-        with patch("broker.vault_get", return_value="s3cr3t") as mock:
+        with patch("aegis.broker.vault_get", return_value="s3cr3t") as mock:
             result = fetch_secrets(objects, AUTH)
         assert result == {"db_pass": "s3cr3t"}
         mock.assert_called_once_with("secret/db_pass", AUTH["vault"]["prod"])
 
     def test_aws_routing(self):
         objects = [_obj("aws_key", "aws", path="arn:aws:secretsmanager:us-east-1:123:secret:key")]
-        with patch("broker.aws_get", return_value="aws_val") as mock:
+        with patch("aegis.broker.aws_get", return_value="aws_val") as mock:
             result = fetch_secrets(objects, AUTH)
         assert result == {"aws_key": "aws_val"}
         mock.assert_called_once()
 
     def test_conjur_routing(self):
         objects = [_obj("conjur_secret", "conjur", path="secrets/my-app/db")]
-        with patch("broker.conjur_get", return_value="conjur_val") as mock:
+        with patch("aegis.broker.conjur_get", return_value="conjur_val") as mock:
             result = fetch_secrets(objects, AUTH)
         assert result == {"conjur_secret": "conjur_val"}
         mock.assert_called_once()
@@ -76,8 +76,8 @@ class TestFetchSecrets:
             _obj("vault_obj", "vault"),
             _obj("aws_obj",   "aws"),
         ]
-        with patch("broker.vault_get", return_value="v_val"), \
-             patch("broker.aws_get",   return_value="a_val"):
+        with patch("aegis.broker.vault_get", return_value="v_val"), \
+             patch("aegis.broker.aws_get",   return_value="a_val"):
             result = fetch_secrets(objects, AUTH)
         assert result == {"vault_obj": "v_val", "aws_obj": "a_val"}
 
@@ -97,8 +97,8 @@ class TestFetchSecrets:
             _obj("bad",  "vault"),
             _obj("good", "aws"),
         ]
-        with patch("broker.vault_get", side_effect=Exception("vault down")), \
-             patch("broker.aws_get",   return_value="ok") as mock_aws:
+        with patch("aegis.broker.vault_get", side_effect=Exception("vault down")), \
+             patch("aegis.broker.aws_get",   return_value="ok") as mock_aws:
             with pytest.raises(ValueError, match="vault down"):
                 fetch_secrets(objects, AUTH)
         # aws_get was still called despite vault failure
@@ -110,9 +110,9 @@ class TestFetchSecrets:
             _obj("obj1", "cyberark", path="Account1"),
             _obj("obj2", "cyberark", path="Account2"),
         ]
-        with patch("broker.cyberark_logon", return_value="session") as mock_logon, \
-             patch("broker.cyberark_find_account", return_value="acct_id"), \
-             patch("broker.cyberark_get", return_value="secret_val"):
+        with patch("aegis.broker.cyberark_logon", return_value="session") as mock_logon, \
+             patch("aegis.broker.cyberark_find_account", return_value="acct_id"), \
+             patch("aegis.broker.cyberark_get", return_value="secret_val"):
             fetch_secrets(objects, AUTH)
         # One logon for two objects sharing the same auth_ref
         mock_logon.assert_called_once()

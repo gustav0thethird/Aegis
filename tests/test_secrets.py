@@ -8,7 +8,6 @@ All external vault calls (vault_get, aws_get, etc.) are mocked via monkeypatch.
 import hashlib
 import secrets as slib
 
-import pytest
 
 from aegis.models import Object, Registry, RegistryObject, Team, TeamRegistryKey
 from tests.conftest import ADMIN_CREDS
@@ -77,7 +76,7 @@ class TestSecretsEndpoint:
         obj, reg, team, key = _create_scenario(db, client)
 
         monkeypatch.setattr(
-            "api.fetch_secrets",
+            "aegis.api.fetch_secrets",
             lambda rows, auth: {rows[0]["name"]: "plaintext_value"},
         )
 
@@ -123,7 +122,7 @@ class TestSecretsEndpoint:
         obj, reg, team, key = _create_scenario(db, client)
 
         monkeypatch.setattr(
-            "api.fetch_secrets",
+            "aegis.api.fetch_secrets",
             lambda rows, auth: {rows[0]["name"]: "val"},
         )
 
@@ -147,7 +146,7 @@ class TestSecretsEndpoint:
         obj, reg, team, key = _create_scenario(db, client)
 
         monkeypatch.setattr(
-            "api.fetch_secrets",
+            "aegis.api.fetch_secrets",
             lambda rows, auth: {rows[0]["name"]: "val"},
         )
 
