@@ -5,7 +5,7 @@
 > Teams self-manage their own webhooks, key rotation, and notifications — without filing tickets.
 
 <p align="center">
-  <img src="assets/Aegis-logo.png" width="600">
+  <img src="static/assets/Aegis-logo.png" width="600">
 </p>
 
 Aegis is a thin, audited proxy that sits between your applications and your secrets infrastructure. Teams authenticate with a scoped API key (one key per team-registry pair) and receive exactly the secrets they are authorised to see — regardless of whether those secrets live in CyberArk, HashiCorp Vault, AWS Secrets Manager, or Conjur. Every fetch, every rotation, and every configuration change is written to an immutable log with structured before/after diffs and full account attribution.
@@ -57,6 +57,8 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
 - [Health Check](#health-check)
+- [Development and Testing](#development-and-testing)
+- [Terraform (AWS)](#terraform-aws)
 - [Project Structure](#project-structure)
 
 ---
@@ -441,19 +443,19 @@ cp config/auth.json.example config/auth.json
 $EDITOR config/auth.json
 ```
 
-### 2. Set your admin password
+### 2. Configure environment
 
-Edit `docker-compose.yml`:
-
-```yaml
-environment:
-  ADMIN_PASSWORD: your-strong-password-here
+```bash
+make env          # copies .env.example → .env
+$EDITOR .env      # set ADMIN_PASSWORD, SECRET_KEY, and any other overrides
 ```
 
 ### 3. Start
 
 ```bash
-docker compose up -d
+make dev          # docker compose up --build (foreground)
+# or
+make dev-d        # background
 ```
 
 On first start, Aegis will:
@@ -510,6 +512,9 @@ curl http://localhost:8080/secrets \
   "db_password": "correct-horse-battery-staple"
 }
 ```
+
+> For single-server production deployment see [`docs/deploy-local.md`](docs/deploy-local.md).
+> For AWS / hybrid deployment see [`docs/deploy-cloud-hybrid.md`](docs/deploy-cloud-hybrid.md).
 
 ---
 
@@ -1534,6 +1539,8 @@ Migration history:
   008 — user_teams junction table (many-to-many users ↔ teams);
         slack_webhook_url, ms_teams_webhook_url, discord_webhook_url on teams;
         removes team_id from users
+  009 — suspended column on team_registry_keys (key-level suspend/resume without deletion)
+  010 — Composite performance indexes (audit_log, team_registry_keys, change_log, policies)
 ```
 
 ### Table summary
@@ -1619,21 +1626,15 @@ Preview and save from **Settings → General → Theme**. Does not affect the te
 ### Backup
 
 ```bash
-# Dump the database
-docker exec aegis-postgres-1 pg_dump -U broker aegis > backup_$(date +%Y%m%d_%H%M%S).sql
-
-# Compress if large
-gzip backup_*.sql
+make backup       # dumps dev Postgres to ./backups/aegis_<timestamp>.sql.gz
 ```
 
-Run this before any `docker compose down -v` or destructive operation. The `config/auth.json` file should be backed up separately — it is not in the database.
+Run this before any `docker compose down -v` or destructive operation. Back up `config/auth.json` separately — it is not stored in the database.
 
 ### Restore
 
 ```bash
-docker compose up -d postgres
-docker exec -i aegis-postgres-1 psql -U broker aegis < backup_20260315_120000.sql
-docker compose up -d
+make restore file=backups/aegis_20260315_120000.sql.gz
 ```
 
 ### Rename the database without data loss
@@ -1656,7 +1657,7 @@ docker compose up -d broker
 GET /health
 ```
 
-Returns `200 OK` with `{"status": "ok"}`. No authentication required. Does not exercise the database or Redis — intentionally lightweight.
+Returns `200 OK` with `{"status": "ok", "db": "ok", "redis": "ok"}`. No authentication required.
 
 ```
 GET /docs
@@ -1666,36 +1667,159 @@ Interactive OpenAPI documentation (Swagger UI). Linked from the Settings panel h
 
 ---
 
+## Development and Testing
+
+### Setup
+
+```bash
+pip install -r requirements-dev.txt
+
+make dev-d          # start Postgres + Redis in the background
+make test-db        # create aegis_test database (run once)
+```
+
+### Running tests
+
+```bash
+make test           # pytest tests/ -v --tb=short
+make test-cov       # same + coverage report
+make lint           # ruff check tests/
+```
+
+Tests require a running Postgres. The `DATABASE_URL` is automatically overridden to `aegis_test` by the Makefile target — the application database is never touched.
+
+### Test suites
+
+| File | Type | What it covers |
+|---|---|---|
+| `tests/test_policy.py` | Unit | IP allowlist and time-window policy helpers (16 tests, no DB) |
+| `tests/test_broker.py` | Unit | Vendor routing and `auth_cfg` resolution (12 tests, no DB) |
+| `tests/test_rate_limit.py` | Unit | Rate limiter with FakeRedis (6 tests, no Redis) |
+| `tests/test_secrets.py` | Integration | `GET /secrets` end-to-end: auth, policy, audit log (9 tests, Postgres) |
+
+### CI
+
+Tests run automatically on every push and PR via `.github/workflows/ci.yml`. The workflow spins up a PostgreSQL 16 service container — no external dependencies needed.
+
+---
+
+## Terraform (AWS)
+
+The `terraform/` directory contains a production-ready AWS deployment. It provisions:
+
+| Resource | Detail |
+|---|---|
+| **VPC** | Dedicated VPC with public/private subnets across two AZs |
+| **ECS Fargate** | Containerised broker service; configurable CPU/memory and replica count |
+| **RDS Aurora PostgreSQL** | Serverless-compatible Aurora cluster; credentials stored in Secrets Manager |
+| **ElastiCache Redis** | Single-shard replication group for sessions and rate limiting |
+| **ALB** | HTTPS Application Load Balancer with ACM TLS certificate |
+| **IAM** | Least-privilege task execution role with Secrets Manager read |
+| **S3** | Optional SIEM log bucket |
+| **CloudWatch** | Log group with configurable retention |
+
+### Quick deploy
+
+```bash
+make tf-init                     # terraform init
+
+# Create a terraform.tfvars file:
+cat > terraform/terraform.tfvars <<EOF
+image_uri       = "ghcr.io/<your-org>/secrets-broker:latest"
+domain_name     = "aegis.example.com"
+admin_password  = "$(openssl rand -hex 16)"
+secret_key      = "$(openssl rand -hex 32)"
+EOF
+
+make tf-plan                     # review the plan
+make tf-apply                    # apply (~5 min)
+```
+
+### Outputs
+
+After apply, Terraform prints:
+
+| Output | Use |
+|---|---|
+| `alb_dns_name` | CNAME your domain here |
+| `ecr_repository_url` | Push images here |
+| `acm_validation_records` | Add to DNS to validate the TLS certificate |
+
+### Variables
+
+All variables have sensible defaults. Override in `terraform.tfvars` or via `-var`:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `aws_region` | `us-east-1` | |
+| `environment` | `prod` | Used as resource name prefix |
+| `db_instance_class` | `db.t3.medium` | RDS Aurora instance size |
+| `redis_node_type` | `cache.t3.micro` | ElastiCache node size |
+| `fargate_cpu` | `512` | 256 / 512 / 1024 / 2048 / 4096 |
+| `fargate_memory` | `1024` | MiB |
+| `desired_count` | `2` | ECS task replica count |
+| `rate_limit_rpm` | `60` | Default rate limit per API key |
+| `log_retention_days` | `30` | CloudWatch log retention |
+
+See `docs/deploy-cloud-hybrid.md` for full deployment guidance including hybrid (on-prem vault + cloud broker) topology.
+
+---
+
 ## Project Structure
 
 ```
-aegis/
-├── api.py              — FastAPI application: all routes, auth, session management,
-│                         user self-service, inbound webhooks, metrics, SIEM exports
-├── broker.py           — Secret fetcher: groups objects by vendor, dispatches to functions.py
-├── functions.py        — Vendor-specific implementations (CyberArk, Vault, AWS, Conjur)
-├── models.py           — SQLAlchemy ORM models (all 14 tables)
-├── database.py         — Database session factory
-├── webhook.py          — Outgoing webhook delivery (HTTP + retry + HMAC signing)
-│                         + Slack, MS Teams, Discord notification formatters
-├── scheduler.py        — Background scheduler: key expiry checks, rotation events
-├── rate_limit.py       — Redis-backed per-key rate limiter
-├── siem.py             — SIEM adapters (stdout, Splunk, S3, Datadog)
-├── apps.py             — Legacy compatibility shim
-├── parser.py           — CLI admin tool (aegis-admin)
-├── registry.py         — Registry utilities
-├── requirements.txt    — Python dependencies
-├── Dockerfile          — Container image definition
-├── docker-compose.yml  — Local development stack (Aegis + PostgreSQL + Redis)
-├── alembic.ini         — Alembic configuration
-├── alembic/
-│   └── versions/       — Database migration scripts (001–008)
+secrets-broker/
+├── aegis/                      — Python application package
+│   ├── __init__.py
+│   ├── api.py                  — FastAPI application: all routes, auth, session management,
+│   │                             user self-service, inbound webhooks, metrics, SIEM exports
+│   ├── broker.py               — Secret fetcher: groups objects by vendor, dispatches to functions.py
+│   ├── database.py             — SQLAlchemy engine, session factory, Base
+│   ├── functions.py            — Vendor-specific implementations (CyberArk, Vault, AWS, Conjur)
+│   ├── models.py               — ORM models (14 tables)
+│   ├── rate_limit.py           — Redis-backed per-key rate limiter
+│   ├── scheduler.py            — Background scheduler: key expiry checks, rotation events
+│   ├── siem.py                 — SIEM adapters (stdout, Splunk, S3, Datadog)
+│   └── webhook.py              — Outgoing webhook delivery (HTTP + retry + HMAC signing)
+│                                 + Slack, MS Teams, Discord notification formatters
+├── alembic/                    — Alembic migration environment
+│   └── versions/               — Migration scripts (001–010)
+├── config/
+│   ├── auth.json               — Vault credentials (gitignored)
+│   ├── auth.json.example       — Template for auth.json
+│   └── Caddyfile               — Caddy reverse-proxy config
+├── docs/
+│   ├── deploy-local.md         — Local Docker Compose deployment guide
+│   └── deploy-cloud-hybrid.md  — Cloud / hybrid deployment guide
 ├── static/
-│   ├── index.html      — Admin panel (vanilla JS + Tailwind CDN, single file)
-│   ├── dashboard.html  — Team self-service dashboard (Overview | Webhooks | Activity tabs)
-│   ├── login.html      — Login page
-│   └── 404.html        — Branded 404 page
-└── config/
-    ├── auth.json        — Vault credentials (gitignored)
-    └── auth.json.example — Template for auth.json
+│   ├── assets/
+│   │   └── Aegis-logo.png
+│   ├── index.html              — Admin panel (vanilla JS + Tailwind CDN, single file)
+│   ├── dashboard.html          — Team self-service dashboard (Overview | Webhooks | Activity tabs)
+│   ├── docs.html               — Interactive OpenAPI documentation (Swagger UI)
+│   ├── login.html              — Login page
+│   └── 404.html                — Branded 404 page
+├── terraform/                  — AWS infrastructure (ECS, RDS, ElastiCache, ALB, IAM, S3)
+├── helm/                       — Kubernetes Helm chart
+│   └── values.yaml             — Default chart values
+├── tests/
+│   ├── conftest.py             — pytest fixtures (TestClient, DB, FakeRedis)
+│   ├── test_policy.py          — Unit tests: IP allowlist and time-window policy helpers
+│   ├── test_broker.py          — Unit tests: vendor routing and auth_cfg resolution
+│   ├── test_rate_limit.py      — Unit tests: rate limiter with FakeRedis
+│   └── test_secrets.py         — Integration tests: GET /secrets end-to-end
+├── .github/
+│   ├── dependabot.yml          — Automated dependency updates (pip, docker, terraform, actions)
+│   └── workflows/
+│       ├── ci.yml              — Lint + integration tests on every push/PR
+│       └── release.yml         — Build + push GHCR image + GitHub release on v* tags
+├── alembic.ini
+├── docker-compose.yml          — Local development stack (Aegis + PostgreSQL + Redis + exporter)
+├── docker-compose.prod.yml     — Production stack variant
+├── Dockerfile
+├── Makefile                    — Dev, test, build, backup, Helm, and Terraform targets
+├── requirements.txt            — Runtime Python dependencies
+├── requirements-dev.txt        — Dev/test dependencies (pytest, fakeredis, httpx, ruff)
+├── .env.example                — Environment variable template (copy to .env)
+└── README.md
 ```

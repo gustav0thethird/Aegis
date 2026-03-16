@@ -4,8 +4,8 @@ from logging.config import fileConfig
 from sqlalchemy import engine_from_config, pool
 from alembic import context
 
-from database import Base
-import models  # ensure all models are registered
+from aegis.database import Base
+import aegis.models  # ensure all models are registered
 
 config = context.config
 
