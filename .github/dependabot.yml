@@ -1,0 +1,51 @@
+version: 2
+updates:
+
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    versioning-strategy: increase
+    labels:
+      - dependencies
+      - python
+      - automerge
+    commit-message:
+      prefix: "build(deps)"
+    groups:
+      default:
+        patterns:
+          - "*"
+
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - docker
+      - automerge
+    commit-message:
+      prefix: "build(deps)"
+
+  - package-ecosystem: "terraform"
+    directory: "/terraform"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - terraform
+      - automerge
+    commit-message:
+      prefix: "build(deps)"
+
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+    labels:
+      - dependencies
+      - github-actions
+      - automerge
+    commit-message:
+      prefix: "build(deps)"

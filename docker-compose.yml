@@ -1,41 +1,59 @@
 services:
+
   postgres:
     image: postgres:16-alpine
+    command: >
+      postgres
+        -c shared_preload_libraries=pg_stat_statements
+        -c pg_stat_statements.track=all
+        -c max_connections=100
     environment:
-      POSTGRES_DB: aegis
-      POSTGRES_USER: broker
-      POSTGRES_PASSWORD: brokerpass
+      POSTGRES_DB:       ${POSTGRES_DB:-aegis}
+      POSTGRES_USER:     ${POSTGRES_USER:-broker}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+    ports:
+      - "5432:5432"
     volumes:
       - pg_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U broker -d aegis"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-broker} -d ${POSTGRES_DB:-aegis}"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   redis:
     image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 10
 
+  postgres-exporter:
+    image: prometheuscommunity/postgres-exporter:v0.15.0
+    environment:
+      DATA_SOURCE_NAME: "postgresql://${POSTGRES_USER:-broker}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-aegis}?sslmode=disable"
+    ports:
+      - "9187:9187"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
   broker:
     build: .
     ports:
       - "8080:8080"
     environment:
-      DATABASE_URL: postgresql://broker:brokerpass@postgres/aegis
-      REDIS_URL: redis://redis:6379
-      AUTH_PATH: /config/auth.json
-      ADMIN_PASSWORD: changeme
-      # LOG_DESTINATIONS: stdout,splunk,s3,datadog
-      # SPLUNK_HEC_URL: https://splunk:8088
-      # SPLUNK_HEC_TOKEN: ...
-      # S3_LOG_BUCKET: my-audit-logs
-      # DD_API_KEY: ...
-      RATE_LIMIT_RPM: "60"
+      DATABASE_URL:      postgresql://${POSTGRES_USER:-broker}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-aegis}
+      REDIS_URL:         redis://redis:6379
+      AUTH_PATH:         /config/auth.json
+      ADMIN_PASSWORD:    ${ADMIN_PASSWORD:-changeme}
+      SECRET_KEY:        ${SECRET_KEY:-dev-secret-replace-in-prod}
+      RATE_LIMIT_RPM:    ${RATE_LIMIT_RPM:-60}
+      LOG_DESTINATIONS:  ${LOG_DESTINATIONS:-stdout}
     volumes:
       - ./config:/config
     depends_on:
@@ -43,6 +61,13 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
 volumes:
   pg_data:
+  redis_data:

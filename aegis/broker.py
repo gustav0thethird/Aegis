@@ -34,7 +34,7 @@ import json
 import logging
 import os
 
-from functions import (
+from aegis.functions import (
     vault_get,
     cyberark_logon,
     cyberark_find_account,

@@ -1,11 +1,11 @@
-FROM python:3.12-slim
+FROM python:3.14-slim
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY *.py .
+COPY aegis/ aegis/
 COPY static/ static/
 COPY alembic/ alembic/
 COPY alembic.ini .
@@ -28,4 +28,4 @@ COPY alembic.ini .
 
 EXPOSE 8080
 
-CMD ["sh", "-c", "alembic upgrade head && uvicorn api:app --host 0.0.0.0 --port 8080"]
+CMD ["sh", "-c", "alembic upgrade head && uvicorn aegis.api:app --host 0.0.0.0 --port 8080"]

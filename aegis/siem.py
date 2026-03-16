@@ -53,6 +53,7 @@ def build_event(
     source_ip: str | None = None,
     user_agent: str | None = None,
     error_detail: str | None = None,
+    **_,  # absorb DB-only fields (team_id, team_name, etc.) passed via _write_audit
 ) -> dict:
     return {
         "schema":    "aegis/v1",
