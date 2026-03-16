@@ -10,8 +10,9 @@ jobs:
     name: Release ${{ github.ref_name }}
     runs-on: ubuntu-latest
     permissions:
-      contents: write   # create GitHub release
-      packages: write   # push to GHCR
+      contents: write        # create GitHub release
+      packages: write        # push to GHCR
+      security-events: write # upload Trivy SARIF results
 
     steps:
       - uses: actions/checkout@v4
@@ -31,7 +32,32 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      - name: Build and push image
+      - name: Build image (local, pre-scan)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          cache-from: type=gha
+          cache-to:   type=gha,mode=max
+
+      - name: Scan image for CVEs (Trivy)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          image-ref: ghcr.io/${{ github.repository }}:${{ github.ref_name }}
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: "1"   # fail the release if CRITICAL or HIGH CVEs are found
+
+      - name: Upload Trivy results to GitHub Security tab
+        if: always()  # upload even if the scan step failed
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-results.sarif
+
+      - name: Push image
         uses: docker/build-push-action@v6
         with:
           context: .
