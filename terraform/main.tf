@@ -24,10 +24,10 @@ resource "aws_vpc" "main" {
 
 # ── Subnets ───────────────────────────────────────────────────────────────────
 resource "aws_subnet" "public" {
-  count             = 2
-  vpc_id            = aws_vpc.main.id
-  cidr_block        = cidrsubnet(var.vpc_cidr, 8, count.index + 1)
-  availability_zone = local.azs[count.index]
+  count                   = 2
+  vpc_id                  = aws_vpc.main.id
+  cidr_block              = cidrsubnet(var.vpc_cidr, 8, count.index + 1)
+  availability_zone       = local.azs[count.index]
   map_public_ip_on_launch = true
 
   tags = { Name = "${local.name}-public-${count.index + 1}" }

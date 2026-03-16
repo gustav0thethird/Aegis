@@ -36,15 +36,15 @@ resource "aws_ecs_task_definition" "broker" {
     }]
 
     secrets = [
-      { name = "DATABASE_URL",   valueFrom = aws_secretsmanager_secret.database_url.arn },
-      { name = "REDIS_URL",      valueFrom = aws_secretsmanager_secret.redis_url.arn },
+      { name = "DATABASE_URL", valueFrom = aws_secretsmanager_secret.database_url.arn },
+      { name = "REDIS_URL", valueFrom = aws_secretsmanager_secret.redis_url.arn },
       { name = "ADMIN_PASSWORD", valueFrom = aws_secretsmanager_secret.admin_password.arn },
-      { name = "SECRET_KEY",     valueFrom = aws_secretsmanager_secret.secret_key.arn },
+      { name = "SECRET_KEY", valueFrom = aws_secretsmanager_secret.secret_key.arn },
     ]
 
     environment = [
-      { name = "AUTH_PATH",        value = "/config/auth.json" },
-      { name = "RATE_LIMIT_RPM",   value = tostring(var.rate_limit_rpm) },
+      { name = "AUTH_PATH", value = "/config/auth.json" },
+      { name = "RATE_LIMIT_RPM", value = tostring(var.rate_limit_rpm) },
       { name = "LOG_DESTINATIONS", value = "stdout" },
     ]
 
@@ -89,6 +89,6 @@ resource "aws_ecs_service" "broker" {
   depends_on = [aws_lb_listener.https]
 
   lifecycle {
-    ignore_changes = [task_definition]  # allow external deployments (CI/CD)
+    ignore_changes = [task_definition] # allow external deployments (CI/CD)
   }
 }
