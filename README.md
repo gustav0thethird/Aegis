@@ -23,7 +23,7 @@
   </a>
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
   <a href="https://github.com/gustav0thethird/secrets-broker/blob/main/LICENSE">
-    <img src="https://img.shields.io/badge/license-Proprietary-red" alt="License">
+    <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License">
   </a>
 </p>
 
