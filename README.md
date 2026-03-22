@@ -8,6 +8,25 @@
   <img src="static/assets/Aegis-logo.png" width="600">
 </p>
 
+<p align="center">
+  <a href="https://github.com/gustav0thethird/secrets-broker/actions/workflows/ci.yml">
+    <img src="https://github.com/gustav0thethird/secrets-broker/actions/workflows/ci.yml/badge.svg" alt="CI">
+  </a>
+  <a href="https://github.com/gustav0thethird/secrets-broker/actions/workflows/codeql.yml">
+    <img src="https://github.com/gustav0thethird/secrets-broker/actions/workflows/codeql.yml/badge.svg" alt="Bandit">
+  </a>
+  <a href="https://github.com/gustav0thethird/secrets-broker/releases">
+    <img src="https://img.shields.io/github/v/release/gustav0thethird/secrets-broker" alt="Latest release">
+  </a>
+  <a href="https://github.com/gustav0thethird/secrets-broker/pkgs/container/secrets-broker">
+    <img src="https://img.shields.io/badge/container-ghcr.io-blue" alt="GHCR">
+  </a>
+  <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
+  <a href="https://github.com/gustav0thethird/secrets-broker/blob/main/LICENSE">
+    <img src="https://img.shields.io/badge/license-Proprietary-red" alt="License">
+  </a>
+</p>
+
 Aegis is a thin, audited proxy that sits between your applications and your secrets infrastructure. Teams authenticate with a scoped API key (one key per team-registry pair) and receive exactly the secrets they are authorised to see — regardless of whether those secrets live in CyberArk, HashiCorp Vault, AWS Secrets Manager, or Conjur. Every fetch, every rotation, and every configuration change is written to an immutable log with structured before/after diffs and full account attribution.
 
 Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Team members self-service their own webhook subscriptions, notification channels, and CI/CD key rotation via their own dashboard — the security team manages policy, not operations.
