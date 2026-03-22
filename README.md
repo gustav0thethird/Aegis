@@ -9,20 +9,20 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/gustav0thethird/secrets-broker/actions/workflows/ci.yml">
-    <img src="https://github.com/gustav0thethird/secrets-broker/actions/workflows/ci.yml/badge.svg" alt="CI">
+  <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/ci.yml">
+    <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
-  <a href="https://github.com/gustav0thethird/secrets-broker/actions/workflows/codeql.yml">
-    <img src="https://github.com/gustav0thethird/secrets-broker/actions/workflows/codeql.yml/badge.svg" alt="Bandit">
+  <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/codeql.yml">
+    <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/codeql.yml/badge.svg" alt="Bandit">
   </a>
-  <a href="https://github.com/gustav0thethird/secrets-broker/releases">
-    <img src="https://img.shields.io/github/v/release/gustav0thethird/secrets-broker" alt="Latest release">
+  <a href="https://github.com/gustav0thethird/Aegis/releases">
+    <img src="https://img.shields.io/github/v/release/gustav0thethird/Aegis" alt="Latest release">
   </a>
-  <a href="https://github.com/gustav0thethird/secrets-broker/pkgs/container/secrets-broker">
+  <a href="https://github.com/gustav0thethird/Aegis/pkgs/container/Aegis">
     <img src="https://img.shields.io/badge/container-ghcr.io-blue" alt="GHCR">
   </a>
   <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
-  <a href="https://github.com/gustav0thethird/secrets-broker/blob/main/LICENSE">
+  <a href="https://github.com/gustav0thethird/Aegis/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License">
   </a>
 </p>
