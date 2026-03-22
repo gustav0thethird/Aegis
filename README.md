@@ -14,6 +14,11 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 
 ---
 
+> 🚧 **Development in Progress**
+> Aegis is an early-stage project - stable for local testing, but production hardening is ongoing. Use with caution on public-facing nodes.
+
+---
+
 ## Contents
 
 - [Why Aegis](#why-aegis)
