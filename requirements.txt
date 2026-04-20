@@ -1,9 +1,9 @@
 alembic==1.18.4
 apscheduler==3.11.2
 bcrypt==5.0.0
-boto3==1.42.88
+boto3==1.42.91
 cryptography==46.0.7
-fastapi==0.135.3
+fastapi==0.136.0
 psycopg2-binary==2.9.11
 python-multipart==0.0.26
 redis==7.4.0
