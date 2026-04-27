@@ -1,5 +1,5 @@
-pytest>=8.0
-fakeredis>=2.26
-httpx>=0.27
-ruff>=0.4
-bandit>=1.7
+pytest>=9.0.3
+fakeredis>=2.35.1
+httpx>=0.28.1
+ruff>=0.15.12
+bandit>=1.9.4
