@@ -32,18 +32,27 @@ def vault_put(secret_name, value, auth):
 
 # CyberArk — CCP retrieves svc account creds → PVWA Logon → PVWA operations
 
+def _auth_key(auth, name, legacy):
+    """Read a CyberArk auth.json key, tolerating the pre-existing legacy spelling."""
+    for key in (name, legacy):
+        if auth.get(key):
+            return auth[key]
+    raise ValueError(f"CyberArk auth config missing '{name}'")
+
+
 def cyberark_logon(auth):
     """
     Two-step logon:
       1. CCP: retrieve service account username + password stored in CyberArk.
       2. PVWA: exchange those credentials for a session token.
-    auth keys: host, app_id, safe, svc_object
+    auth keys: host, app_id, auth_safe, auth_object
+      (the legacy spellings "safe" and "svc_object" are still accepted)
     Returns {"token": <pvwa_session_token>}
     """
     host = auth["host"]
     app_id = auth["app_id"]
-    safe = auth["safe"]
-    svc_object = auth["svc_object"]
+    safe = _auth_key(auth, "auth_safe", "safe")
+    svc_object = _auth_key(auth, "auth_object", "svc_object")
 
     # Step 1: CCP — fetch stored service account credentials
     ccp = requests.get(

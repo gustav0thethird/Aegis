@@ -27,7 +27,7 @@ UI:
   GET  /dashboard    Team dashboard (role=user)
   GET  /docs         API documentation + companion tester
 
-Admin API (session token with role=admin OR Basic admin/$ADMIN_PASSWORD):
+Admin API (session token with role=admin OR HTTP Basic with an admin account):
   GET    /admin/api/ping
 
   Objects: GET/POST/PUT/DELETE /admin/api/objects[/{name}]
@@ -75,6 +75,7 @@ from aegis.models import AuditLog, ChangeLog, Object, Policy, Registry, Registry
 from aegis.broker import fetch_secrets, load_auth
 from aegis.siem import build_event, emit, start_s3_flush_thread
 from aegis import rate_limit
+from aegis import url_guard
 from aegis import webhook as wh
 from aegis import scheduler
 
@@ -129,6 +130,16 @@ def _seed_admin():
 
 def _hash_key(key: str) -> str:
     return hashlib.sha256(key.encode()).hexdigest()
+
+
+def _validated_url(value: Optional[str], field: str) -> Optional[str]:
+    """Reject SSRF-unsafe outbound URLs before they are persisted."""
+    if not value:
+        return value
+    try:
+        return url_guard.validate_url(value, field)
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc))
 
 
 def _generate_key() -> str:
@@ -191,7 +202,10 @@ async def _require_admin(request: Request, db: Session = Depends(get_db)) -> dic
         if session and session["role"] == "admin":
             return session
 
-    # Fall back to HTTP Basic (for curl / API access)
+    # Fall back to HTTP Basic (for curl / API access). Credentials are verified
+    # against the users table — never against ADMIN_PASSWORD, which is a
+    # bootstrap-only value — so password changes, role changes and account
+    # deletion all take effect immediately.
     from fastapi.security.utils import get_authorization_scheme_param
     auth_header = request.headers.get("Authorization", "")
     scheme, credentials = get_authorization_scheme_param(auth_header)
@@ -199,16 +213,20 @@ async def _require_admin(request: Request, db: Session = Depends(get_db)) -> dic
         import base64
         try:
             decoded = base64.b64decode(credentials).decode("utf-8")
-            username, _, password = decoded.partition(":")
-            admin_password = os.environ.get("ADMIN_PASSWORD", "")
-            ok = (
-                secrets_lib.compare_digest(username.encode(), b"admin") and
-                secrets_lib.compare_digest(password.encode(), admin_password.encode())
-            )
-            if ok:
-                return {"username": "admin", "role": "admin", "team_id": None}
+            username, sep, password = decoded.partition(":")
         except Exception:
-            pass
+            username = sep = password = ""
+        if sep and username:
+            user = db.query(User).filter(User.username == username).first()
+            if user and user.role == "admin" and _verify_pw(password, user.password_hash):
+                return {
+                    "user_id":  str(user.id),
+                    "username": user.username,
+                    "role":     user.role,
+                    "team_id":  None,
+                    "team_ids": [str(m.team_id) for m in (user.team_memberships or [])],
+                    "theme":    user.theme,
+                }
 
     raise HTTPException(
         status_code=status.HTTP_401_UNAUTHORIZED,
@@ -549,21 +567,24 @@ def api_put_my_webhook(
     """Create or update webhook config + notification channels for user's team."""
     team = _resolve_user_team(session, db, team_id)
 
+    # Every URL below is requested server-side, so validate before storing.
+    webhook_url = _validated_url(req.url, "url")
+
     # Update notification channels on Team
-    team.slack_webhook_url    = req.slack_webhook_url
-    team.ms_teams_webhook_url = req.ms_teams_webhook_url
-    team.discord_webhook_url  = req.discord_webhook_url
+    team.slack_webhook_url    = _validated_url(req.slack_webhook_url, "slack_webhook_url")
+    team.ms_teams_webhook_url = _validated_url(req.ms_teams_webhook_url, "ms_teams_webhook_url")
+    team.discord_webhook_url  = _validated_url(req.discord_webhook_url, "discord_webhook_url")
 
     # Upsert HTTP webhook if URL provided
-    if req.url:
-        from webhook import ALL_EVENTS
+    if webhook_url:
+        from aegis.webhook import ALL_EVENTS
         bad = [e for e in req.events if e not in ALL_EVENTS]
         if bad:
             raise HTTPException(status_code=400, detail=f"Unknown events: {bad}")
 
         wh = team.webhook
         if wh:
-            wh.url             = req.url
+            wh.url             = webhook_url
             wh.enabled         = req.enabled
             wh.events          = req.events
             wh.signing_enabled = req.signing_enabled
@@ -572,7 +593,7 @@ def api_put_my_webhook(
         else:
             wh = Webhook(
                 team_id         = team.id,
-                url             = req.url,
+                url             = webhook_url,
                 enabled         = req.enabled,
                 events          = req.events,
                 signing_enabled = req.signing_enabled,
@@ -732,10 +753,11 @@ def api_inbound_webhook(
         if not tr:
             raise HTTPException(status_code=403, detail="Team does not have access to that registry")
 
-        # Rotate key
-        new_raw    = secrets_lib.token_urlsafe(40)
-        new_hash   = hashlib.sha256(new_raw.encode()).hexdigest()
-        new_preview = new_raw[:10]
+        # Rotate key — same generator, hash and preview format as every other
+        # rotation path, so inbound-rotated keys are indistinguishable downstream.
+        new_raw     = _generate_key()
+        new_hash    = _hash_key(new_raw)
+        new_preview = new_raw[:10] + "..."
 
         old_keys = db.query(TeamRegistryKey).filter(
             TeamRegistryKey.team_id    == tid,
@@ -1632,8 +1654,7 @@ def _mask_auth_cfg(cfg: dict) -> dict:
 def admin_auth_backends(session: dict = Depends(_require_admin)):
     """Return the currently loaded auth.json structure (secrets masked)."""
     try:
-        import broker
-        raw = broker.load_auth()
+        raw = load_auth()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Cannot read auth.json: {e}")
 
@@ -1647,9 +1668,8 @@ def admin_auth_backends(session: dict = Depends(_require_admin)):
 def admin_test_auth_backend(vendor: str, ref: str, session: dict = Depends(_require_admin)):
     """Attempt a basic connectivity check against the backend."""
     import socket
-    import broker
     try:
-        raw = broker.load_auth()
+        raw = load_auth()
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Cannot read auth.json: {e}")
 
@@ -2119,6 +2139,8 @@ def admin_set_webhook(team_id: str, req: WebhookRequest, session: dict = Depends
     unknown = set(req.events) - wh.ALL_EVENTS
     if unknown:
         raise HTTPException(status_code=422, detail=f"Unknown event types: {unknown}")
+
+    req.url = _validated_url(req.url, "url")
 
     new_secret = None
     if team.webhook:

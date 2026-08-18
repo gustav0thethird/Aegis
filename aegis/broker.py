@@ -114,15 +114,18 @@ def _fetch_cyberark(objects: list[dict], auth: dict, results: dict) -> None:
     for auth_ref, group in by_auth_ref.items():
         cfg = _auth_cfg(auth, "cyberark", auth_ref, group[0]["name"])
         session = cyberark_logon(cfg)
+        token = session["token"]
+        host = cfg["host"]
         for obj in group:
+            # functions.cyberark_find_account(platform, safe, name, token, host)
             account_id = cyberark_find_account(
-                obj["path"],
                 obj.get("platform"),
                 obj.get("safe"),
-                cfg,
-                session,
+                obj["path"],
+                token,
+                host,
             )
-            results[obj["name"]] = cyberark_get(account_id, cfg, session)
+            results[obj["name"]] = cyberark_get(account_id, token, host)
 
 
 def _fetch_conjur(objects: list[dict], auth: dict, results: dict) -> None:

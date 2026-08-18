@@ -17,6 +17,8 @@ from datetime import datetime, timezone
 
 import requests
 
+from aegis import url_guard
+
 logger = logging.getLogger("aegis.webhook")
 
 WEBHOOK_TIMEOUT   = 10   # seconds per attempt
@@ -69,7 +71,7 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
     Deliver payload to webhook URL with optional HMAC signature.
     Logs every attempt to webhook_log. Returns True if any attempt succeeded.
     """
-    from models import WebhookLog  # local import avoids circular
+    from aegis.models import WebhookLog  # local import avoids circular
 
     if not webhook.enabled:
         return False
@@ -84,6 +86,25 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
     if getattr(webhook, "signing_enabled", False) and webhook.secret:
         sig = _sign(payload_str, webhook.secret)
         headers["X-Aegis-Signature"] = f"sha256={sig}"
+
+    # Re-checked at delivery time: rows stored before URL validation existed
+    # are still in the database, and DNS may have moved since the write.
+    reason = url_guard.check_url(webhook.url)
+    if reason:
+        logger.error("Webhook delivery blocked event=%s team=%s: %s",
+                     event, webhook.team_id, reason)
+        db.add(WebhookLog(
+            webhook_id=webhook.id,
+            team_id=webhook.team_id,
+            event=event,
+            payload=payload_str,
+            status_code=None,
+            success=False,
+            attempt=1,
+            error=f"blocked by URL policy: {reason}",
+        ))
+        db.commit()
+        return False
 
     for attempt, delay in enumerate(RETRY_BACKOFF, start=1):
         if delay:
@@ -197,6 +218,18 @@ def _discord_payload(event: str, team: dict, registry: dict | None, detail: str 
     }
 
 
+def _channel_url(team, attr: str, event: str) -> str | None:
+    """Return the channel URL only if it is set and still safe to request."""
+    url = getattr(team, attr, None)
+    if not url:
+        return None
+    reason = url_guard.check_url(url)
+    if reason:
+        logger.error("%s blocked event=%s team=%s: %s", attr, event, team.id, reason)
+        return None
+    return url
+
+
 def notify_channels(team, event: str, registry: dict | None = None,
                     detail: str | None = None) -> None:
     """
@@ -205,10 +238,11 @@ def notify_channels(team, event: str, registry: dict | None = None,
     """
     team_dict = {"id": str(team.id), "name": team.name}
 
-    if getattr(team, "slack_webhook_url", None):
+    slack_url = _channel_url(team, "slack_webhook_url", event)
+    if slack_url:
         try:
             requests.post(
-                team.slack_webhook_url,
+                slack_url,
                 json=_slack_payload(event, team_dict, registry, detail),
                 timeout=WEBHOOK_TIMEOUT,
             )
@@ -216,10 +250,11 @@ def notify_channels(team, event: str, registry: dict | None = None,
         except Exception as exc:
             logger.warning("Slack notification failed event=%s team=%s: %s", event, team.id, exc)
 
-    if getattr(team, "ms_teams_webhook_url", None):
+    ms_teams_url = _channel_url(team, "ms_teams_webhook_url", event)
+    if ms_teams_url:
         try:
             requests.post(
-                team.ms_teams_webhook_url,
+                ms_teams_url,
                 json=_ms_teams_payload(event, team_dict, registry, detail),
                 timeout=WEBHOOK_TIMEOUT,
             )
@@ -227,10 +262,11 @@ def notify_channels(team, event: str, registry: dict | None = None,
         except Exception as exc:
             logger.warning("MS Teams notification failed event=%s team=%s: %s", event, team.id, exc)
 
-    if getattr(team, "discord_webhook_url", None):
+    discord_url = _channel_url(team, "discord_webhook_url", event)
+    if discord_url:
         try:
             requests.post(
-                team.discord_webhook_url,
+                discord_url,
                 json=_discord_payload(event, team_dict, registry, detail),
                 timeout=WEBHOOK_TIMEOUT,
             )

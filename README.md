@@ -649,6 +649,10 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `AUTH_PATH` | Yes | — | Filesystem path to `auth.json` inside the container |
 | `ADMIN_PASSWORD` | Yes | — | Bootstrap password for the `admin` account (used on first start only) |
 | `RATE_LIMIT_RPM` | No | `60` | Per-key requests per minute. Used as fallback if DB setting is absent. |
+| `RATE_LIMIT_FAIL_MODE` | No | `open` | Behaviour when Redis is unreachable. `open` keeps serving without enforcing limits; `closed` rejects requests. |
+| `WEBHOOK_ALLOWED_SCHEMES` | No | `https` | Comma-separated URL schemes accepted for outbound webhook and notification URLs. |
+| `WEBHOOK_ALLOWED_HOSTS` | No | — | Comma-separated host allowlist for outbound URLs. Empty means any public host. An entry matches exactly or as a parent domain. |
+| `WEBHOOK_ALLOW_PRIVATE_IPS` | No | `false` | Permit webhook targets on loopback/RFC1918/link-local addresses. Local development only. |
 | `LOG_DESTINATIONS` | No | `stdout` | Comma-separated SIEM targets. Used as fallback if DB setting is absent. |
 | `SPLUNK_HEC_URL` | No | — | Splunk HEC endpoint URL |
 | `SPLUNK_HEC_TOKEN` | No | — | Splunk HEC authentication token |
@@ -750,8 +754,13 @@ curl -X POST https://aegis.internal/api/logout \
 
 ```bash
 curl https://aegis.internal/admin/api/objects \
-  -u admin:changeme
+  -u admin:'<the admin account password>'
 ```
+
+Basic credentials are verified against the `users` table, so they are the same
+credentials used at `/api/login`. `ADMIN_PASSWORD` is a bootstrap value only —
+once the account exists, changing its password, demoting it, or deleting it
+takes effect immediately for Basic auth too.
 
 | Method | Path | Description |
 |---|---|---|
@@ -1642,6 +1651,7 @@ Preview and save from **Settings → General → Theme**. Does not affect the te
 
 - Operator account passwords are hashed using bcrypt (via the `bcrypt` library directly — not `passlib`).
 - The admin bootstrap password (`ADMIN_PASSWORD`) is only used on first startup to seed the initial account. Only the bcrypt hash is persisted.
+- `ADMIN_PASSWORD` is never accepted as a live credential. Every authenticated path — session login and HTTP Basic alike — verifies against the bcrypt hash stored on the user row, so account changes cannot be bypassed.
 
 ---
 
