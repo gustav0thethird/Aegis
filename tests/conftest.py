@@ -24,6 +24,9 @@ os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
 # The background key-rotation job must not run underneath the tests, mutating
 # rows they are asserting on. Scheduler behaviour is tested explicitly instead.
 os.environ.setdefault("SCHEDULER_ENABLED", "false")
+# Alerts deliver synchronously under test so assertions do not race a worker
+# thread. Background dispatch is exercised explicitly in test_scan_ingest.
+os.environ.setdefault("ALERT_DISPATCH_MODE", "sync")
 
 import pytest
 import fakeredis

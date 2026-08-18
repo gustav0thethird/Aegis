@@ -58,6 +58,7 @@ import logging
 import os
 import secrets as secrets_lib
 import uuid
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
@@ -2525,6 +2526,68 @@ def _raise_alert(db: Session, finding: ScanFinding, team: Team) -> dict:
     return result
 
 
+# A small pool: alerting talks to Jira, ServiceNow and SMTP, and flooding them
+# with concurrent requests from a burst of scans helps nobody.
+_alert_pool: Optional[ThreadPoolExecutor] = None
+
+
+def _alert_executor() -> ThreadPoolExecutor:
+    global _alert_pool
+    if _alert_pool is None:
+        _alert_pool = ThreadPoolExecutor(
+            max_workers=int(os.environ.get("ALERT_WORKERS", "2")),
+            thread_name_prefix="aegis-alert",
+        )
+    return _alert_pool
+
+
+def _alert_dispatch_is_sync() -> bool:
+    """
+    Whether ingest waits for alerts to be delivered.
+
+    Background is the default: a slow or unreachable Jira should not hold a CI
+    request open. Sync exists for deployments that want the pipeline to block
+    until a ticket exists, and for deterministic tests.
+    """
+    return os.environ.get("ALERT_DISPATCH_MODE", "background").strip().lower() == "sync"
+
+
+def _dispatch_alerts(finding_ids: list, team_id) -> dict:
+    """
+    Deliver alerts for the given findings and record the outcome on each.
+
+    Runs on its own database session so it is safe off the request thread. The
+    findings must already be committed before this is called.
+    """
+    delivered = 0
+    errors: dict[str, str] = {}
+    db = SessionLocal()
+    try:
+        team = db.get(Team, team_id)
+        if team is None:
+            return {"delivered": 0, "errors": {"team": "team no longer exists"}}
+        for finding_id in finding_ids:
+            finding = db.get(ScanFinding, finding_id)
+            if finding is None:
+                continue
+            # Re-checked here: the finding may have been triaged, or alerted by
+            # a concurrent run, between queueing and delivery.
+            if not alerting.should_alert(_finding_payload(finding, team)):
+                continue
+            result = _raise_alert(db, finding, team)
+            errors.update(result["errors"])
+            if result["delivered"]:
+                delivered += 1
+        db.commit()
+    except Exception as exc:
+        logger.error("Alert dispatch failed: %s", exc)
+        db.rollback()
+        errors["dispatch"] = str(exc)
+    finally:
+        db.close()
+    return {"delivered": delivered, "errors": errors}
+
+
 @app.post("/api/scan/{team_id_str}/ingest")
 def api_scan_ingest(
     team_id_str: str,
@@ -2605,29 +2668,41 @@ def api_scan_ingest(
     run.new_finding_count = len(new_rows)
     db.flush()
 
-    alerted = 0
-    alert_errors: dict[str, str] = {}
-    for row in new_rows:
-        if alerted >= _ALERT_MAX_PER_RUN:
-            break
-        if not alerting.should_alert(_finding_payload(row, team)):
-            continue
-        result = _raise_alert(db, row, team)
-        alert_errors.update(result["errors"])
-        if result["delivered"]:
-            alerted += 1
+    # Select what to alert on, then commit before dispatching: the background
+    # worker uses its own session and can only see committed rows.
+    to_alert = [
+        row.id for row in new_rows
+        if alerting.should_alert(_finding_payload(row, team))
+    ][:_ALERT_MAX_PER_RUN]
 
     db.commit()
 
-    logger.info("Scan ingested team=%s repo=%s scanner=%s findings=%d new=%d alerted=%d",
-                team.name, req.repository, req.scanner, len(findings), len(new_rows), alerted)
+    alert_errors: dict[str, str] = {}
+    # In sync mode the count is knowable, so report a real number even when
+    # nothing qualified. In background mode it is not yet known, hence None.
+    delivered = 0 if _alert_dispatch_is_sync() else None
+    if to_alert:
+        if _alert_dispatch_is_sync():
+            result = _dispatch_alerts(to_alert, team.id)
+            delivered = result["delivered"]
+            alert_errors = result["errors"]
+        else:
+            _alert_executor().submit(_dispatch_alerts, list(to_alert), team.id)
+
+    logger.info("Scan ingested team=%s repo=%s scanner=%s findings=%d new=%d queued=%d",
+                team.name, req.repository, req.scanner,
+                len(findings), len(new_rows), len(to_alert))
 
     return {
         "ok": True,
         "scan_run_id": str(run.id),
         "findings": len(findings),
         "new_findings": len(new_rows),
-        "alerted": alerted,
+        # Findings handed to the alert sinks. Delivery happens off this request
+        # unless ALERT_DISPATCH_MODE=sync, so "queued" is what can honestly be
+        # reported here; per-finding outcome lands on the finding itself.
+        "alerts_queued": len(to_alert),
+        "alerted": delivered,
         "alert_errors": alert_errors or None,
     }
 

@@ -306,3 +306,74 @@ class TestFindingsApi:
         resp = client.get("/admin/api/scan/findings", auth=ADMIN_CREDS,
                           params={"team_id": str(team.id)})
         assert SECRET not in resp.text
+
+
+class TestBackgroundDispatch:
+    """
+    Delivery runs off the request by default, so a slow or unreachable Jira
+    cannot hold a CI request open.
+    """
+
+    def test_ingest_does_not_wait_for_a_slow_sink(self, client, db, monkeypatch):
+        import threading
+        import time
+
+        monkeypatch.setenv("ALERT_DISPATCH_MODE", "background")
+        monkeypatch.setenv("ALERT_SINKS", "webhook")
+
+        started = threading.Event()
+        release = threading.Event()
+
+        def _slow(finding):
+            started.set()
+            release.wait(timeout=10)
+            return {"delivered": ["webhook"], "errors": {},
+                    "ticket_key": None, "ticket_url": None}
+
+        monkeypatch.setattr("aegis.alerting.dispatch", _slow)
+
+        team, secret = _team_with_ingest(db)
+        begin = time.monotonic()
+        resp = _ingest(client, team, secret)
+        elapsed = time.monotonic() - begin
+
+        try:
+            assert resp.status_code == 200
+            assert resp.json()["alerts_queued"] == 1
+            # Not yet known — delivery has not finished.
+            assert resp.json()["alerted"] is None
+            assert started.wait(timeout=5), "dispatch never started"
+            assert elapsed < 5, f"ingest blocked for {elapsed:.1f}s on the sink"
+        finally:
+            release.set()
+
+    def test_outcome_is_recorded_once_delivery_finishes(self, client, db, monkeypatch):
+        import time
+
+        monkeypatch.setenv("ALERT_DISPATCH_MODE", "background")
+        monkeypatch.setenv("ALERT_SINKS", "webhook")
+        monkeypatch.setattr("aegis.alerting.dispatch", lambda f: {
+            "delivered": ["webhook"], "errors": {},
+            "ticket_key": "SEC-9", "ticket_url": "https://jira/browse/SEC-9"})
+
+        team, secret = _team_with_ingest(db)
+        assert _ingest(client, team, secret).json()["alerts_queued"] == 1
+
+        deadline = time.monotonic() + 10
+        while time.monotonic() < deadline:
+            db.expire_all()
+            finding = db.query(ScanFinding).filter_by(team_id=team.id).one_or_none()
+            if finding is not None and finding.alerted_at is not None:
+                break
+            time.sleep(0.05)
+
+        assert finding.alerted_at is not None, "background dispatch never recorded"
+        assert finding.ticket_key == "SEC-9"
+
+    def test_nothing_queued_when_below_threshold(self, client, db, monkeypatch):
+        monkeypatch.setenv("ALERT_DISPATCH_MODE", "background")
+        monkeypatch.setenv("ALERT_SINKS", "webhook")
+        monkeypatch.setenv("ALERT_MIN_SEVERITY", "critical")
+
+        team, secret = _team_with_ingest(db)
+        assert _ingest(client, team, secret).json()["alerts_queued"] == 0

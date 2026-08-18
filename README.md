@@ -675,6 +675,8 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `ALERT_SINKS` | No | — | Comma-separated: `jira`, `servicenow`, `email`, `webhook`. Empty disables alerting. |
 | `ALERT_MIN_SEVERITY` | No | `high` | Minimum severity that raises an alert |
 | `ALERT_MAX_PER_RUN` | No | `25` | Cap on alerts raised by a single scan ingest |
+| `ALERT_DISPATCH_MODE` | No | `background` | `background` delivers alerts off the ingest request; `sync` makes ingest wait until sinks have responded. |
+| `ALERT_WORKERS` | No | `2` | Worker threads delivering alerts in background mode. |
 | `JIRA_URL` / `JIRA_USER` / `JIRA_API_TOKEN` / `JIRA_PROJECT_KEY` | No | — | Jira ticket creation |
 | `JIRA_ISSUE_TYPE` | No | `Task` | Issue type for created tickets |
 | `SERVICENOW_URL` / `SERVICENOW_USER` / `SERVICENOW_PASSWORD` | No | — | ServiceNow incident creation |
@@ -1522,7 +1524,7 @@ findings are attributed to a team without issuing a second class of credential.
 Response:
 
 ```json
-{ "ok": true, "scan_run_id": "...", "findings": 3, "new_findings": 1, "alerted": 1 }
+{ "ok": true, "scan_run_id": "...", "findings": 3, "new_findings": 1, "alerts_queued": 1 }
 ```
 
 Ready-made pipeline configuration lives in [`examples/ci/`](examples/ci/): a
@@ -1576,6 +1578,16 @@ Design decisions worth knowing:
 - **Alerting never fails the ingest.** A Jira outage is recorded against the
   finding, not returned to the pipeline. CI should not go red because a
   ticketing system is down.
+- **Delivery runs off the request.** A slow or unreachable sink would otherwise
+  hold a CI request open for as long as its timeout. The ingest response
+  reports `alerts_queued`; the per-finding outcome (`alerted_at`, `ticket_key`,
+  `alert_error`) lands on the finding itself. Set `ALERT_DISPATCH_MODE=sync` if
+  you want the pipeline to block until a ticket exists — the response then also
+  carries `alerted`.
+- **In-flight alerts are not durable.** A restart mid-delivery leaves the
+  finding un-alerted rather than half-alerted, and the next scan or an explicit
+  re-alert picks it up. That falls out of alerting being keyed on
+  `alerted_at`.
 - **One alert per finding.** Re-alerting on every pipeline run turns the
   channel into noise.
 - **Alerts are capped per run** (`ALERT_MAX_PER_RUN`, default 25) so a scan
