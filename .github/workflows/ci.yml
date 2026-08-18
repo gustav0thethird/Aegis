@@ -145,3 +145,22 @@ jobs:
           echo "$out"
           echo "$out" | grep -q "skipping migrations"
           echo "$out" | grep -q "started"
+
+  deps:
+    name: Dependency audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Audit runtime dependencies
+        run: |
+          pip install pip-audit
+          # Fails the build on any known vulnerability in a pinned runtime
+          # dependency. Dependabot opens PRs; this makes an unpatched
+          # vulnerability visible on every push rather than only in the
+          # security tab.
+          pip-audit -r requirements.txt --progress-spinner off
