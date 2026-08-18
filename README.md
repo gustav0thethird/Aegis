@@ -2176,12 +2176,27 @@ See `docs/deploy-cloud-hybrid.md` for full deployment guidance including hybrid 
 secrets-broker/
 ├── aegis/                      — Python application package
 │   ├── __init__.py
-│   ├── api.py                  — FastAPI application: all routes, auth, session management,
-│   │                             user self-service, inbound webhooks, metrics, SIEM exports
+│   ├── api.py                  — Application assembly: creates the app, wires routers,
+│   │                             startup hooks and error handlers. No request logic.
+│   ├── deps.py                 — Shared dependencies: auth, audit/change writers,
+│   │                             policy enforcement, broker fetch helpers
+│   ├── routers/                — One module per domain; each imports from deps
+│   │   ├── health.py           — Liveness, readiness and dependency probes
+│   │   ├── secrets.py          — GET /secrets
+│   │   ├── eso.py              — External Secrets Operator provider
+│   │   ├── session.py          — Login, logout, session management
+│   │   ├── self_service.py     — Team dashboard, webhooks, inbound actions
+│   │   ├── scanning.py         — Scan ingest, triage and alerting
+│   │   ├── metrics.py          — Prometheus metrics
+│   │   ├── ui.py               — Static page routes
+│   │   └── admin_*.py          — Admin API by domain (core, teams, users,
+│   │                             config, logs, webhooks)
 │   ├── broker.py               — Secret fetcher: groups objects by vendor, dispatches to functions.py
 │   ├── database.py             — SQLAlchemy engine, session factory, Base
 │   ├── functions.py            — Vendor-specific implementations (CyberArk, Vault, AWS, Conjur)
+│   ├── keys.py                 — API key generation, hashing, preview format
 │   ├── models.py               — ORM models (16 tables)
+│   ├── secret_cache.py         — Short-lived in-process cache for ESO fetches
 │   ├── alerting.py             — Jira / ServiceNow / email / webhook alert sinks
 │   ├── rate_limit.py           — Redis-backed per-key rate limiter
 │   ├── scanning.py             — Semgrep / Gitleaks output normalisation and dedupe

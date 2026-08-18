@@ -115,7 +115,7 @@ class TestEsoCaching:
             calls.append(1)
             return {rows[0]["name"]: "v"}
 
-        monkeypatch.setattr("aegis.api.fetch_secrets", _fetch)
+        monkeypatch.setattr("aegis.deps.fetch_secrets", _fetch)
 
         first = client.get(f"/eso/v1/secret/{obj.name}", headers=_auth_header(key))
         second = client.get(f"/eso/v1/secret/{obj.name}", headers=_auth_header(key))
@@ -129,7 +129,7 @@ class TestEsoCaching:
 
         monkeypatch.setenv("SECRET_CACHE_TTL_SECONDS", "30")
         obj, _reg, team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         client.get(f"/eso/v1/secret/{obj.name}", headers=_auth_header(key))
@@ -144,7 +144,7 @@ class TestEsoCaching:
         monkeypatch.setenv("SECRET_CACHE_TTL_SECONDS", "30")
         _obj, _reg, _team, key = _create_scenario(db, client)
         calls = []
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: calls.append(1) or {"x": "v"})
 
         client.get("/secrets", headers=_auth_header(key))
@@ -155,7 +155,7 @@ class TestEsoCaching:
     def test_revoking_a_key_drops_its_cache(self, client, db, monkeypatch):
         monkeypatch.setenv("SECRET_CACHE_TTL_SECONDS", "30")
         obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         client.get(f"/eso/v1/secret/{obj.name}", headers=_auth_header(key))
@@ -170,7 +170,7 @@ class TestRegistryExtractGate:
 
     def test_allowed_by_default(self, client, db, monkeypatch):
         _obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets", lambda rows, auth: {"x": "v"})
+        monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
         assert client.get("/eso/v1/secrets", headers=_auth_header(key)).status_code == 200
 
     def test_can_be_disabled(self, client, db, monkeypatch):
@@ -185,7 +185,7 @@ class TestRegistryExtractGate:
     def test_per_object_still_works_when_disabled(self, client, db, monkeypatch):
         monkeypatch.setenv("ESO_ALLOW_REGISTRY_EXTRACT", "false")
         obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         resp = client.get(f"/eso/v1/secret/{obj.name}", headers=_auth_header(key))

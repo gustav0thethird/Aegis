@@ -36,4 +36,14 @@ extend-immutable-calls = [
     "fastapi.Body",
     "fastapi.File",
     "fastapi.Form",
+    # Routers import these through aegis.deps, so the fastapi.* paths above do
+    # not match the call sites.
+    "aegis.deps.Depends",
+    "aegis.deps.Query",
+    "aegis.deps.Header",
+    "aegis.deps.Security",
+    "aegis.deps.Path",
+    "aegis.deps.Body",
+    "aegis.deps.File",
+    "aegis.deps.Form",
 ]

@@ -39,7 +39,7 @@ class TestExpiryEnforcement:
     def test_expired_key_is_rejected(self, client, db, monkeypatch):
         """Regression: an expired key used to keep working indefinitely."""
         _obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets", lambda rows, auth: {"x": "v"})
+        monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
         assert client.get("/secrets", headers=_auth_header(key)).status_code == 200
 
         _expire(db, key)
@@ -48,7 +48,7 @@ class TestExpiryEnforcement:
 
     def test_key_without_an_expiry_still_works(self, client, db, monkeypatch):
         obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         assert _key_row(db, key).expires_at is None
@@ -57,7 +57,7 @@ class TestExpiryEnforcement:
 
     def test_future_expiry_still_works(self, client, db, monkeypatch):
         _obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets", lambda rows, auth: {"x": "v"})
+        monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
 
         _expire(db, key, when=datetime.now(timezone.utc) + timedelta(days=5))
 
@@ -66,7 +66,7 @@ class TestExpiryEnforcement:
     def test_eso_endpoints_reject_expired_keys_too(self, client, db, monkeypatch):
         """The ESO path shares the auth helper, so it must inherit this."""
         _obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets", lambda rows, auth: {"x": "v"})
+        monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
         _expire(db, key)
 
         assert client.get("/eso/v1/secrets", headers=_auth_header(key)).status_code == 401
@@ -87,7 +87,7 @@ class TestExpiryEnforcement:
     def test_warn_mode_allows_but_records(self, client, db, monkeypatch):
         """The migration aid: find out what breaks before it breaks."""
         _obj, _reg, team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets", lambda rows, auth: {"x": "v"})
+        monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
         _expire(db, key)
         monkeypatch.setenv("KEY_EXPIRY_MODE", "warn")
 

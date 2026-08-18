@@ -81,7 +81,7 @@ class TestEsoFetchAll:
     def test_returns_registry_under_data_key(self, client, db, monkeypatch):
         """ESO dataFrom.extract reads the map at jsonPath $.data."""
         obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "plaintext_value"})
 
         resp = client.get(ALL, headers=_auth_header(key))
@@ -92,7 +92,7 @@ class TestEsoFetchAll:
 
     def test_includes_team_and_registry_for_traceability(self, client, db, monkeypatch):
         _obj, reg, team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         body = client.get(ALL, headers=_auth_header(key)).json()
@@ -106,7 +106,7 @@ class TestEsoFetchOne:
     def test_returns_single_value(self, client, db, monkeypatch):
         """ESO data[].remoteRef reads the scalar at jsonPath $.value."""
         obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "plaintext_value"})
 
         resp = client.get(_one(obj.name), headers=_auth_header(key))
@@ -116,7 +116,7 @@ class TestEsoFetchOne:
 
     def test_object_outside_the_registry_returns_404(self, client, db, monkeypatch):
         _obj, _reg, _team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         resp = client.get(_one("not-in-this-registry"), headers=_auth_header(key))
@@ -134,14 +134,14 @@ class TestEsoFetchOne:
             seen["names"] = [r["name"] for r in rows]
             return {r["name"]: "v" for r in rows}
 
-        monkeypatch.setattr("aegis.api.fetch_secrets", _fetch)
+        monkeypatch.setattr("aegis.deps.fetch_secrets", _fetch)
         client.get(_one(obj.name), headers=_auth_header(key))
 
         assert seen["names"] == [obj.name]
 
     def test_denied_lookup_is_audited(self, client, db, monkeypatch):
         _obj, _reg, team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         client.get(_one("nope"), headers=_auth_header(key))
@@ -159,7 +159,7 @@ class TestEsoAuditing:
 
     def test_successful_fetch_is_audited(self, client, db, monkeypatch):
         _obj, reg, team, key = _create_scenario(db, client)
-        monkeypatch.setattr("aegis.api.fetch_secrets",
+        monkeypatch.setattr("aegis.deps.fetch_secrets",
                             lambda rows, auth: {rows[0]["name"]: "v"})
 
         client.get(ALL, headers=_auth_header(key))

@@ -17,8 +17,12 @@ import pytest
 import aegis
 
 PKG_DIR = pathlib.Path(aegis.__file__).resolve().parent
-SOURCE_FILES = sorted(PKG_DIR.glob("*.py"))
-MODULE_NAMES = sorted(p.stem for p in SOURCE_FILES if p.stem != "__init__")
+# Routers are part of the package and subject to the same rule.
+SOURCE_FILES = sorted(PKG_DIR.glob("*.py")) + sorted(PKG_DIR.glob("routers/*.py"))
+MODULE_NAMES = ([p.stem for p in PKG_DIR.glob("*.py") if p.stem != "__init__"]
+                + [f"routers.{p.stem}" for p in PKG_DIR.glob("routers/*.py")
+                   if p.stem != "__init__"])
+MODULE_NAMES = sorted(MODULE_NAMES)
 
 
 def _imported_roots(path):
@@ -32,12 +36,15 @@ def _imported_roots(path):
             yield node.module.split(".")[0], node.lineno
 
 
+TOP_LEVEL_MODULES = sorted(p.stem for p in PKG_DIR.glob("*.py") if p.stem != "__init__")
+
+
 @pytest.mark.parametrize("path", SOURCE_FILES, ids=lambda p: p.name)
 def test_no_unqualified_intra_package_imports(path):
     offenders = [
         f"{path.name}:{lineno} imports '{root}' — use 'aegis.{root}'"
         for root, lineno in _imported_roots(path)
-        if root in MODULE_NAMES
+        if root in TOP_LEVEL_MODULES
     ]
     assert not offenders, "unqualified intra-package imports: " + "; ".join(offenders)
 

@@ -74,7 +74,7 @@ class TestSecretsEndpoint:
         obj, reg, team, key = _create_scenario(db, client)
 
         monkeypatch.setattr(
-            "aegis.api.fetch_secrets",
+            "aegis.deps.fetch_secrets",
             lambda rows, auth: {rows[0]["name"]: "plaintext_value"},
         )
 
@@ -120,7 +120,7 @@ class TestSecretsEndpoint:
         obj, reg, team, key = _create_scenario(db, client)
 
         monkeypatch.setattr(
-            "aegis.api.fetch_secrets",
+            "aegis.deps.fetch_secrets",
             lambda rows, auth: {rows[0]["name"]: "val"},
         )
 
@@ -144,7 +144,7 @@ class TestSecretsEndpoint:
         obj, reg, team, key = _create_scenario(db, client)
 
         monkeypatch.setattr(
-            "aegis.api.fetch_secrets",
+            "aegis.deps.fetch_secrets",
             lambda rows, auth: {rows[0]["name"]: "val"},
         )
 
