@@ -75,6 +75,7 @@ from aegis.models import AuditLog, ChangeLog, Object, Policy, Registry, Registry
 from aegis.broker import fetch_secrets, load_auth
 from aegis.siem import build_event, emit, start_s3_flush_thread
 from aegis import rate_limit
+from aegis import keys
 from aegis import url_guard
 from aegis import alerting
 from aegis import scanning
@@ -126,12 +127,27 @@ def _seed_admin():
         db.close()
 
 
+@app.on_event("startup")
+def _start_scheduler():
+    """
+    Start the background key-expiry scheduler.
+
+    This was never called, so keys with an expiry policy were never rotated and
+    key.expiring_soon never fired. The job takes an advisory lock, so running a
+    scheduler in every replica is safe.
+    """
+    if os.environ.get("SCHEDULER_ENABLED", "true").strip().lower() == "false":
+        logger.info("Scheduler disabled by SCHEDULER_ENABLED=false")
+        return
+    scheduler.start()
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
 
 def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
+    return keys.hash_key(key)
 
 
 def _validated_url(value: Optional[str], field: str) -> Optional[str]:
@@ -145,7 +161,18 @@ def _validated_url(value: Optional[str], field: str) -> Optional[str]:
 
 
 def _generate_key() -> str:
-    return "sk_" + secrets_lib.token_urlsafe(32)
+    return keys.generate_key()
+
+
+def _key_expiry_enforced() -> bool:
+    """
+    Whether an expired key is rejected (default) or merely recorded.
+
+    "warn" exists so an operator turning this on for the first time can find
+    out which integrations are running on expired keys before those
+    integrations break. It is a migration aid, not a setting to leave on.
+    """
+    return os.environ.get("KEY_EXPIRY_MODE", "enforce").strip().lower() != "warn"
 
 
 def _get_redis():
@@ -334,6 +361,21 @@ def _authenticate_registry_key(db: Session, api_key: str, source_ip, user_agent)
                      key_preview=key_row.key_preview, source_ip=source_ip, user_agent=user_agent,
                      error_detail="Key is suspended")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    # An expired key must stop working. max_key_days is documented as enforcing
+    # expiry, but nothing checked expires_at at request time, so keys with an
+    # expiry policy kept authenticating indefinitely.
+    if key_row.expires_at and key_row.expires_at <= datetime.now(timezone.utc):
+        enforced = _key_expiry_enforced()
+        logger.warning("Expired key (hash prefix: %s...) expired_at=%s enforced=%s",
+                       key_hash[:8], key_row.expires_at.isoformat(), enforced)
+        _write_audit(db, "auth.failed", "denied" if enforced else "warning",
+                     registry_id=str(key_row.registry_id), registry_name=key_row.registry.name,
+                     team_id=str(key_row.team_id), team_name=key_row.team.name,
+                     key_preview=key_row.key_preview, source_ip=source_ip, user_agent=user_agent,
+                     error_detail=f"Key expired at {key_row.expires_at.isoformat()}")
+        if enforced:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
     return key_row
 

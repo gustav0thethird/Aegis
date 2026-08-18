@@ -21,6 +21,9 @@ os.environ.setdefault("ADMIN_PASSWORD", "test-admin-pass")
 os.environ.setdefault("SECRET_KEY", "test-secret-key-32-chars-xyzxyzxy")
 os.environ.setdefault("AUTH_PATH", "config/auth.json")
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379")
+# The background key-rotation job must not run underneath the tests, mutating
+# rows they are asserting on. Scheduler behaviour is tested explicitly instead.
+os.environ.setdefault("SCHEDULER_ENABLED", "false")
 
 import pytest
 import fakeredis

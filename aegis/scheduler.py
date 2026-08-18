@@ -6,17 +6,26 @@ Jobs:
 
 Uses APScheduler (in-process). Scheduler state is not persisted — on restart it will
 re-check immediately, which is safe (idempotent).
+
+Every replica runs a scheduler, so each job takes a Postgres advisory lock and
+skips if another replica already holds it. Without that, two replicas rotate the
+same key at the same moment and each fires a key.rotated webhook carrying a
+different plaintext — the team ends up with two "new" keys, only one of which
+survives.
 """
 
-import hashlib
 import logging
-import secrets as secrets_lib
+from contextlib import contextmanager
 from datetime import datetime, timezone, timedelta
 
 from apscheduler.schedulers.background import BackgroundScheduler
+from sqlalchemy import text as sa_text
 
-from aegis.database import SessionLocal
-from aegis.models import Policy, Setting, Team, TeamRegistry, TeamRegistryKey, WebhookLog
+from aegis.database import SessionLocal, engine
+from aegis.keys import generate_key as _generate_key
+from aegis.keys import hash_key as _hash_key
+from aegis.keys import preview as _key_preview
+from aegis.models import Policy, Setting, TeamRegistryKey, WebhookLog
 from aegis import webhook as wh
 
 logger = logging.getLogger("aegis.scheduler")
@@ -40,12 +49,33 @@ def _get_policy(db, entity_type: str, entity_id) -> Policy | None:
     ).first()
 
 
-def _hash_key(key: str) -> str:
-    return hashlib.sha256(key.encode()).hexdigest()
+# One stable 64-bit id per job. Postgres releases advisory locks automatically
+# when the holding session ends, so a crashed replica does not wedge the job.
+_EXPIRY_LOCK_ID = 0x41656769735F4B45   # "Aegis_KE"
 
 
-def _generate_key() -> str:
-    return "sk_" + secrets_lib.token_urlsafe(32)
+@contextmanager
+def _job_lock(lock_id: int):
+    """
+    Yield True if this process acquired the job lock, False if another holds it.
+
+    Takes its own connection rather than borrowing the job's Session: a Session
+    hands its connection back to the pool on commit, and a session-scoped
+    advisory lock goes with it — the lock would be dropped halfway through the
+    very work it is protecting.
+    """
+    conn = engine.connect()
+    try:
+        acquired = bool(
+            conn.execute(sa_text("SELECT pg_try_advisory_lock(:id)"), {"id": lock_id}).scalar()
+        )
+        try:
+            yield acquired
+        finally:
+            if acquired:
+                conn.execute(sa_text("SELECT pg_advisory_unlock(:id)"), {"id": lock_id})
+    finally:
+        conn.close()
 
 
 def _rotate_key(db, key_row: TeamRegistryKey, reason: str) -> str:
@@ -63,7 +93,7 @@ def _rotate_key(db, key_row: TeamRegistryKey, reason: str) -> str:
     expires_at   = now + timedelta(days=max_key_days) if max_key_days else None
 
     plaintext   = _generate_key()
-    new_preview = plaintext[:10] + "..."
+    new_preview = _key_preview(plaintext)
     db.add(TeamRegistryKey(
         team_id=team.id,
         registry_id=registry.id,
@@ -86,6 +116,14 @@ def check_key_expiry() -> None:
       - If within warning_days: fire key.expiring_soon webhook (once per day at most — checked via webhook_log)
       - If past expires_at: auto-rotate, fire key.rotated webhook with new key
     """
+    with _job_lock(_EXPIRY_LOCK_ID) as acquired:
+        if not acquired:
+            logger.debug("check_key_expiry skipped — another replica holds the lock")
+            return
+        _check_key_expiry_locked()
+
+
+def _check_key_expiry_locked() -> None:
     db = SessionLocal()
     try:
         now          = datetime.now(timezone.utc)

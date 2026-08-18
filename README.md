@@ -665,6 +665,8 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `DD_API_KEY` | No | — | Datadog API key |
 | `DD_SITE` | No | `datadoghq.com` | Datadog intake site (`datadoghq.com` or `datadoghq.eu`) |
 | `RUN_MIGRATIONS` | No | `true` | Apply migrations on container start. Kubernetes sets `false`; the chart migrates once in a Job. |
+| `KEY_EXPIRY_MODE` | No | `enforce` | `enforce` rejects expired keys. `warn` allows them but records a denial in the audit log — a migration aid for finding out which integrations run on expired keys before they break. |
+| `SCHEDULER_ENABLED` | No | `true` | Runs the key-expiry job. Safe in every replica: the job takes a Postgres advisory lock. |
 | `AEGIS_BASE_URL` | No | — | Public base URL, used to link alerts back to the finding |
 | `ALERT_SINKS` | No | — | Comma-separated: `jira`, `servicenow`, `email`, `webhook`. Empty disables alerting. |
 | `ALERT_MIN_SEVERITY` | No | `high` | Minimum severity that raises an alert |
@@ -1341,6 +1343,8 @@ stateDiagram-v2
 - Rotating a key atomically revokes the old key and issues a new one. There is no grace period — the old key stops working immediately.
 - A team with access to N registries has N independent keys. Compromising one key does not affect the others.
 - If a policy sets `max_key_days`, the key's `expires_at` is set at issuance. The scheduler checks daily and fires `key.expiring_soon` events 7 days before expiry.
+- An expired key is rejected at authentication, on `/secrets` and the ESO endpoints alike, and the rejection is audited with the expiry time. Set `KEY_EXPIRY_MODE=warn` to log without rejecting while you find out what is still using expired keys.
+- Every replica runs the scheduler, but the job takes a Postgres advisory lock so only one performs a rotation. Without it, two replicas would rotate the same key simultaneously and each fire a `key.rotated` webhook carrying a different plaintext.
 - CI/CD can trigger key rotation via `POST /api/inbound/{team_id}` without admin involvement.
 
 ---
