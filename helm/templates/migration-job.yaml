@@ -1,0 +1,63 @@
+{{- if .Values.migrations.enabled }}
+{{/*
+Migrations run exactly once per sync, before the new pods roll out.
+
+The application image applies migrations on start by default, which races when
+there is more than one replica. The chart therefore sets RUN_MIGRATIONS=false
+on the Deployment and does the work here instead.
+*/}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "aegis.fullname" . }}-migrate
+  labels:
+    {{- include "aegis.labels" . | nindent 4 }}
+  annotations:
+    {{- if eq .Values.migrations.hookProvider "argocd" }}
+    argocd.argoproj.io/hook: PreSync
+    argocd.argoproj.io/hook-delete-policy: BeforeHookCreation
+    {{- else if eq .Values.migrations.hookProvider "helm" }}
+    helm.sh/hook: pre-install,pre-upgrade
+    helm.sh/hook-weight: "-1"
+    helm.sh/hook-delete-policy: before-hook-creation
+    {{- else }}
+    argocd.argoproj.io/sync-wave: "-1"
+    {{- end }}
+spec:
+  backoffLimit: {{ .Values.migrations.backoffLimit }}
+  ttlSecondsAfterFinished: 600
+  template:
+    metadata:
+      labels:
+        {{- include "aegis.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migrate
+    spec:
+      restartPolicy: Never
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "aegis.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: migrate
+          image: {{ include "aegis.image" . }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          command: ["alembic", "upgrade", "head"]
+          env:
+            {{- include "aegis.secretEnv" . | nindent 12 }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "aegis.fullname" . }}-config
+          resources:
+            {{- toYaml .Values.migrations.resources | nindent 12 }}
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

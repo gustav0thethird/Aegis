@@ -249,25 +249,57 @@ async def _require_any_user(request: Request) -> dict:
 # Developer endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/health")
-def health(db: Session = Depends(get_db)):
+def _dependency_status(db: Session) -> tuple[bool, dict]:
+    """Probe every backing service. Returns (all_ok, per-dependency detail)."""
     details: dict = {}
     ok = True
-    # Check DB
     try:
         db.execute(sa_text("SELECT 1"))
         details["db"] = "ok"
     except Exception as e:
-        details["db"] = str(e); ok = False
-    # Check Redis
+        details["db"] = str(e)
+        ok = False
     try:
         _get_redis().ping()
         details["redis"] = "ok"
     except Exception as e:
-        details["redis"] = str(e); ok = False
-    status_code = 200 if ok else 503
+        details["redis"] = str(e)
+        ok = False
+    return ok, details
+
+
+@app.get("/health")
+def health(db: Session = Depends(get_db)):
+    """Full dependency check. Retained for existing compose/ALB/ECS health checks."""
+    ok, details = _dependency_status(db)
     from fastapi.responses import JSONResponse
-    return JSONResponse({"status": "ok" if ok else "degraded", **details}, status_code=status_code)
+    return JSONResponse({"status": "ok" if ok else "degraded", **details},
+                        status_code=200 if ok else 503)
+
+
+@app.get("/healthz")
+def healthz():
+    """
+    Liveness probe. Deliberately checks nothing external.
+
+    Kubernetes restarts the container when this fails, so it must only report
+    failure when the process itself is unusable. Reporting a Redis or database
+    outage here would turn a dependency blip into a cluster-wide restart loop,
+    destroying the pods that would otherwise recover on their own.
+    """
+    return {"status": "ok"}
+
+
+@app.get("/readyz")
+def readyz(db: Session = Depends(get_db)):
+    """
+    Readiness probe. Fails while a backing service is unreachable, which pulls
+    the pod out of the Service endpoints without restarting it.
+    """
+    ok, details = _dependency_status(db)
+    from fastapi.responses import JSONResponse
+    return JSONResponse({"status": "ok" if ok else "degraded", **details},
+                        status_code=200 if ok else 503)
 
 
 @app.get("/secrets")
@@ -819,11 +851,19 @@ from fastapi import Request as _Request
 from fastapi.responses import JSONResponse as _JSONResponse
 from starlette.exceptions import HTTPException as _StarletteHTTPException
 
+# Paths that always answer in JSON, never with the HTML error page.
+_JSON_PREFIXES = ("/api/", "/admin/api/", "/eso/")
+_JSON_PATHS = {"/health", "/healthz", "/readyz", "/secrets", "/metrics"}
+
+
+def _wants_json(path: str) -> bool:
+    return path in _JSON_PATHS or path.startswith(_JSON_PREFIXES)
+
 
 @app.exception_handler(_StarletteHTTPException)
 async def http_exception_handler(request: _Request, exc: _StarletteHTTPException):
     # API paths return JSON
-    if request.url.path.startswith("/api/") or request.url.path.startswith("/admin/api/") or request.url.path == "/health" or request.url.path == "/secrets" or request.url.path == "/metrics":
+    if _wants_json(request.url.path):
         return _JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     # UI paths return the 404 page for 404s, JSON for everything else
     if exc.status_code == 404:

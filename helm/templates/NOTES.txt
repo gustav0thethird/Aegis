@@ -1,0 +1,33 @@
+Aegis {{ .Chart.AppVersion }} has been deployed as {{ include "aegis.fullname" . }}.
+
+Probes
+  liveness   /healthz   process only, no dependencies
+  readiness  /readyz    database and Redis
+
+Migrations
+{{- if .Values.migrations.enabled }}
+  Applied by the {{ include "aegis.fullname" . }}-migrate Job
+  ({{ .Values.migrations.hookProvider }} ordering). The application replicas run
+  with RUN_MIGRATIONS=false and never migrate on start.
+{{- else }}
+  DISABLED. Apply migrations yourself before the new pods serve traffic:
+    kubectl run --rm -it aegis-migrate --image={{ include "aegis.image" . }} -- alembic upgrade head
+{{- end }}
+
+Reach the API:
+{{- if .Values.ingress.enabled }}
+{{- range .Values.ingress.hosts }}
+  https://{{ .host }}/health
+{{- end }}
+{{- else }}
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "aegis.fullname" . }} {{ .Values.service.port }}:{{ .Values.service.port }}
+  curl http://localhost:{{ .Values.service.port }}/health
+{{- end }}
+
+{{- if and .Values.secret.create (not .Values.secret.existingSecret) }}
+
+WARNING: secret.create is true, so DATABASE_URL, REDIS_URL and ADMIN_PASSWORD
+came from values.yaml. In a GitOps repository those are committed in plain
+text. Set secret.existingSecret instead and manage the Secret with
+sealed-secrets, SOPS, or the External Secrets Operator.
+{{- end }}

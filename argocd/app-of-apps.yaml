@@ -1,0 +1,24 @@
+# App-of-apps root. Argo CD watches this one Application, which in turn owns the
+# per-environment Aegis Applications committed under argocd/environments/.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aegis-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/gustav0thethird/Aegis.git
+    targetRevision: main
+    path: argocd/environments
+    directory:
+      recurse: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

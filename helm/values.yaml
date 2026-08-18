@@ -1,0 +1,149 @@
+# Default values for the Aegis chart.
+
+replicaCount: 2
+
+image:
+  repository: ghcr.io/gustav0thethird/aegis
+  tag: ""            # defaults to .Chart.AppVersion
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+  annotations: {}    # e.g. eks.amazonaws.com/role-arn for IRSA
+  name: ""
+
+service:
+  type: ClusterIP
+  port: 8080
+  annotations: {}
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  hosts:
+    - host: aegis.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  tls: []
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  enabled: false
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 75
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1
+
+# Applied to the pod and to every container. The image ships a non-root user
+# (uid 10001) and needs no write access to its root filesystem.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+nodeSelector: {}
+tolerations: []
+affinity: {}
+topologySpreadConstraints: []
+podAnnotations: {}
+podLabels: {}
+
+# ── Application configuration ────────────────────────────────────────────────
+# Non-sensitive settings; rendered into a ConfigMap.
+config:
+  logDestinations: stdout
+  rateLimitRpm: "60"
+  # open  — serve without enforcing limits when Redis is down (availability first)
+  # closed — reject requests when Redis is down (security first)
+  rateLimitFailMode: open
+  webhookAllowedSchemes: https
+  # Comma-separated allowlist for outbound webhook and alert URLs. Empty means
+  # any public host; private and loopback targets are always rejected.
+  webhookAllowedHosts: ""
+  extraEnv: {}
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# Point existingSecret at a Secret you manage yourself — sealed-secrets, SOPS,
+# or one materialised by the External Secrets Operator. Nothing sensitive should
+# be committed to values.yaml in a GitOps repository.
+secret:
+  existingSecret: ""
+  # Only used when existingSecret is empty. Development convenience only.
+  create: false
+  databaseUrl: ""
+  redisUrl: ""
+  adminPassword: ""
+
+# auth.json — the vault backend credentials the broker brokers with.
+# Mounted read-only at authPath.
+auth:
+  existingSecret: ""
+  secretKey: auth.json
+  authPath: /etc/aegis/auth.json
+
+# ── Database migrations ──────────────────────────────────────────────────────
+# Migrations run once, in a Job, before new pods roll out — never in every
+# replica's start-up. hookProvider selects how that ordering is expressed:
+#   argocd — Argo CD PreSync hook (default; correct for GitOps)
+#   helm   — Helm pre-install/pre-upgrade hook (for plain `helm install`)
+#   none   — plain Job, no ordering guarantee
+migrations:
+  enabled: true
+  hookProvider: argocd
+  backoffLimit: 3
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# ── Observability ────────────────────────────────────────────────────────────
+serviceMonitor:
+  enabled: false
+  interval: 30s
+  labels: {}
+
+# ── Network policy ───────────────────────────────────────────────────────────
+networkPolicy:
+  enabled: false
+  # Namespaces allowed to reach the broker. Empty allows any pod in the cluster.
+  allowedNamespaces: []
+  # Egress is left to the cluster default unless set; the broker must reach its
+  # database, Redis, the vault backends and any alert destinations.
+  egress: []
+
+# ── External Secrets Operator ────────────────────────────────────────────────
+# Optionally emit a ClusterSecretStore pointing at this release, so workloads
+# can pull brokered secrets through ESO without any further wiring.
+externalSecrets:
+  clusterSecretStore:
+    enabled: false
+    name: aegis
+    # Secret holding the Aegis team API key ESO authenticates with.
+    apiKeySecret:
+      name: aegis-eso-credentials
+      key: api-key
+      namespace: external-secrets

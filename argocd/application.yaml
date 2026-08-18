@@ -1,0 +1,74 @@
+# Argo CD Application for a single Aegis environment.
+#
+# Point spec.source.repoURL at the repository holding your environment values,
+# or at this repository to deploy the chart as-is.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: aegis
+  namespace: argocd
+  finalizers:
+    # Cascade deletion so removing the Application removes its resources.
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+
+  source:
+    repoURL: https://github.com/gustav0thethird/Aegis.git
+    targetRevision: main
+    path: helm
+    helm:
+      releaseName: aegis
+      # Values that differ per environment. Keep secrets out of Git — reference
+      # a Secret managed by sealed-secrets, SOPS, or the External Secrets
+      # Operator instead.
+      values: |
+        replicaCount: 3
+        image:
+          repository: ghcr.io/gustav0thethird/aegis
+          tag: "0.1.0"
+        secret:
+          existingSecret: aegis-credentials
+        auth:
+          existingSecret: aegis-auth-json
+        config:
+          rateLimitFailMode: open
+          webhookAllowedHosts: "hooks.slack.com,api.example.com"
+        ingress:
+          enabled: true
+          className: nginx
+          hosts:
+            - host: aegis.example.com
+              paths:
+                - path: /
+                  pathType: Prefix
+        serviceMonitor:
+          enabled: true
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: aegis
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true
+      # The migration Job is a PreSync hook; this keeps failed hook pods around
+      # long enough to read their logs.
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 15s
+        factor: 2
+        maxDuration: 5m
+
+  ignoreDifferences:
+    # The HorizontalPodAutoscaler owns replica count once it is enabled; without
+    # this Argo CD fights the autoscaler and reports permanent drift.
+    - group: apps
+      kind: Deployment
+      jsonPointers:
+        - /spec/replicas

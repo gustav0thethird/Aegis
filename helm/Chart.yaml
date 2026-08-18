@@ -1,0 +1,17 @@
+apiVersion: v2
+name: aegis
+description: Aegis — Vault Agnostic API Broker Solution
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/gustav0thethird/Aegis
+sources:
+  - https://github.com/gustav0thethird/Aegis
+keywords:
+  - secrets
+  - vault
+  - cyberark
+  - conjur
+  - external-secrets
+maintainers:
+  - name: gustav0thethird

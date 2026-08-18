@@ -59,3 +59,89 @@ jobs:
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.16.3
+
+      - name: helm lint
+        run: helm lint helm/
+
+      - name: Render with defaults
+        run: |
+          helm template aegis helm/ \
+            --set auth.existingSecret=aegis-auth-json \
+            --set secret.existingSecret=aegis-credentials \
+            > /tmp/render-default.yaml
+          test -s /tmp/render-default.yaml
+
+      - name: Render with every optional feature enabled
+        run: |
+          helm template aegis helm/ \
+            --set auth.existingSecret=aegis-auth-json \
+            --set secret.existingSecret=aegis-credentials \
+            --set ingress.enabled=true \
+            --set autoscaling.enabled=true \
+            --set serviceMonitor.enabled=true \
+            --set networkPolicy.enabled=true \
+            --set externalSecrets.clusterSecretStore.enabled=true \
+            > /tmp/render-all.yaml
+          test -s /tmp/render-all.yaml
+
+      - name: Render each migration hook provider
+        run: |
+          for provider in argocd helm none; do
+            helm template aegis helm/ \
+              --set auth.existingSecret=aegis-auth-json \
+              --set secret.existingSecret=aegis-credentials \
+              --set migrations.hookProvider=$provider > /dev/null
+          done
+
+      - name: Validate rendered manifests against Kubernetes schemas
+        run: |
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          # CRDs (ServiceMonitor, ClusterSecretStore) are not in the stock
+          # schema set, so missing schemas are ignored rather than failing.
+          /tmp/kubeconform -strict -ignore-missing-schemas -summary /tmp/render-all.yaml
+
+      - name: Validate Argo CD manifests parse
+        run: |
+          python3 -c "
+          import yaml, pathlib, sys
+          for p in pathlib.Path('argocd').rglob('*.yaml'):
+              docs = [d for d in yaml.safe_load_all(p.read_text()) if d]
+              assert docs, f'{p} is empty'
+              for d in docs:
+                  assert 'kind' in d, f'{p} missing kind'
+              print(p, '->', [d['kind'] for d in docs])
+          "
+
+  image:
+    name: Container image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build image
+        run: docker build -t aegis:ci .
+
+      - name: Image runs as a non-root user
+        run: |
+          uid=$(docker run --rm --entrypoint id aegis:ci -u)
+          echo "container uid: $uid"
+          test "$uid" != "0"
+
+      - name: Entrypoint skips migrations when RUN_MIGRATIONS=false
+        run: |
+          out=$(docker run --rm -e RUN_MIGRATIONS=false aegis:ci echo started)
+          echo "$out"
+          echo "$out" | grep -q "skipping migrations"
+          echo "$out" | grep -q "started"

@@ -1,0 +1,17 @@
+# Ruff configuration.
+#
+# The rule selection is pinned explicitly on purpose. CI installs ruff unpinned
+# (`pip install ruff`), and Ruff has widened its implicit default rule set over
+# time — so without this file the lint job's behaviour changes underneath the
+# repository whenever a new Ruff is released, failing builds on code that never
+# changed.
+#
+# This selection is Ruff's long-standing default: pycodestyle errors (E4/E7/E9)
+# plus Pyflakes (F). To adopt stricter rules — import sorting (I), flake8-simplify
+# (SIM) or the Ruff-specific set (RUF) — add them below and fix the findings in
+# the same change, so the lint job never goes red on unrelated work.
+
+line-length = 110
+
+[lint]
+select = ["E4", "E7", "E9", "F"]

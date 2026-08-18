@@ -1,0 +1,19 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "aegis.fullname" . }}-config
+  labels:
+    {{- include "aegis.labels" . | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "-2"
+data:
+  # Migrations are handled by the migration Job, never by the app replicas.
+  RUN_MIGRATIONS: "false"
+  LOG_DESTINATIONS: {{ .Values.config.logDestinations | quote }}
+  RATE_LIMIT_RPM: {{ .Values.config.rateLimitRpm | quote }}
+  RATE_LIMIT_FAIL_MODE: {{ .Values.config.rateLimitFailMode | quote }}
+  WEBHOOK_ALLOWED_SCHEMES: {{ .Values.config.webhookAllowedSchemes | quote }}
+  WEBHOOK_ALLOWED_HOSTS: {{ .Values.config.webhookAllowedHosts | quote }}
+  {{- range $key, $value := .Values.config.extraEnv }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}
