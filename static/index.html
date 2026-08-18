@@ -337,6 +337,10 @@ select option { background: var(--surface-2); }
         <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"/></svg>
         <span class="nav-label">Log</span>
       </button>
+      <button class="nav-item" id="nav-findings"   onclick="setView('findings')"   title="Secret Findings">
+        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+        <span class="nav-label">Findings</span>
+      </button>
       <button class="nav-item" id="nav-audit"      onclick="setView('audit')"      title="Audit Log">
         <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>
         <span class="nav-label">Audit</span>
@@ -378,10 +382,12 @@ const S = {
   objects: [], registries: [], teams: [], users: [], settings: {},
   audit:     { rows: [], total: 0, page: 1 },
   changelog: { rows: [], total: 0, page: 1 },
+  findings:  { rows: [], total: 0, page: 1 },
   filter: {
     obj:       { q: '', vendor: 'all' },
     audit:     { outcome: '', change_number: '', registry_id: '' },
     changelog: { entity_type: '', action: '' },
+    findings:  { status: 'open', severity: '', repository: '' },
     teamKeyQ:  '',
   },
   page: { obj: 1, reg: 1, team: 1 },
@@ -497,6 +503,36 @@ async function loadChangelog() {
   S.changelog = {rows:d.rows, total:d.total, page:d.page};
 }
 
+async function loadFindings(page) {
+  if(page) S.findings.page = page;
+  const f = S.filter.findings;
+  const p = new URLSearchParams({ page: S.findings.page, limit: PG });
+  if(f.status)     p.set('status', f.status);
+  if(f.severity)   p.set('severity', f.severity);
+  if(f.repository) p.set('repository', f.repository);
+  const d = await api('GET','/admin/api/scan/findings?'+p);
+  S.findings = { rows: d.rows, total: d.total, page: d.page };
+}
+
+async function setFindingStatus(id, status) {
+  await api('PATCH','/admin/api/scan/findings/'+id, { status });
+  await loadFindings(); renderFindings();
+}
+
+async function realertFinding(id, btn) {
+  setBtn(btn, true, 'Sending…');
+  try {
+    const r = await api('POST','/admin/api/scan/findings/'+id+'/alert');
+    const delivered = (r.delivered||[]).join(', ');
+    toast(delivered ? ('Alert sent via '+delivered) : 'No sink delivered', delivered?'success':'error');
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    setBtn(btn, false, 'Re-alert');
+    await loadFindings(); renderFindings();
+  }
+}
+
 // ═══════════════════════════════════════════════
 // Navigation
 // ═══════════════════════════════════════════════
@@ -505,7 +541,8 @@ function setView(v) {
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   const n = document.getElementById('nav-'+v); if(n) n.classList.add('active');
   closeDrawer();
-  if      (v==='audit')     loadAudit().then(renderAudit);
+  if      (v==='findings')  loadFindings().then(renderFindings);
+  else if (v==='audit')     loadAudit().then(renderAudit);
   else if (v==='changelog') loadChangelog().then(renderChangelog);
   else if (v==='settings')  loadSettings().then(()=>loadUsers()).then(renderSettings);
   else if (v==='my-team')   renderMyTeam();
@@ -1347,6 +1384,69 @@ function renderChangelog() {
 // ═══════════════════════════════════════════════
 // AUDIT LOG
 // ═══════════════════════════════════════════════
+const SEV = {
+  critical: 'color:#fca5a5;font-weight:600;',
+  high:     'color:#fca5a5;font-weight:600;',
+  medium:   'color:#fcd34d;font-weight:600;',
+  low:      'color:#93c5fd;',
+  info:     'color:var(--text-3);',
+};
+const FSTATUS = ['open','triaged','resolved','false_positive'];
+
+function renderFindings() {
+  const f = S.filter.findings;
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Secret Findings <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.findings.total})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Credentials detected in source by CI scanners. The secret itself is never stored — only a masked preview.</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="loadFindings().then(renderFindings)">↻ Refresh</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <select style="width:150px;height:32px;font-size:11px;" onchange="S.filter.findings.status=this.value;S.findings.page=1;loadFindings().then(renderFindings)">
+        <option value="">All statuses</option>
+        ${FSTATUS.map(o=>`<option value="${o}" ${f.status===o?'selected':''}>${o.replace('_',' ')}</option>`).join('')}
+      </select>
+      <select style="width:150px;height:32px;font-size:11px;" onchange="S.filter.findings.severity=this.value;S.findings.page=1;loadFindings().then(renderFindings)">
+        <option value="">All severities</option>
+        ${['critical','high','medium','low','info'].map(o=>`<option value="${o}" ${f.severity===o?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="Repository…" style="width:220px;height:32px;font-size:11px;" value="${x(f.repository)}" onchange="S.filter.findings.repository=this.value;S.findings.page=1;loadFindings().then(renderFindings)">
+    </div>
+    <div class="card" style="overflow:hidden;overflow-x:auto;">
+      <table class="data-table" style="min-width:1100px;">
+        <thead><tr><th>Severity</th><th>Repository</th><th>Location</th><th>Rule</th><th>Match</th><th>Seen</th><th>Ticket</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${S.findings.rows.length?S.findings.rows.map(r=>{
+            const loc = r.file_path ? `${r.file_path}${r.line_start?':'+r.line_start:''}` : '—';
+            const ticket = r.ticket_url
+              ? `<a href="${x(r.ticket_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--indigo-hi);">${x(r.ticket_key||'ticket')}</a>`
+              : (r.alert_error ? `<span style="color:var(--danger);" title="${x(r.alert_error)}">failed</span>`
+                               : (r.alerted_at ? '<span style="color:var(--text-3);">sent</span>' : '—'));
+            return `<tr style="cursor:default;">
+              <td style="${SEV[r.severity]||''}">${x(r.severity)}${r.validated?' <span title="Scanner confirmed this credential is live" style="color:#fca5a5;">●</span>':''}</td>
+              <td class="td-primary">${x(r.repository)}</td>
+              <td class="truncate" style="max-width:240px;font-size:11px;font-family:monospace;" title="${x(loc)}">${x(loc)}</td>
+              <td class="truncate" style="max-width:180px;font-size:11px;color:var(--text-3);" title="${x(r.rule_id||'')}">${x(r.rule_id||'—')}</td>
+              <td style="font-family:monospace;font-size:11px;color:var(--text-3);">${x(r.secret_preview||'—')}</td>
+              <td style="font-size:11px;color:var(--text-3);white-space:nowrap;" title="First seen ${x(r.first_seen_at||'')}">${r.last_seen_at?.slice(0,10)||'—'} ×${r.occurrences}</td>
+              <td style="font-size:11px;">${ticket}</td>
+              <td>
+                <select style="height:28px;font-size:11px;width:130px;" onchange="setFindingStatus('${r.id}', this.value)">
+                  ${FSTATUS.map(o=>`<option value="${o}" ${r.status===o?'selected':''}>${o.replace('_',' ')}</option>`).join('')}
+                </select>
+              </td>
+              <td><button class="btn btn-ghost btn-sm" onclick="realertFinding('${r.id}', this)">Re-alert</button></td>
+            </tr>`;}).join(''):
+          `<tr><td colspan="9"><div class="empty-state">No findings — nothing has been reported for this filter</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.findings.total, S.findings.page, 'p=>loadFindings(p).then(renderFindings)')}
+  </div>`);
+}
+
 function renderAudit() {
   const f=S.filter.audit;
   set('main',`<div style="padding:24px;">
