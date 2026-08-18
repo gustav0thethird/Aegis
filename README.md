@@ -658,6 +658,9 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `WEBHOOK_ALLOWED_HOSTS` | No | — | Comma-separated host allowlist for outbound URLs. Empty means any public host. An entry matches exactly or as a parent domain. |
 | `WEBHOOK_ALLOW_PRIVATE_IPS` | No | `false` | Permit webhook targets on loopback/RFC1918/link-local addresses. Local development only. |
 | `WEBHOOK_PIN_DNS` | No | `true` | Connect outbound webhooks to the address that validation resolved, closing the DNS-rebinding window between check and connect. TLS still verifies against the hostname. |
+| `SECRET_CACHE_TTL_SECONDS` | No | `0` | Seconds to cache a brokered fetch for the ESO endpoints. `0` disables caching. |
+| `SECRET_CACHE_MAX_ENTRIES` | No | `512` | Bound on cached entries before eviction. |
+| `ESO_ALLOW_REGISTRY_EXTRACT` | No | `true` | Allow `/eso/v1/secrets` to return a whole registry. `false` forces per-object fetches. |
 | `LOG_DESTINATIONS` | No | `stdout` | Comma-separated SIEM targets. Used as fallback if DB setting is absent. |
 | `SPLUNK_HEC_URL` | No | — | Splunk HEC endpoint URL |
 | `SPLUNK_HEC_TOKEN` | No | — | Splunk HEC authentication token |
@@ -2053,6 +2056,31 @@ denial in the audit log.
 
 Worked examples, including whole-registry extraction, are in
 [`examples/eso/`](examples/eso/).
+
+### Caching
+
+ESO refreshes on a timer, so without a cache every ExternalSecret tick is a
+round trip to the upstream vault. `SECRET_CACHE_TTL_SECONDS` caches the fetch
+for the ESO endpoints only.
+
+It is **off by default, and in-process rather than in Redis** — both because it
+holds plaintext credentials. A shared cache would widen the blast radius of a
+Redis compromise from sessions and rate counters to every secret Aegis has
+brokered recently; process memory dies with the process. And holding a
+credential longer than the request that needed it is a trade-off worth opting
+into knowingly rather than inheriting.
+
+Entries are keyed by the hashed API key, so two teams never share one, and
+revoking, rotating or suspending a key drops whatever it cached. `/secrets` is
+never cached: that path is change-controlled and should reach the vault every
+time. A cache hit is still policy-checked and still audited, so it is
+indistinguishable from a miss in the audit log.
+
+### Limiting what a workload can pull
+
+`/eso/v1/secrets` hands the caller everything in the registry. Set
+`ESO_ALLOW_REGISTRY_EXTRACT=false` to disable it and require per-object
+`remoteRef` fetches, so a workload only receives the values it names.
 
 ### One operational tension
 

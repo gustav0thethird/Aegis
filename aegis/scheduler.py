@@ -22,6 +22,7 @@ from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text as sa_text
 
 from aegis.database import SessionLocal, engine
+from aegis import secret_cache
 from aegis.keys import generate_key as _generate_key
 from aegis.keys import hash_key as _hash_key
 from aegis.keys import preview as _key_preview
@@ -84,8 +85,10 @@ def _rotate_key(db, key_row: TeamRegistryKey, reason: str) -> str:
     team      = key_row.team
     registry  = key_row.registry
 
-    # Revoke old key
+    # Revoke old key. Drop anything it fetched from the cache too — a cached
+    # value must not outlive the credential that was allowed to read it.
     key_row.revoked_at = now
+    secret_cache.invalidate(key_row.key_hash)
 
     # Determine expiry for new key from registry policy
     policy       = _get_policy(db, "registry", registry.id)

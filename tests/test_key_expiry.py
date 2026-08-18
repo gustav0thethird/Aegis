@@ -13,8 +13,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from aegis import scheduler
-from aegis.models import AuditLog, Registry, Team, TeamRegistry, TeamRegistryKey
-from tests.conftest import ADMIN_CREDS
+from aegis.models import AuditLog, TeamRegistryKey
 from tests.test_secrets import _auth_header, _create_scenario
 
 

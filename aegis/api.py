@@ -76,6 +76,7 @@ from aegis.broker import fetch_secrets, load_auth
 from aegis.siem import build_event, emit, start_s3_flush_thread
 from aegis import rate_limit
 from aegis import keys
+from aegis import secret_cache
 from aegis import url_guard
 from aegis import alerting
 from aegis import scanning
@@ -162,6 +163,16 @@ def _validated_url(value: Optional[str], field: str) -> Optional[str]:
 
 def _generate_key() -> str:
     return keys.generate_key()
+
+
+def _eso_registry_extract_allowed() -> bool:
+    """
+    Whether /eso/v1/secrets may hand a workload an entire registry.
+
+    Convenient, but it grants everything in the registry to any workload holding
+    the key. Deployments that want per-object grants turn it off.
+    """
+    return os.environ.get("ESO_ALLOW_REGISTRY_EXTRACT", "true").strip().lower() != "false"
 
 
 def _key_expiry_enforced() -> bool:
@@ -381,13 +392,18 @@ def _authenticate_registry_key(db: Session, api_key: str, source_ip, user_agent)
 
 
 def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
-                   only: Optional[str] = None) -> dict:
+                   only: Optional[str] = None, use_cache: bool = False) -> dict:
     """
     Enforce policy for the key's team/registry and fetch its objects.
 
     only — restrict the fetch to a single object name. Policy is still evaluated
     against the whole registry, because the registry is the unit of
     authorisation; only the vault round-trip is narrowed.
+
+    use_cache — serve a recent identical fetch from the in-process cache instead
+    of calling the vault again. Only the vault round trip is skipped: policy is
+    still enforced and the request is still audited, so a cache hit is
+    indistinguishable in the audit log from a miss.
 
     Returns {object_name: plaintext}. Raises the same HTTP errors /secrets has
     always raised, and writes the same audit records.
@@ -428,6 +444,17 @@ def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
     logger.info("Request team=%s registry=%s change=%s objects=%s",
                 team.name, registry.name, x_change_number, object_names)
 
+    cache_key = secret_cache.make_key(key_row.key_hash, only or "*")
+    cached = secret_cache.get(cache_key) if use_cache else None
+    if cached is not None:
+        _write_audit(db, "secrets.fetched", "success",
+                     change_number=x_change_number,
+                     registry_id=str(registry.id), registry_name=registry.name,
+                     team_id=str(team.id), team_name=team.name,
+                     objects=object_names, key_preview=key_preview,
+                     source_ip=source_ip, user_agent=user_agent)
+        return cached
+
     try:
         auth    = load_auth()
         fetched = fetch_secrets(object_rows, auth)
@@ -440,6 +467,9 @@ def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
                      objects=object_names, key_preview=key_preview,
                      source_ip=source_ip, user_agent=user_agent, error_detail=str(exc))
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+
+    if use_cache:
+        secret_cache.put(cache_key, fetched)
 
     _write_audit(db, "secrets.fetched", "success",
                  change_number=x_change_number,
@@ -488,13 +518,18 @@ def eso_get_all(
     db: Session = Depends(get_db),
 ):
     """Whole registry, shaped for ESO dataFrom.extract (jsonPath: $.data)."""
+    if not _eso_registry_extract_allowed():
+        raise HTTPException(
+            status_code=403,
+            detail="Whole-registry extraction is disabled; fetch objects individually")
     if not credentials:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
     source_ip  = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
     key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
-    fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent)
+    fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent,
+                             use_cache=True)
     return {
         "data": fetched,
         "registry": key_row.registry.name,
@@ -518,7 +553,7 @@ def eso_get_one(
     user_agent = request.headers.get("user-agent")
     key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
     fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent,
-                             only=object_name)
+                             only=object_name, use_cache=True)
     return {"key": object_name, "value": fetched[object_name]}
 
 
@@ -915,6 +950,7 @@ def api_inbound_webhook(
         ).all()
         for k in old_keys:
             k.revoked_at = datetime.now(timezone.utc)
+            secret_cache.invalidate(k.key_hash)
 
         new_key = TeamRegistryKey(
             team_id=tid, registry_id=reg_uuid,
@@ -1298,6 +1334,7 @@ def admin_rotate_assignment_key(team_id: str, reg_id: str, session: dict = Depen
         TeamRegistryKey.revoked_at.is_(None),
     ).all():
         k.revoked_at = now
+        secret_cache.invalidate(k.key_hash)
     plaintext = _generate_key()
     new_preview = plaintext[:10] + "..."
     db.add(TeamRegistryKey(
@@ -1326,6 +1363,8 @@ def admin_toggle_key_suspend(key_id: str, session: dict = Depends(_require_admin
     if k.revoked_at:
         raise HTTPException(status_code=400, detail="Cannot suspend a revoked key")
     k.suspended = not k.suspended
+    if k.suspended:
+        secret_cache.invalidate(k.key_hash)
     db.commit()
     state = "suspended" if k.suspended else "enabled"
     _write_change(db, "updated", "team", str(k.team_id), k.team.name if k.team else str(k.team_id),
@@ -1349,6 +1388,7 @@ def admin_remove_registry(team_id: str, reg_id: str, session: dict = Depends(_re
         TeamRegistryKey.revoked_at.is_(None),
     ).all():
         k.revoked_at = now
+        secret_cache.invalidate(k.key_hash)
     _write_change(db, "registry_unassigned", "team", str(team.id), team.name,
                   None, session["username"],
                   diff={"registries": {"removed": reg.name}})
