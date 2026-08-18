@@ -147,3 +147,9 @@ externalSecrets:
       name: aegis-eso-credentials
       key: api-key
       namespace: external-secrets
+    # Sent as X-Change-Number on every ESO fetch. Aegis rejects requests without
+    # one while the change_number_required setting is on. ESO refreshes on a
+    # timer rather than against a change record, so this is a standing
+    # identifier for automated sync traffic — set it to whatever your change
+    # process expects, or turn change_number_required off for this path.
+    changeNumber: "ESO-SYNC"

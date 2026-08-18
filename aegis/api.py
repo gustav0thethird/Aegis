@@ -302,22 +302,15 @@ def readyz(db: Session = Depends(get_db)):
                         status_code=200 if ok else 503)
 
 
-@app.get("/secrets")
-def get_secrets(
-    request: Request,
-    credentials: HTTPAuthorizationCredentials = Security(bearer),
-    x_change_number: Optional[str] = Header(default=None),
-    db: Session = Depends(get_db),
-):
-    if not credentials:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+def _authenticate_registry_key(db: Session, api_key: str, source_ip, user_agent):
+    """
+    Resolve an API key to its team_registry_keys row, or raise 401.
 
-    api_key    = credentials.credentials
-    key_hash   = _hash_key(api_key)
-    source_ip  = request.client.host if request.client else None
-    user_agent = request.headers.get("user-agent")
+    Shared by /secrets and the External Secrets Operator endpoints so both are
+    authenticated, audited and revoked identically.
+    """
+    key_hash = _hash_key(api_key)
 
-    # --- Lookup key — now in team_registry_keys for full traceability ---
     key_row = db.query(TeamRegistryKey).filter(
         TeamRegistryKey.key_hash == key_hash,
         TeamRegistryKey.revoked_at.is_(None),
@@ -340,6 +333,21 @@ def get_secrets(
                      error_detail="Key is suspended")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
+    return key_row
+
+
+def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
+                   only: Optional[str] = None) -> dict:
+    """
+    Enforce policy for the key's team/registry and fetch its objects.
+
+    only — restrict the fetch to a single object name. Policy is still evaluated
+    against the whole registry, because the registry is the unit of
+    authorisation; only the vault round-trip is narrowed.
+
+    Returns {object_name: plaintext}. Raises the same HTTP errors /secrets has
+    always raised, and writes the same audit records.
+    """
     registry    = key_row.registry
     team        = key_row.team
     key_preview = key_row.key_preview
@@ -360,6 +368,18 @@ def get_secrets(
          "path": ro.object.path, "platform": ro.object.platform, "safe": ro.object.safe}
         for ro in registry.registry_entries
     ]
+    if only is not None:
+        object_rows = [o for o in object_rows if o["name"] == only]
+        if not object_rows:
+            _write_audit(db, "secrets.fetched", "denied",
+                         change_number=x_change_number,
+                         registry_id=str(registry.id), registry_name=registry.name,
+                         team_id=str(team.id), team_name=team.name,
+                         objects=[only], key_preview=key_preview,
+                         source_ip=source_ip, user_agent=user_agent,
+                         error_detail=f"Object '{only}' is not in registry '{registry.name}'")
+            raise HTTPException(status_code=404, detail="Secret not found")
+
     object_names = [o["name"] for o in object_rows]
     logger.info("Request team=%s registry=%s change=%s objects=%s",
                 team.name, registry.name, x_change_number, object_names)
@@ -384,6 +404,78 @@ def get_secrets(
                  objects=object_names, key_preview=key_preview,
                  source_ip=source_ip, user_agent=user_agent)
     return fetched
+
+
+@app.get("/secrets")
+def get_secrets(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Security(bearer),
+    x_change_number: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    source_ip  = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
+    return _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent)
+
+
+# ---------------------------------------------------------------------------
+# External Secrets Operator provider
+#
+# ESO's generic `webhook` provider calls these endpoints and extracts the value
+# with a JSON path, which lets a Kubernetes cluster materialise brokered secrets
+# without giving workloads credentials for the underlying vaults.
+#
+#   ClusterSecretStore -> GET /eso/v1/secret/{name}   jsonPath $.value
+#   (dataFrom.extract) -> GET /eso/v1/secrets         jsonPath $.data
+#
+# Authentication, policy enforcement, auditing and revocation are identical to
+# /secrets — this is a response shape for ESO, not a second way in.
+# ---------------------------------------------------------------------------
+
+@app.get("/eso/v1/secrets")
+def eso_get_all(
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Security(bearer),
+    x_change_number: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Whole registry, shaped for ESO dataFrom.extract (jsonPath: $.data)."""
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    source_ip  = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
+    fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent)
+    return {
+        "data": fetched,
+        "registry": key_row.registry.name,
+        "team": key_row.team.name,
+    }
+
+
+@app.get("/eso/v1/secret/{object_name}")
+def eso_get_one(
+    object_name: str,
+    request: Request,
+    credentials: HTTPAuthorizationCredentials = Security(bearer),
+    x_change_number: Optional[str] = Header(default=None),
+    db: Session = Depends(get_db),
+):
+    """Single object, shaped for ESO data[].remoteRef (jsonPath: $.value)."""
+    if not credentials:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
+
+    source_ip  = request.client.host if request.client else None
+    user_agent = request.headers.get("user-agent")
+    key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
+    fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent,
+                             only=object_name)
+    return {"key": object_name, "value": fetched[object_name]}
 
 
 # ---------------------------------------------------------------------------
