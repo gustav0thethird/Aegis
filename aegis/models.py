@@ -16,6 +16,8 @@ Schema:
   audit_log          — immutable request log; fields snapshotted at request time
   users              — operator accounts with role; team membership via user_teams
   settings           — key/value config store (runtime-mutable settings)
+  scan_runs          — one row per secret-scanner run reported by CI
+  scan_findings      — deduplicated findings across runs, with ticket/alert state
 """
 
 import uuid
@@ -247,3 +249,73 @@ class Setting(Base):
     value      = Column(Text)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_now)
     updated_by = Column(Text, nullable=False, default="admin")
+
+
+class ScanRun(Base):
+    """One secret-scanner execution reported by a pipeline."""
+    __tablename__ = "scan_runs"
+
+    id              = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    team_id         = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"),
+                             nullable=False)
+    repository      = Column(Text, nullable=False)
+    ref             = Column(Text)
+    commit_sha      = Column(Text)
+    scanner         = Column(Text, nullable=False)
+    scanner_version = Column(Text)
+    source          = Column(Text)                       # github-actions | pre-commit | manual
+    finding_count   = Column(Integer, nullable=False, default=0)
+    new_finding_count = Column(Integer, nullable=False, default=0)
+    created_at      = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    team     = relationship("Team")
+    findings = relationship("ScanFinding", back_populates="scan_run")
+
+
+class ScanFinding(Base):
+    """
+    A secret detected in source code, deduplicated across scans by fingerprint.
+
+    The matched credential is never stored. secret_hash is a keyed HMAC used
+    only to recognise the same secret again, and secret_preview is masked.
+    """
+    __tablename__ = "scan_findings"
+
+    id             = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    fingerprint    = Column(Text, nullable=False, unique=True)
+    scan_run_id    = Column(UUID(as_uuid=True), ForeignKey("scan_runs.id", ondelete="SET NULL"))
+    team_id        = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"),
+                            nullable=False)
+
+    repository     = Column(Text, nullable=False)
+    ref            = Column(Text)
+    commit_sha     = Column(Text)
+    scanner        = Column(Text, nullable=False)
+    rule_id        = Column(Text)
+    severity       = Column(Text, nullable=False, default="medium")
+    title          = Column(Text)
+    description    = Column(Text)
+    file_path      = Column(Text)
+    line_start     = Column(Integer)
+    line_end       = Column(Integer)
+    secret_hash    = Column(Text)
+    secret_preview = Column(Text)
+    validated      = Column(Boolean, nullable=False, default=False)
+
+    # open | triaged | resolved | false_positive
+    status         = Column(Text, nullable=False, default="open")
+    occurrences    = Column(Integer, nullable=False, default=1)
+    first_seen_at  = Column(DateTime(timezone=True), nullable=False, default=_now)
+    last_seen_at   = Column(DateTime(timezone=True), nullable=False, default=_now)
+
+    # Ticketing / alerting state
+    ticket_key     = Column(Text)
+    ticket_url     = Column(Text)
+    alerted_at     = Column(DateTime(timezone=True))
+    alert_error    = Column(Text)
+
+    updated_at     = Column(DateTime(timezone=True), nullable=False, default=_now, onupdate=_now)
+    updated_by     = Column(Text)
+
+    team     = relationship("Team")
+    scan_run = relationship("ScanRun", back_populates="findings")

@@ -1,0 +1,32 @@
+# Optional Gitleaks configuration.
+#
+# Test fixtures routinely contain credential-shaped strings — the canonical AWS
+# example key AKIAIOSFODNN7EXAMPLE appears in Aegis's own test suite — and a
+# scanner that cries wolf on those gets switched off. Allowlist deliberately
+# and narrowly: by path for fixture directories, by regex for documented
+# example values. Never allowlist a whole repository.
+
+title = "Repository gitleaks config"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+description = "Generic API key"
+regex = '''(?i)(api[_-]?key|secret)[\s]*[:=][\s]*['"][0-9a-zA-Z\-_]{16,}['"]'''
+tags = ["key"]
+
+[allowlist]
+description = "Documented example values and test fixtures"
+paths = [
+  '''tests/.*''',
+  '''.*_test\.go''',
+  '''docs/.*\.md''',
+]
+regexes = [
+  # Vendor-published example credentials that are not real.
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+  '''EXAMPLE|example\.com|changeme|placeholder''',
+]

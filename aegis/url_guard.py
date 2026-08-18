@@ -71,8 +71,15 @@ def _is_blocked_ip(addr: str) -> bool:
     )
 
 
-def check_url(url: str) -> str | None:
-    """Return None if the URL is safe to request, otherwise a reason string."""
+def check_url(url: str, allow_private: bool = False) -> str | None:
+    """
+    Return None if the URL is safe to request, otherwise a reason string.
+
+    allow_private relaxes only the address checks, for destinations configured
+    by the operator rather than supplied by a user — a self-hosted Jira or
+    ServiceNow on RFC1918 space is a normal deployment, not an SSRF attempt.
+    Scheme and embedded-credential checks still apply.
+    """
     if not url or not url.strip():
         return "URL is empty"
 
@@ -96,7 +103,7 @@ def check_url(url: str) -> str | None:
     if not _host_allowed(hostname, allowlist):
         return f"host '{hostname}' is not in WEBHOOK_ALLOWED_HOSTS"
 
-    if _allow_private():
+    if allow_private or _allow_private():
         return None
 
     # A literal IP needs no lookup; a name has to be resolved, and *every*
@@ -121,13 +128,13 @@ def check_url(url: str) -> str | None:
     return None
 
 
-def validate_url(url: str, field: str = "url") -> str:
+def validate_url(url: str, field: str = "url", allow_private: bool = False) -> str:
     """Return the trimmed URL, or raise ValueError describing why it was rejected."""
-    reason = check_url(url)
+    reason = check_url(url, allow_private=allow_private)
     if reason:
         raise ValueError(f"{field}: {reason}")
     return url.strip()
 
 
-def is_safe(url: str) -> bool:
-    return check_url(url) is None
+def is_safe(url: str, allow_private: bool = False) -> bool:
+    return check_url(url, allow_private=allow_private) is None

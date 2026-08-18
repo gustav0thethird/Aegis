@@ -59,7 +59,7 @@ import os
 import secrets as secrets_lib
 import uuid
 from datetime import datetime, timezone
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security, status
 from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
@@ -71,11 +71,13 @@ from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
 
 from aegis.database import get_db, SessionLocal
-from aegis.models import AuditLog, ChangeLog, Object, Policy, Registry, RegistryObject, Setting, Team, TeamRegistry, TeamRegistryKey, User, UserTeam, Webhook, WebhookLog
+from aegis.models import AuditLog, ChangeLog, Object, Policy, Registry, RegistryObject, ScanFinding, ScanRun, Setting, Team, TeamRegistry, TeamRegistryKey, User, UserTeam, Webhook, WebhookLog
 from aegis.broker import fetch_secrets, load_auth
 from aegis.siem import build_event, emit, start_s3_flush_thread
 from aegis import rate_limit
 from aegis import url_guard
+from aegis import alerting
+from aegis import scanning
 from aegis import webhook as wh
 from aegis import scheduler
 
@@ -832,28 +834,9 @@ def api_inbound_webhook(
     Authenticated via Authorization: Bearer <webhook_signing_secret>.
     URL is auto-generated per team based on team ID.
     """
-    try:
-        tid = uuid.UUID(team_id_str)
-    except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    team = db.get(Team, tid)
-    if not team:
-        raise HTTPException(status_code=404, detail="Not found")
-
-    # Authenticate with the team's webhook signing secret
-    auth_header = request.headers.get("Authorization", "")
-    if not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Bearer token required")
-    token = auth_header[7:]
-
-    wh = team.webhook
-    if not wh or not wh.secret or not wh.signing_enabled:
-        raise HTTPException(status_code=403, detail="Inbound webhook not configured (enable signing and set secret)")
-
-    import hmac as _hmac
-    if not _hmac.compare_digest(token, wh.secret):
-        raise HTTPException(status_code=403, detail="Invalid token")
+    # Same credential and checks as scan ingest — see _authenticate_team_webhook.
+    team = _authenticate_team_webhook(db, team_id_str, request)
+    tid = team.id
 
     if req.action == "ping":
         return {"ok": True, "team": team.name, "message": "pong"}
@@ -2365,3 +2348,384 @@ def admin_webhook_log(team_id: str, page: int = 1, limit: int = 25,
             "fired_at":    r.fired_at.isoformat(),
         } for r in rows],
     }
+
+
+# ---------------------------------------------------------------------------
+# Secret scanning — ingest, triage and alerting
+#
+# Aegis does not run scanners. Semgrep, Gitleaks or anything else runs where the
+# code is and POSTs its results here, authenticated with the team's inbound
+# webhook secret so findings are attributed to a team without issuing a second
+# class of credential.
+#
+# The matched credential is never stored: see aegis/scanning.py.
+# ---------------------------------------------------------------------------
+
+# A scan reporting hundreds of findings must not hold the request open while
+# every one of them opens a ticket. Anything past the cap stays un-alerted and
+# is picked up by the next run or by an explicit re-alert.
+_ALERT_MAX_PER_RUN = int(os.environ.get("ALERT_MAX_PER_RUN", "25"))
+
+
+class ScanIngestRequest(BaseModel):
+    scanner: str                                 # semgrep | gitleaks | aegis
+    repository: str
+    ref: Optional[str] = None
+    commit_sha: Optional[str] = None
+    scanner_version: Optional[str] = None
+    source: Optional[str] = None                 # github-actions | pre-commit | manual
+    results: Any = None                          # raw scanner output
+
+
+def _authenticate_team_webhook(db: Session, team_id_str: str, request: Request) -> Team:
+    """
+    Resolve a team from its id and verify the caller holds its inbound webhook
+    secret. Shared by the inbound action endpoint and scan ingest.
+    """
+    try:
+        tid = uuid.UUID(team_id_str)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    team = db.get(Team, tid)
+    if not team:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Bearer token required")
+    token = auth_header[7:]
+
+    hook = team.webhook
+    if not hook or not hook.secret or not hook.signing_enabled:
+        raise HTTPException(
+            status_code=403,
+            detail="Inbound webhook not configured (enable signing and set secret)")
+
+    import hmac as _hmac2
+    if not _hmac2.compare_digest(token, hook.secret):
+        raise HTTPException(status_code=403, detail="Invalid token")
+
+    return team
+
+
+def _finding_payload(finding: ScanFinding, team: Team) -> dict:
+    """Plain dict for the alerting sinks, so they never touch the ORM."""
+    return {
+        "id": str(finding.id),
+        "fingerprint": finding.fingerprint,
+        "repository": finding.repository,
+        "ref": finding.ref,
+        "commit_sha": finding.commit_sha,
+        "scanner": finding.scanner,
+        "rule_id": finding.rule_id,
+        "severity": finding.severity,
+        "title": finding.title,
+        "file_path": finding.file_path,
+        "line_start": finding.line_start,
+        "secret_preview": finding.secret_preview,
+        "validated": finding.validated,
+        "status": finding.status,
+        "alerted_at": finding.alerted_at,
+        "team": team.name,
+    }
+
+
+def _raise_alert(db: Session, finding: ScanFinding, team: Team) -> dict:
+    """Dispatch a finding to the configured sinks and record the outcome."""
+    result = alerting.dispatch(_finding_payload(finding, team))
+    if result["delivered"]:
+        finding.alerted_at = datetime.now(timezone.utc)
+        if result["ticket_key"]:
+            finding.ticket_key = result["ticket_key"]
+            finding.ticket_url = result["ticket_url"]
+    finding.alert_error = "; ".join(f"{k}: {v}" for k, v in result["errors"].items()) or None
+    return result
+
+
+@app.post("/api/scan/{team_id_str}/ingest")
+def api_scan_ingest(
+    team_id_str: str,
+    req: ScanIngestRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+):
+    """
+    Accept scanner output for a repository owned by this team.
+
+    Findings are deduplicated by fingerprint across runs, so a leak that stays
+    in the codebase raises one ticket rather than one per pipeline run.
+    """
+    team = _authenticate_team_webhook(db, team_id_str, request)
+
+    try:
+        findings = scanning.normalize(req.scanner, req.results, req.repository)
+    except scanning.UnsupportedScanner as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+    run = ScanRun(
+        team_id=team.id,
+        repository=req.repository,
+        ref=req.ref,
+        commit_sha=req.commit_sha,
+        scanner=req.scanner.lower(),
+        scanner_version=req.scanner_version,
+        source=req.source,
+        finding_count=len(findings),
+    )
+    db.add(run)
+    db.flush()
+
+    now = datetime.now(timezone.utc)
+    new_rows: list[ScanFinding] = []
+
+    for item in findings:
+        existing = db.query(ScanFinding).filter(
+            ScanFinding.fingerprint == item["fingerprint"]
+        ).first()
+
+        if existing:
+            # Same leak seen again: refresh where it was last observed, but keep
+            # first_seen_at and any triage decision already made.
+            existing.occurrences += 1
+            existing.last_seen_at = now
+            existing.ref = req.ref or existing.ref
+            existing.commit_sha = req.commit_sha or existing.commit_sha
+            existing.line_start = item["line_start"] or existing.line_start
+            existing.line_end = item["line_end"] or existing.line_end
+            existing.scan_run_id = run.id
+            continue
+
+        row = ScanFinding(
+            fingerprint=item["fingerprint"],
+            scan_run_id=run.id,
+            team_id=team.id,
+            repository=req.repository,
+            ref=req.ref,
+            commit_sha=req.commit_sha,
+            scanner=req.scanner.lower(),
+            rule_id=item["rule_id"],
+            severity=item["severity"],
+            title=item["title"],
+            description=item["description"],
+            file_path=item["file_path"],
+            line_start=item["line_start"],
+            line_end=item["line_end"],
+            secret_hash=item["secret_hash"],
+            secret_preview=item["secret_preview"],
+            validated=item["validated"],
+            first_seen_at=now,
+            last_seen_at=now,
+        )
+        db.add(row)
+        new_rows.append(row)
+
+    run.new_finding_count = len(new_rows)
+    db.flush()
+
+    alerted = 0
+    alert_errors: dict[str, str] = {}
+    for row in new_rows:
+        if alerted >= _ALERT_MAX_PER_RUN:
+            break
+        if not alerting.should_alert(_finding_payload(row, team)):
+            continue
+        result = _raise_alert(db, row, team)
+        alert_errors.update(result["errors"])
+        if result["delivered"]:
+            alerted += 1
+
+    db.commit()
+
+    logger.info("Scan ingested team=%s repo=%s scanner=%s findings=%d new=%d alerted=%d",
+                team.name, req.repository, req.scanner, len(findings), len(new_rows), alerted)
+
+    return {
+        "ok": True,
+        "scan_run_id": str(run.id),
+        "findings": len(findings),
+        "new_findings": len(new_rows),
+        "alerted": alerted,
+        "alert_errors": alert_errors or None,
+    }
+
+
+def _finding_response(f: ScanFinding) -> dict:
+    return {
+        "id": str(f.id),
+        "fingerprint": f.fingerprint,
+        "repository": f.repository,
+        "ref": f.ref,
+        "commit_sha": f.commit_sha,
+        "scanner": f.scanner,
+        "rule_id": f.rule_id,
+        "severity": f.severity,
+        "title": f.title,
+        "file_path": f.file_path,
+        "line_start": f.line_start,
+        "line_end": f.line_end,
+        "secret_preview": f.secret_preview,
+        "validated": f.validated,
+        "status": f.status,
+        "occurrences": f.occurrences,
+        "first_seen_at": f.first_seen_at.isoformat() if f.first_seen_at else None,
+        "last_seen_at": f.last_seen_at.isoformat() if f.last_seen_at else None,
+        "ticket_key": f.ticket_key,
+        "ticket_url": f.ticket_url,
+        "alerted_at": f.alerted_at.isoformat() if f.alerted_at else None,
+        "alert_error": f.alert_error,
+    }
+
+
+def _query_findings(db, *, team_id=None, status=None, severity=None, repository=None):
+    q = db.query(ScanFinding)
+    if team_id:
+        q = q.filter(ScanFinding.team_id == team_id)
+    if status:
+        q = q.filter(ScanFinding.status == status)
+    if severity:
+        q = q.filter(ScanFinding.severity == severity)
+    if repository:
+        q = q.filter(ScanFinding.repository == repository)
+    return q.order_by(ScanFinding.last_seen_at.desc())
+
+
+@app.get("/admin/api/scan/findings")
+def admin_scan_findings(
+    status: Optional[str] = None,
+    severity: Optional[str] = None,
+    repository: Optional[str] = None,
+    team_id: Optional[str] = None,
+    page: int = 1,
+    limit: int = 25,
+    session: dict = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    limit = min(limit, 100)
+    tid = None
+    if team_id:
+        try:
+            tid = uuid.UUID(team_id)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid team_id")
+
+    q = _query_findings(db, team_id=tid, status=status, severity=severity,
+                        repository=repository)
+    total = q.count()
+    rows = q.offset((page - 1) * limit).limit(limit).all()
+    return {"total": total, "page": page, "limit": limit,
+            "rows": [_finding_response(f) for f in rows]}
+
+
+class ScanFindingUpdate(BaseModel):
+    status: str            # open | triaged | resolved | false_positive
+
+
+_FINDING_STATUSES = {"open", "triaged", "resolved", "false_positive"}
+
+
+@app.patch("/admin/api/scan/findings/{finding_id}")
+def admin_update_scan_finding(
+    finding_id: str,
+    req: ScanFindingUpdate,
+    session: dict = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    if req.status not in _FINDING_STATUSES:
+        raise HTTPException(
+            status_code=422,
+            detail=f"status must be one of {sorted(_FINDING_STATUSES)}")
+    try:
+        fid = uuid.UUID(finding_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    finding = db.get(ScanFinding, fid)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    before = finding.status
+    finding.status = req.status
+    finding.updated_by = session["username"]
+    db.commit()
+
+    _write_change(db, "updated", "scan_finding", str(finding.id), finding.repository,
+                  performed_by=session["username"],
+                  diff={"status": {"from": before, "to": req.status}})
+    return _finding_response(finding)
+
+
+@app.post("/admin/api/scan/findings/{finding_id}/alert")
+def admin_alert_scan_finding(
+    finding_id: str,
+    session: dict = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    """Re-send a finding to the configured sinks — for a failed or capped alert."""
+    try:
+        fid = uuid.UUID(finding_id)
+    except ValueError:
+        raise HTTPException(status_code=404, detail="Not found")
+
+    finding = db.get(ScanFinding, fid)
+    if not finding:
+        raise HTTPException(status_code=404, detail="Not found")
+    if not alerting.configured_sinks():
+        raise HTTPException(status_code=400, detail="No alert sinks are configured")
+
+    result = _raise_alert(db, finding, finding.team)
+    db.commit()
+    return {"delivered": result["delivered"], "errors": result["errors"] or None,
+            "ticket_key": finding.ticket_key, "ticket_url": finding.ticket_url}
+
+
+@app.get("/admin/api/scan/runs")
+def admin_scan_runs(
+    repository: Optional[str] = None,
+    page: int = 1,
+    limit: int = 25,
+    session: dict = Depends(_require_admin),
+    db: Session = Depends(get_db),
+):
+    limit = min(limit, 100)
+    q = db.query(ScanRun)
+    if repository:
+        q = q.filter(ScanRun.repository == repository)
+    q = q.order_by(ScanRun.created_at.desc())
+    total = q.count()
+    rows = q.offset((page - 1) * limit).limit(limit).all()
+    return {
+        "total": total, "page": page, "limit": limit,
+        "rows": [{
+            "id": str(r.id),
+            "repository": r.repository,
+            "ref": r.ref,
+            "commit_sha": r.commit_sha,
+            "scanner": r.scanner,
+            "scanner_version": r.scanner_version,
+            "source": r.source,
+            "finding_count": r.finding_count,
+            "new_finding_count": r.new_finding_count,
+            "created_at": r.created_at.isoformat() if r.created_at else None,
+        } for r in rows],
+    }
+
+
+@app.get("/api/my-scan-findings")
+def api_my_scan_findings(
+    team_id: Optional[str] = None,
+    status: Optional[str] = "open",
+    page: int = 1,
+    limit: int = 25,
+    session: dict = Depends(_require_any_user),
+    db: Session = Depends(get_db),
+):
+    """A team's own findings, scoped by team membership."""
+    team = _resolve_user_team(session, db, team_id)
+    limit = min(limit, 100)
+    q = _query_findings(db, team_id=team.id, status=status)
+    total = q.count()
+    rows = q.offset((page - 1) * limit).limit(limit).all()
+    return {"team_id": str(team.id), "team_name": team.name,
+            "total": total, "page": page, "limit": limit,
+            "rows": [_finding_response(f) for f in rows]}
