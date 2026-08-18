@@ -1,0 +1,43 @@
+# Gitleaks configuration for this repository.
+#
+# Aegis scans its own source. The allowlist below is deliberately narrow:
+# specific documented placeholder values, not whole directories. In particular
+# tests/ is *not* path-allowlisted — a real credential committed into a fixture
+# should still be caught, and the fixtures only contain values enumerated here.
+#
+# Anything added below must be a value that is published, generated at runtime,
+# or otherwise provably not a credential.
+
+title = "Aegis"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Documented placeholders and vendor-published example values"
+
+paths = [
+  # Prose. Every credential-shaped string in the documentation is an
+  # illustration, and the surrounding text says so.
+  '''README\.md''',
+  '''docs/.*\.md''',
+  # The scanner-config template ships example values by definition.
+  '''examples/ci/gitleaks\.toml''',
+  '''\.gitleaks\.toml''',
+]
+
+regexes = [
+  # AWS's own published example credentials. Non-functional by design.
+  '''AKIAIOSFODNN7EXAMPLE''',
+  '''wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY''',
+  # Vault token placeholders in the example auth config: s.XXXX / s.xxxx.
+  '''s\.[Xx]{8,}''',
+  # Values the repository ships as "replace this" defaults.
+  '''changeme''',
+  '''dev-secret-replace-in-prod''',
+  '''correct-horse-battery-staple''',
+  '''optional-override-or-leave-null-to-auto-generate''',
+  # Fixed test credentials. They exist only inside the test database.
+  '''test-admin-pass''',
+  '''test-secret-key-32-chars-xyzxyzxy''',
+]

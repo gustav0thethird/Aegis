@@ -164,3 +164,19 @@ jobs:
           # vulnerability visible on every push rather than only in the
           # security tab.
           pip-audit -r requirements.txt --progress-spinner off
+
+  secrets:
+    name: Secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Scan history, not just the working tree: a credential that was
+          # committed and later deleted is still a leaked credential.
+          fetch-depth: 0
+
+      - name: Gitleaks
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo zricethezav/gitleaks:latest \
+            detect --source /repo --config /repo/.gitleaks.toml \
+            --redact --verbose --no-banner
