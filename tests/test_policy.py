@@ -6,7 +6,7 @@ No database or network required.
 from datetime import datetime, time, timezone
 from unittest.mock import patch
 
-from aegis.api import _check_ip, _check_hours
+from aegis.api import _check_hours, _check_ip
 
 
 class TestCheckIp:

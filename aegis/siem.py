@@ -15,15 +15,12 @@ Config (env vars):
 """
 
 import gzip
-import io
 import json
 import logging
 import os
 import socket
 import threading
-from collections import defaultdict
 from datetime import datetime, timezone
-from typing import Any
 
 import requests
 

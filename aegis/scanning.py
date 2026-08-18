@@ -205,7 +205,7 @@ def normalize(scanner: str, payload, repository: str) -> list[dict]:
     except KeyError:
         raise UnsupportedScanner(
             f"Unsupported scanner '{scanner}'. Supported: {', '.join(SUPPORTED_SCANNERS)}"
-        )
+        ) from None
 
     seen: dict[str, dict] = {}
     for finding in normalizer(payload, repository):

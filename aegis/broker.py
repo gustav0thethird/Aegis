@@ -35,12 +35,12 @@ import logging
 import os
 
 from aegis.functions import (
-    vault_get,
-    cyberark_logon,
+    aws_get,
+    conjur_get,
     cyberark_find_account,
     cyberark_get,
-    conjur_get,
-    aws_get,
+    cyberark_logon,
+    vault_get,
 )
 
 logger = logging.getLogger("aegis")

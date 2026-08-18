@@ -191,7 +191,7 @@ def aws_get(secret_name, auth):
     try:
         return _aws_client(auth).get_secret_value(SecretId=secret_name)["SecretString"]
     except ClientError as e:
-        raise ValueError(f"AWS GET failed: {e}")
+        raise ValueError(f"AWS GET failed: {e}") from e
 
 
 def aws_put(secret_name, value, auth):
@@ -203,6 +203,6 @@ def aws_put(secret_name, value, auth):
             try:
                 client.create_secret(Name=secret_name, SecretString=value)
             except ClientError as ce:
-                raise ValueError(f"AWS create secret failed: {ce}")
+                raise ValueError(f"AWS create secret failed: {ce}") from ce
         else:
-            raise ValueError(f"AWS PUT failed: {e}")
+            raise ValueError(f"AWS PUT failed: {e}") from e

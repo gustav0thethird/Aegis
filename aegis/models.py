@@ -23,9 +23,7 @@ Schema:
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import (
-    BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, String, Text, Time, ARRAY
-)
+from sqlalchemy import ARRAY, BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, Text, Time
 from sqlalchemy.dialects.postgresql import JSONB as _JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship

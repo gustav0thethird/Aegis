@@ -107,7 +107,7 @@ def check_url(url: str, allow_private: bool = False) -> str | None:
     if allow_private or _allow_private():
         return None
 
-    addresses, reason = _resolve(hostname, parsed.port or 443)
+    _addresses, reason = _resolve(hostname, parsed.port or 443)
     return reason
 
 
@@ -167,8 +167,8 @@ def is_safe(url: str, allow_private: bool = False) -> bool:
 # the original hostname, so virtual hosting and certificate verification behave
 # exactly as they would have.
 
-import requests                                   # noqa: E402
-from requests.adapters import HTTPAdapter         # noqa: E402
+import requests  # noqa: E402
+from requests.adapters import HTTPAdapter  # noqa: E402
 
 
 class _PinnedAdapter(HTTPAdapter):

@@ -8,10 +8,8 @@ All external vault calls (vault_get, aws_get, etc.) are mocked via monkeypatch.
 import hashlib
 import secrets as slib
 
-
 from aegis.models import Object, Registry, RegistryObject, Team, TeamRegistryKey
 from tests.conftest import ADMIN_CREDS
-
 
 # ---------------------------------------------------------------------------
 # Helpers

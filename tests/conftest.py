@@ -28,15 +28,15 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 # thread. Background dispatch is exercised explicitly in test_scan_ingest.
 os.environ.setdefault("ALERT_DISPATCH_MODE", "sync")
 
-import pytest
 import fakeredis
+import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from starlette.testclient import TestClient
 
-from aegis.database import Base, get_db
 import aegis.models  # registers all ORM classes in Base.metadata  # noqa: F401
 from aegis import rate_limit
+from aegis.database import Base, get_db
 
 _engine = create_engine(os.environ["DATABASE_URL"])
 _Session = sessionmaker(bind=_engine)

@@ -14,9 +14,10 @@ Config:
                                     outage becomes an API outage)
 """
 
+import logging
 import os
 import time
-import logging
+
 import redis
 
 logger = logging.getLogger("aegis.rate_limit")

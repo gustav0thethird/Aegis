@@ -156,9 +156,9 @@ class TestJira:
 
     def test_http_error_raises(self, monkeypatch):
         self._configure(monkeypatch)
-        with patch("aegis.alerting.requests.post", return_value=_response(403)):
-            with pytest.raises(alerting.AlertError, match="403"):
-                alerting.send_jira(FINDING)
+        with patch("aegis.alerting.requests.post", return_value=_response(403)), \
+             pytest.raises(alerting.AlertError, match="403"):
+            alerting.send_jira(FINDING)
 
     def test_self_hosted_private_address_is_allowed(self, monkeypatch):
         """An internal Jira is a normal deployment, not an SSRF attempt."""

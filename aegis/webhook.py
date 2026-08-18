@@ -15,7 +15,6 @@ import logging
 import time
 from datetime import datetime, timezone
 
-
 from aegis import url_guard
 
 logger = logging.getLogger("aegis.webhook")

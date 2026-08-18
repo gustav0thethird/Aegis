@@ -120,9 +120,8 @@ class TestSchedulerLock:
             assert acquired is True
 
     def test_lock_is_released_when_the_job_raises(self):
-        with pytest.raises(RuntimeError):
-            with scheduler._job_lock(scheduler._EXPIRY_LOCK_ID):
-                raise RuntimeError("job blew up")
+        with pytest.raises(RuntimeError), scheduler._job_lock(scheduler._EXPIRY_LOCK_ID):
+            raise RuntimeError("job blew up")
         with scheduler._job_lock(scheduler._EXPIRY_LOCK_ID) as acquired:
             assert acquired is True
 

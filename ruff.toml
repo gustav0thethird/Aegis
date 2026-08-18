@@ -6,12 +6,34 @@
 # repository whenever a new Ruff is released, failing builds on code that never
 # changed.
 #
-# This selection is Ruff's long-standing default: pycodestyle errors (E4/E7/E9)
-# plus Pyflakes (F). To adopt stricter rules — import sorting (I), flake8-simplify
-# (SIM) or the Ruff-specific set (RUF) — add them below and fix the findings in
-# the same change, so the lint job never goes red on unrelated work.
+# The selection below is pycodestyle errors (E4/E7/E9) and Pyflakes (F) — Ruff's
+# long-standing default — plus import sorting (I), flake8-simplify (SIM),
+# flake8-bugbear (B) and the Ruff-specific set (RUF). Anything added here must
+# come with its findings fixed in the same change, so the lint job never goes
+# red on work that did not touch the offending code.
 
 line-length = 110
 
 [lint]
-select = ["E4", "E7", "E9", "F"]
+select = ["E4", "E7", "E9", "F", "I", "SIM", "B", "RUF"]
+
+# Tests legitimately hold mutable class-level fixtures and unpack tuples they
+# only partly use; enforcing those rules there produces noise, not safety.
+[lint.per-file-ignores]
+"tests/*" = ["RUF012", "RUF059"]
+
+# FastAPI's dependency-injection idiom puts calls in argument defaults —
+# Depends(get_db), Header(default=None) and friends. B008 exists to catch a
+# mutable default evaluated once at import; these are the framework's declared
+# API, not that mistake.
+[lint.flake8-bugbear]
+extend-immutable-calls = [
+    "fastapi.Depends",
+    "fastapi.Query",
+    "fastapi.Header",
+    "fastapi.Security",
+    "fastapi.Path",
+    "fastapi.Body",
+    "fastapi.File",
+    "fastapi.Form",
+]

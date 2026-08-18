@@ -3,8 +3,8 @@ Unit tests for the Redis sliding-window rate limiter.
 Uses FakeRedis — no real Redis required.
 """
 
-import pytest
 import fakeredis
+import pytest
 import redis as redis_lib
 
 from aegis import rate_limit

@@ -16,7 +16,7 @@ jobs:
         with:
           python-version: "3.12"
       - run: pip install ruff
-      - run: ruff check tests/
+      - run: ruff check aegis/ tests/
 
   test:
     name: Test

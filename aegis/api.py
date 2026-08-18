@@ -49,8 +49,8 @@ Admin API (session token with role=admin OR HTTP Basic with an admin account):
         GET /admin/api/audit
 """
 
+import contextlib
 import csv
-import hashlib
 import io
 import ipaddress
 import json
@@ -62,27 +62,39 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from typing import Any, List, Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security, status
-from fastapi.responses import FileResponse, RedirectResponse, StreamingResponse
-from fastapi.security import HTTPBasic, HTTPBasicCredentials, HTTPBearer, HTTPAuthorizationCredentials
-from fastapi.staticfiles import StaticFiles
 import bcrypt as _bcrypt
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, Security, status
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBasic, HTTPBearer
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 from sqlalchemy import text as sa_text
 from sqlalchemy.orm import Session
+from starlette.exceptions import HTTPException as _StarletteHTTPException
 
-from aegis.database import get_db, SessionLocal
-from aegis.models import AuditLog, ChangeLog, Object, Policy, Registry, RegistryObject, ScanFinding, ScanRun, Setting, Team, TeamRegistry, TeamRegistryKey, User, UserTeam, Webhook, WebhookLog
-from aegis.broker import fetch_secrets, load_auth
-from aegis.siem import build_event, emit, start_s3_flush_thread
-from aegis import rate_limit
-from aegis import keys
-from aegis import secret_cache
-from aegis import url_guard
-from aegis import alerting
-from aegis import scanning
+from aegis import alerting, keys, rate_limit, scanning, scheduler, secret_cache, url_guard
 from aegis import webhook as wh
-from aegis import scheduler
+from aegis.broker import fetch_secrets, load_auth
+from aegis.database import SessionLocal, get_db
+from aegis.models import (
+    AuditLog,
+    ChangeLog,
+    Object,
+    Policy,
+    Registry,
+    RegistryObject,
+    ScanFinding,
+    ScanRun,
+    Setting,
+    Team,
+    TeamRegistry,
+    TeamRegistryKey,
+    User,
+    UserTeam,
+    Webhook,
+    WebhookLog,
+)
+from aegis.siem import build_event, emit, start_s3_flush_thread
 
 logger = logging.getLogger("aegis")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
@@ -159,7 +171,7 @@ def _validated_url(value: Optional[str], field: str) -> Optional[str]:
     try:
         return url_guard.validate_url(value, field)
     except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc))
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
 
 
 def _generate_key() -> str:
@@ -222,10 +234,8 @@ def _get_session(token: str) -> Optional[dict]:
 
 
 def _delete_session(token: str):
-    try:
+    with contextlib.suppress(Exception):
         _get_redis().delete(_session_key(token))
-    except Exception:
-        pass
 
 
 def _extract_bearer_token(request: Request) -> Optional[str]:
@@ -313,7 +323,6 @@ def _dependency_status(db: Session) -> tuple[bool, dict]:
 def health(db: Session = Depends(get_db)):
     """Full dependency check. Retained for existing compose/ALB/ECS health checks."""
     ok, details = _dependency_status(db)
-    from fastapi.responses import JSONResponse
     return JSONResponse({"status": "ok" if ok else "degraded", **details},
                         status_code=200 if ok else 503)
 
@@ -338,7 +347,6 @@ def readyz(db: Session = Depends(get_db)):
     the pod out of the Service endpoints without restarting it.
     """
     ok, details = _dependency_status(db)
-    from fastapi.responses import JSONResponse
     return JSONResponse({"status": "ok" if ok else "degraded", **details},
                         status_code=200 if ok else 503)
 
@@ -467,7 +475,7 @@ def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
                      team_id=str(team.id), team_name=team.name,
                      objects=object_names, key_preview=key_preview,
                      source_ip=source_ip, user_agent=user_agent, error_detail=str(exc))
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc))
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
 
     if use_cache:
         secret_cache.put(cache_key, fetched)
@@ -926,7 +934,7 @@ def api_inbound_webhook(
         try:
             reg_uuid = uuid.UUID(req.registry_id)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid registry_id")
+            raise HTTPException(status_code=400, detail="Invalid registry_id") from None
         reg = db.get(Registry, reg_uuid)
         if not reg:
             raise HTTPException(status_code=404, detail="Registry not found")
@@ -1001,10 +1009,6 @@ def docs_ui():
 # 404 / error handlers
 # ---------------------------------------------------------------------------
 
-from fastapi import Request as _Request
-from fastapi.responses import JSONResponse as _JSONResponse
-from starlette.exceptions import HTTPException as _StarletteHTTPException
-
 # Paths that always answer in JSON, never with the HTML error page.
 _JSON_PREFIXES = ("/api/", "/admin/api/", "/eso/")
 _JSON_PATHS = {"/health", "/healthz", "/readyz", "/secrets", "/metrics"}
@@ -1015,14 +1019,14 @@ def _wants_json(path: str) -> bool:
 
 
 @app.exception_handler(_StarletteHTTPException)
-async def http_exception_handler(request: _Request, exc: _StarletteHTTPException):
+async def http_exception_handler(request: Request, exc: _StarletteHTTPException):
     # API paths return JSON
     if _wants_json(request.url.path):
-        return _JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
     # UI paths return the 404 page for 404s, JSON for everything else
     if exc.status_code == 404:
         return FileResponse("static/404.html", status_code=404)
-    return _JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
 
 
 # ---------------------------------------------------------------------------
@@ -1104,8 +1108,11 @@ def admin_update_object(name: str, req: ObjectUpdateRequest, session: dict = Dep
     if not obj:
         raise HTTPException(status_code=404, detail=f"Object '{name}' not found")
     before = _obj_snapshot(obj)
-    obj.vendor = req.vendor; obj.auth_ref = req.auth_ref
-    obj.path   = req.path;   obj.platform = req.platform; obj.safe = req.safe
+    obj.vendor   = req.vendor
+    obj.auth_ref = req.auth_ref
+    obj.path     = req.path
+    obj.platform = req.platform
+    obj.safe     = req.safe
     db.commit()
     db.refresh(obj)
     after = _obj_snapshot(obj)
@@ -1357,7 +1364,7 @@ def admin_toggle_key_suspend(key_id: str, session: dict = Depends(_require_admin
     try:
         kid = uuid.UUID(key_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from None
     k = db.get(TeamRegistryKey, kid)
     if not k:
         raise HTTPException(status_code=404, detail="Key not found")
@@ -1442,7 +1449,7 @@ def admin_create_user(req: UserCreateRequest, session: dict = Depends(_require_a
         try:
             team_uuids.append(uuid.UUID(tid))
         except ValueError:
-            raise HTTPException(status_code=400, detail=f"Invalid team_id: {tid}")
+            raise HTTPException(status_code=400, detail=f"Invalid team_id: {tid}") from None
     for tu in team_uuids:
         if not db.query(Team).filter(Team.id == tu).first():
             raise HTTPException(status_code=404, detail=f"Team {tu} not found")
@@ -1479,7 +1486,7 @@ def admin_update_user(user_id: str, req: UserUpdateRequest, session: dict = Depe
     try:
         uid = uuid.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found") from None
     user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1500,7 +1507,7 @@ def admin_update_user(user_id: str, req: UserUpdateRequest, session: dict = Depe
             try:
                 team_uuids.append(uuid.UUID(tid))
             except ValueError:
-                raise HTTPException(status_code=400, detail=f"Invalid team_id: {tid}")
+                raise HTTPException(status_code=400, detail=f"Invalid team_id: {tid}") from None
         for tu in team_uuids:
             if not db.query(Team).filter(Team.id == tu).first():
                 raise HTTPException(status_code=404, detail=f"Team {tu} not found")
@@ -1525,7 +1532,7 @@ def admin_delete_user(user_id: str, session: dict = Depends(_require_admin), db:
     try:
         uid = uuid.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found") from None
     user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1562,7 +1569,7 @@ def admin_add_team_member(team_id: str, req: TeamMemberRequest,
     try:
         uid = uuid.UUID(req.user_id)
     except ValueError:
-        raise HTTPException(status_code=400, detail="Invalid user_id")
+        raise HTTPException(status_code=400, detail="Invalid user_id") from None
     user = db.query(User).filter(User.id == uid).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
@@ -1583,7 +1590,7 @@ def admin_remove_team_member(team_id: str, user_id: str,
     try:
         uid = uuid.UUID(user_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="User not found")
+        raise HTTPException(status_code=404, detail="User not found") from None
     user = db.query(User).filter(User.id == uid).first()
     row = db.query(UserTeam).filter(UserTeam.user_id == uid, UserTeam.team_id == team.id).first()
     if not row:
@@ -1680,9 +1687,12 @@ def admin_changelog(
     db: Session = Depends(get_db),
 ):
     q = db.query(ChangeLog).order_by(ChangeLog.timestamp.desc())
-    if entity_type: q = q.filter(ChangeLog.entity_type == entity_type)
-    if entity_id:   q = q.filter(ChangeLog.entity_id   == entity_id)
-    if action:      q = q.filter(ChangeLog.action       == action)
+    if entity_type:
+        q = q.filter(ChangeLog.entity_type == entity_type)
+    if entity_id:
+        q = q.filter(ChangeLog.entity_id   == entity_id)
+    if action:
+        q = q.filter(ChangeLog.action       == action)
     total = q.count()
     rows  = q.offset((page - 1) * limit).limit(limit).all()
     return {
@@ -1711,9 +1721,12 @@ def admin_audit_log(
     db: Session = Depends(get_db),
 ):
     q = db.query(AuditLog).order_by(AuditLog.timestamp.desc())
-    if registry_id:    q = q.filter(AuditLog.registry_id == registry_id)
-    if change_number:  q = q.filter(AuditLog.change_number == change_number)
-    if outcome:        q = q.filter(AuditLog.outcome == outcome)
+    if registry_id:
+        q = q.filter(AuditLog.registry_id == registry_id)
+    if change_number:
+        q = q.filter(AuditLog.change_number == change_number)
+    if outcome:
+        q = q.filter(AuditLog.outcome == outcome)
     total = q.count()
     rows  = q.offset((page - 1) * limit).limit(limit).all()
     return {
@@ -1745,9 +1758,12 @@ def admin_audit_export(
     db: Session = Depends(get_db),
 ):
     q = db.query(AuditLog).order_by(AuditLog.timestamp.desc())
-    if outcome:        q = q.filter(AuditLog.outcome == outcome)
-    if change_number:  q = q.filter(AuditLog.change_number == change_number)
-    if registry_id:    q = q.filter(AuditLog.registry_id == registry_id)
+    if outcome:
+        q = q.filter(AuditLog.outcome == outcome)
+    if change_number:
+        q = q.filter(AuditLog.change_number == change_number)
+    if registry_id:
+        q = q.filter(AuditLog.registry_id == registry_id)
     rows = q.all()
 
     buf = io.StringIO()
@@ -1776,8 +1792,10 @@ def admin_changelog_export(
     db: Session = Depends(get_db),
 ):
     q = db.query(ChangeLog).order_by(ChangeLog.timestamp.desc())
-    if entity_type: q = q.filter(ChangeLog.entity_type == entity_type)
-    if action:      q = q.filter(ChangeLog.action == action)
+    if entity_type:
+        q = q.filter(ChangeLog.entity_type == entity_type)
+    if action:
+        q = q.filter(ChangeLog.action == action)
     rows = q.all()
 
     buf = io.StringIO()
@@ -1823,7 +1841,7 @@ def admin_list_sessions(session: dict = Depends(_require_admin)):
             except Exception:
                 continue
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Redis error: {e}")
+        raise HTTPException(status_code=503, detail=f"Redis error: {e}") from e
     return {"sessions": sessions, "total": len(sessions)}
 
 
@@ -1854,7 +1872,7 @@ def admin_auth_backends(session: dict = Depends(_require_admin)):
     try:
         raw = load_auth()
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Cannot read auth.json: {e}")
+        raise HTTPException(status_code=503, detail=f"Cannot read auth.json: {e}") from e
 
     result = {}
     for vendor, refs in raw.items():
@@ -1869,7 +1887,7 @@ def admin_test_auth_backend(vendor: str, ref: str, session: dict = Depends(_requ
     try:
         raw = load_auth()
     except Exception as e:
-        raise HTTPException(status_code=503, detail=f"Cannot read auth.json: {e}")
+        raise HTTPException(status_code=503, detail=f"Cannot read auth.json: {e}") from e
 
     cfg = raw.get(vendor, {}).get(ref)
     if not cfg:
@@ -1882,10 +1900,7 @@ def admin_test_auth_backend(vendor: str, ref: str, session: dict = Depends(_requ
         parsed = urllib.parse.urlparse(cfg.get("addr", ""))
         host = parsed.hostname
         port = parsed.port or (443 if parsed.scheme == "https" else 8200)
-    elif vendor == "cyberark":
-        host = cfg.get("host")
-        port = 443
-    elif vendor == "conjur":
+    elif vendor == "cyberark" or vendor == "conjur":
         host = cfg.get("host")
         port = 443
     elif vendor == "aws":
@@ -1994,8 +2009,8 @@ def prometheus_metrics(db: Session = Depends(get_db)):
 # ---------------------------------------------------------------------------
 
 def _write_change(db: Session, action: str, entity_type: str, entity_id: str,
-                  entity_name: str, detail: str = None, performed_by: str = "admin",
-                  diff: dict = None):
+                  entity_name: str, detail: Optional[str] = None,
+                  performed_by: str = "admin", diff: Optional[dict] = None):
     db.add(ChangeLog(action=action, entity_type=entity_type, entity_id=entity_id,
                      entity_name=entity_name, detail=detail, performed_by=performed_by,
                      diff=diff))
@@ -2075,8 +2090,7 @@ def _enforce_policies(db: Session, team, registry, source_ip: str | None,
 
     # --- IP allowlist (team policy first, then registry) ---
     for policy, label in [(team_policy, "team"), (reg_policy, "registry")]:
-        if policy and policy.ip_allowlist:
-            if not _check_ip(source_ip, policy.ip_allowlist):
+        if policy and policy.ip_allowlist and not _check_ip(source_ip, policy.ip_allowlist):
                 detail = f"Source IP {source_ip} not in {label} allowlist"
                 _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)
                 wh.fire(db, team, "policy.violated",
@@ -2085,8 +2099,8 @@ def _enforce_policies(db: Session, team, registry, source_ip: str | None,
                 raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
     # --- Allowed hours (registry policy) ---
-    if reg_policy and (reg_policy.allowed_from or reg_policy.allowed_to):
-        if not _check_hours(reg_policy.allowed_from, reg_policy.allowed_to):
+    if (reg_policy and (reg_policy.allowed_from or reg_policy.allowed_to)
+            and not _check_hours(reg_policy.allowed_from, reg_policy.allowed_to)):
             detail = f"Access to registry '{registry.name}' not permitted at this time"
             _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)
             wh.fire(db, team, "policy.violated",
@@ -2136,7 +2150,7 @@ def _get_registry(db: Session, reg_id: str) -> Registry:
     try:
         uid = uuid.UUID(reg_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Registry not found")
+        raise HTTPException(status_code=404, detail="Registry not found") from None
     reg = db.query(Registry).filter(Registry.id == uid).first()
     if not reg:
         raise HTTPException(status_code=404, detail="Registry not found")
@@ -2147,7 +2161,7 @@ def _get_team(db: Session, team_id: str) -> Team:
     try:
         uid = uuid.UUID(team_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Team not found")
+        raise HTTPException(status_code=404, detail="Team not found") from None
     team = db.query(Team).filter(Team.id == uid).first()
     if not team:
         raise HTTPException(status_code=404, detail="Team not found")
@@ -2175,7 +2189,7 @@ def _parse_time(s: Optional[str]):
         h, m = s.split(":")
         return dt_time(int(h), int(m))
     except Exception:
-        raise HTTPException(status_code=422, detail=f"Invalid time format '{s}', expected HH:MM")
+        raise HTTPException(status_code=422, detail=f"Invalid time format '{s}', expected HH:MM") from None
 
 
 def _policy_response(p: Policy) -> dict:
@@ -2293,7 +2307,6 @@ def admin_delete_team_policy(team_id: str, session: dict = Depends(_require_admi
 def _apply_key_expiry_to_registry(db: Session, registry: Registry, max_key_days: int):
     """Set/update expires_at on all active keys for this registry based on max_key_days."""
     from datetime import timedelta
-    now = datetime.now(timezone.utc)
     for key_row in db.query(TeamRegistryKey).filter(
         TeamRegistryKey.registry_id == registry.id,
         TeamRegistryKey.revoked_at.is_(None),
@@ -2468,7 +2481,7 @@ def _authenticate_team_webhook(db: Session, team_id_str: str, request: Request) 
     try:
         tid = uuid.UUID(team_id_str)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from None
 
     team = db.get(Team, tid)
     if not team:
@@ -2606,7 +2619,7 @@ def api_scan_ingest(
     try:
         findings = scanning.normalize(req.scanner, req.results, req.repository)
     except scanning.UnsupportedScanner as exc:
-        raise HTTPException(status_code=400, detail=str(exc))
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     run = ScanRun(
         team_id=team.id,
@@ -2764,7 +2777,7 @@ def admin_scan_findings(
         try:
             tid = uuid.UUID(team_id)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid team_id")
+            raise HTTPException(status_code=400, detail="Invalid team_id") from None
 
     q = _query_findings(db, team_id=tid, status=status, severity=severity,
                         repository=repository)
@@ -2795,7 +2808,7 @@ def admin_update_scan_finding(
     try:
         fid = uuid.UUID(finding_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from None
 
     finding = db.get(ScanFinding, fid)
     if not finding:
@@ -2822,7 +2835,7 @@ def admin_alert_scan_finding(
     try:
         fid = uuid.UUID(finding_id)
     except ValueError:
-        raise HTTPException(status_code=404, detail="Not found")
+        raise HTTPException(status_code=404, detail="Not found") from None
 
     finding = db.get(ScanFinding, fid)
     if not finding:

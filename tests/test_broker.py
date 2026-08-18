@@ -3,8 +3,9 @@ Unit tests for broker.py — auth config lookup and vendor routing.
 No database or network required; external calls are mocked.
 """
 
-import pytest
 from unittest.mock import patch
+
+import pytest
 
 from aegis.broker import _auth_cfg, fetch_secrets
 from aegis.functions import _auth_key, cyberark_logon
@@ -99,9 +100,9 @@ class TestFetchSecrets:
             _obj("good", "aws"),
         ]
         with patch("aegis.broker.vault_get", side_effect=Exception("vault down")), \
-             patch("aegis.broker.aws_get",   return_value="ok") as mock_aws:
-            with pytest.raises(ValueError, match="vault down"):
-                fetch_secrets(objects, AUTH)
+             patch("aegis.broker.aws_get",   return_value="ok") as mock_aws, \
+             pytest.raises(ValueError, match="vault down"):
+            fetch_secrets(objects, AUTH)
         # aws_get was still called despite vault failure
         mock_aws.assert_called_once()
 
