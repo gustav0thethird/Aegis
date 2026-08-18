@@ -65,6 +65,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
   - [Logs and Exports](#logs-and-exports)
   - [Settings](#settings)
   - [Metrics](#metrics)
+  - [Secret Scanning](#secret-scanning)
 - [Admin Panel](#admin-panel)
 - [Team Dashboard](#team-dashboard)
 - [Team Self-Service Model](#team-self-service-model)
@@ -73,6 +74,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Policies](#policies-1)
 - [Webhooks and Notifications](#webhooks-and-notifications)
 - [Inbound Webhooks (CI/CD Integration)](#inbound-webhooks-cicd-integration)
+- [Secret Scanning and Alerting](#secret-scanning-and-alerting)
 - [Audit and Change Logging](#audit-and-change-logging)
 - [SIEM Integration](#siem-integration)
 - [Rate Limiting](#rate-limiting)
@@ -82,6 +84,8 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Backup and Recovery](#backup-and-recovery)
 - [Health Check](#health-check)
 - [Development and Testing](#development-and-testing)
+- [Kubernetes and Argo CD](#kubernetes-and-argo-cd)
+- [External Secrets Operator](#external-secrets-operator)
 - [Terraform (AWS)](#terraform-aws)
 - [Project Structure](#project-structure)
 
@@ -660,6 +664,19 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `S3_LOG_PREFIX` | No | `aegis` | S3 key prefix |
 | `DD_API_KEY` | No | — | Datadog API key |
 | `DD_SITE` | No | `datadoghq.com` | Datadog intake site (`datadoghq.com` or `datadoghq.eu`) |
+| `RUN_MIGRATIONS` | No | `true` | Apply migrations on container start. Kubernetes sets `false`; the chart migrates once in a Job. |
+| `AEGIS_BASE_URL` | No | — | Public base URL, used to link alerts back to the finding |
+| `ALERT_SINKS` | No | — | Comma-separated: `jira`, `servicenow`, `email`, `webhook`. Empty disables alerting. |
+| `ALERT_MIN_SEVERITY` | No | `high` | Minimum severity that raises an alert |
+| `ALERT_MAX_PER_RUN` | No | `25` | Cap on alerts raised by a single scan ingest |
+| `JIRA_URL` / `JIRA_USER` / `JIRA_API_TOKEN` / `JIRA_PROJECT_KEY` | No | — | Jira ticket creation |
+| `JIRA_ISSUE_TYPE` | No | `Task` | Issue type for created tickets |
+| `SERVICENOW_URL` / `SERVICENOW_USER` / `SERVICENOW_PASSWORD` | No | — | ServiceNow incident creation |
+| `SERVICENOW_TABLE` | No | `incident` | Target table |
+| `SMTP_HOST` / `SMTP_PORT` / `SMTP_USER` / `SMTP_PASSWORD` / `SMTP_FROM` | No | — | Email alerts (port defaults to 587) |
+| `SMTP_STARTTLS` | No | `true` | Set `false` only for a local relay |
+| `ALERT_EMAIL_TO` | No | — | Comma-separated alert recipients |
+| `ALERT_WEBHOOK_URL` | No | — | Generic webhook alert destination |
 
 ---
 
@@ -1141,6 +1158,21 @@ aegis_policy_violations_total 142
 
 ---
 
+### Secret Scanning
+
+| Method | Path | Auth | Description |
+|---|---|---|---|
+| `POST` | `/api/scan/{team_id}/ingest` | Team inbound webhook secret | Report scanner output. Body: `{ scanner, repository, ref, commit_sha, source, results }`. |
+| `GET` | `/admin/api/scan/findings` | Admin | List findings. Filters: `status`, `severity`, `repository`, `team_id`, `page`, `limit`. |
+| `PATCH` | `/admin/api/scan/findings/{id}` | Admin | Set status: `open`, `triaged`, `resolved`, `false_positive`. |
+| `POST` | `/admin/api/scan/findings/{id}/alert` | Admin | Re-send a finding to the configured sinks. |
+| `GET` | `/admin/api/scan/runs` | Admin | List scan runs. Filter: `repository`. |
+| `GET` | `/api/my-scan-findings` | Session | The caller's team findings. |
+
+See [Secret Scanning and Alerting](#secret-scanning-and-alerting) for the full flow.
+
+---
+
 ## Admin Panel
 
 Aegis ships a dark, single-page admin panel at `/admin`. Built with vanilla JS and Tailwind CSS — no build step, no npm, no bundler. One HTML file. Fira Code monospace throughout.
@@ -1445,6 +1477,125 @@ The response includes the new plaintext key. If the team has a `key.rotated` out
 
 ---
 
+## Secret Scanning and Alerting
+
+Aegis exists so credentials do not have to live in code. This closes the loop
+on the ones that got there anyway: pipelines report what their scanners find,
+Aegis keeps the findings deduplicated, and anything new raises a ticket.
+
+**Aegis does not run the scanners.** They run where the code is — in CI and at
+pre-commit — and report back. That keeps the broker out of the business of
+holding Git credentials, cloning repositories and executing untrusted code,
+which is not a role a secrets broker should take on.
+
+### Reporting a scan
+
+```
+POST /api/scan/{team_id}/ingest
+Authorization: Bearer <team inbound webhook secret>
+```
+
+```json
+{
+  "scanner": "gitleaks",
+  "repository": "acme/payments",
+  "ref": "refs/heads/main",
+  "commit_sha": "deadbeef",
+  "source": "github-actions",
+  "results": [ ... raw scanner output ... ]
+}
+```
+
+`scanner` is `semgrep`, `gitleaks`, or `aegis` for output already in Aegis's
+own shape — that last one lets a tool Aegis has never heard of report through
+the same pipeline. Authentication reuses the team's inbound webhook secret, so
+findings are attributed to a team without issuing a second class of credential.
+
+Response:
+
+```json
+{ "ok": true, "scan_run_id": "...", "findings": 3, "new_findings": 1, "alerted": 1 }
+```
+
+Ready-made pipeline configuration lives in [`examples/ci/`](examples/ci/): a
+reusable GitHub Actions workflow, a drop-in caller, a pre-commit config, and a
+Gitleaks allowlist template.
+
+### The credential is never stored
+
+A secrets broker that kept the secrets it found in your code would be worse
+than the problem it reports. A finding carries:
+
+- a **keyed HMAC** of the matched value, used only to recognise the same secret
+  again — keyed rather than a bare digest, because a plain hash of a short
+  credential is trivially reversed with a wordlist
+- a **masked preview** (`AKIA********(20 chars)`), enough to recognise a
+  credential but not to use one; values of eight characters or fewer are masked
+  completely
+
+Nothing else survives normalisation. Gitleaks' `Match` field, which contains
+the surrounding source line, is dropped rather than stored.
+
+### Deduplication
+
+Findings are identified by repository + rule + file + keyed secret hash.
+**Line numbers are deliberately excluded**: a credential that shifts down a
+file when someone adds an import is the same finding, and re-alerting on it
+teaches people to ignore the alerts.
+
+A repeat sighting bumps `occurrences` and refreshes where it was last seen.
+`first_seen_at` and any triage decision are preserved — marking something a
+false positive survives every later scan.
+
+### Alerting
+
+| Sink | Raises | Configuration |
+|---|---|---|
+| `jira` | An issue in the configured project | `JIRA_URL`, `JIRA_USER`, `JIRA_API_TOKEN`, `JIRA_PROJECT_KEY` |
+| `servicenow` | An incident (or any table) | `SERVICENOW_URL`, `SERVICENOW_USER`, `SERVICENOW_PASSWORD` |
+| `email` | SMTP mail to a recipient list | `SMTP_HOST`, `SMTP_FROM`, `ALERT_EMAIL_TO` |
+| `webhook` | A JSON POST | `ALERT_WEBHOOK_URL` |
+
+```bash
+ALERT_SINKS=jira,email
+ALERT_MIN_SEVERITY=high
+```
+
+Design decisions worth knowing:
+
+- **Each sink fires independently.** One broken integration must not suppress
+  the others — the alert that gets dropped is the one about a live credential.
+- **Alerting never fails the ingest.** A Jira outage is recorded against the
+  finding, not returned to the pipeline. CI should not go red because a
+  ticketing system is down.
+- **One alert per finding.** Re-alerting on every pipeline run turns the
+  channel into noise.
+- **Alerts are capped per run** (`ALERT_MAX_PER_RUN`, default 25) so a scan
+  reporting hundreds of findings does not hold the request open opening
+  tickets. The remainder stay un-alerted for the next run or an explicit
+  re-alert.
+- **Credentials for these integrations come from the environment, never the
+  database.** A secrets broker storing its own integration passwords in a table
+  it also serves would be the same mistake it exists to prevent.
+- **Destinations may be on private networks.** A self-hosted Jira on RFC1918
+  space is a normal deployment, so operator-configured URLs skip the
+  private-address check that user-supplied webhook URLs are subject to. The
+  scheme rule still applies — alerts are never posted over plaintext HTTP.
+
+### Triage
+
+```
+GET   /admin/api/scan/findings?status=open&severity=high&repository=acme/payments
+PATCH /admin/api/scan/findings/{id}          { "status": "false_positive" }
+POST  /admin/api/scan/findings/{id}/alert    re-send a failed or capped alert
+GET   /admin/api/scan/runs
+GET   /api/my-scan-findings                  a team's own findings
+```
+
+Statuses are `open`, `triaged`, `resolved` and `false_positive`.
+
+---
+
 ## Audit and Change Logging
 
 ### Audit Log
@@ -1687,11 +1838,34 @@ docker compose up -d broker
 
 ## Health Check
 
+Three endpoints, none of which require authentication. The distinction matters
+on Kubernetes: a liveness probe failure restarts the container, so it must not
+depend on anything the container cannot fix by restarting.
+
+```
+GET /healthz
+```
+
+Liveness. Checks nothing external and returns `200 OK` whenever the process is
+serving. Wiring a dependency check here would turn a brief Redis or database
+outage into a cluster-wide restart loop, destroying the pods that would
+otherwise have recovered on their own.
+
+```
+GET /readyz
+```
+
+Readiness. Checks PostgreSQL and Redis, returning `503` while either is
+unreachable. That removes the pod from the Service endpoints without
+restarting it.
+
 ```
 GET /health
 ```
 
-Returns `200 OK` with `{"status": "ok", "db": "ok", "redis": "ok"}`. No authentication required.
+Full dependency check, identical to `/readyz`. Retained for the existing Docker
+Compose, ALB and ECS health checks. Returns `200 OK` with
+`{"status": "ok", "db": "ok", "redis": "ok"}`, or `503` and `"degraded"`.
 
 ```
 GET /docs
@@ -1734,6 +1908,156 @@ Tests require a running Postgres. The `DATABASE_URL` is automatically overridden
 ### CI
 
 Tests run automatically on every push and PR via `.github/workflows/ci.yml`. The workflow spins up a PostgreSQL 16 service container — no external dependencies needed.
+
+---
+
+## Kubernetes and Argo CD
+
+The chart in [`helm/`](helm/) deploys Aegis, and [`argocd/`](argocd/) contains
+Application manifests for driving it through GitOps.
+
+```bash
+helm install aegis helm/ \
+  --namespace aegis --create-namespace \
+  --set secret.existingSecret=aegis-credentials \
+  --set auth.existingSecret=aegis-auth-json
+```
+
+Or point Argo CD at it:
+
+```bash
+kubectl apply -f argocd/application.yaml
+```
+
+### Migrations run once, not per replica
+
+The container image applies migrations on start, which is correct for a single
+instance and wrong the moment there is a second replica — every pod races to
+migrate the same database.
+
+The chart sets `RUN_MIGRATIONS=false` on the Deployment and runs `alembic
+upgrade head` in a Job instead, ordered ahead of the rollout. `migrations.hookProvider`
+selects how that ordering is expressed:
+
+| Value | Ordering | Use when |
+|---|---|---|
+| `argocd` (default) | Argo CD `PreSync` hook | Deploying through Argo CD |
+| `helm` | Helm `pre-install,pre-upgrade` hook | Plain `helm install` / `helm upgrade` |
+| `none` | Plain Job, sync-wave `-1` | You order migrations yourself |
+
+A failed migration fails the sync, so the new pods never roll out against a
+database they cannot use.
+
+### Probes
+
+`livenessProbe` uses `/healthz`, which checks nothing external. `readinessProbe`
+uses `/readyz`, which checks PostgreSQL and Redis. Pointing liveness at a
+dependency check would restart every pod during a database blip — see
+[Health Check](#health-check).
+
+### Secrets
+
+`secret.create` exists for local experimentation only. In a GitOps repository
+those values are committed to Git in plain text, and the chart prints a warning
+when it is used. For anything real, set `secret.existingSecret` and manage the
+Secret with sealed-secrets, SOPS, or the External Secrets Operator.
+
+`auth.existingSecret` is required and holds `auth.json` — the vault backend
+credentials — mounted read-only.
+
+### Notable values
+
+| Value | Default | Notes |
+|---|---|---|
+| `replicaCount` | `2` | Ignored when `autoscaling.enabled` |
+| `migrations.hookProvider` | `argocd` | See above |
+| `config.rateLimitFailMode` | `open` | `closed` makes a Redis outage an API outage |
+| `config.webhookAllowedHosts` | `""` | Allowlist for outbound webhook and alert URLs |
+| `podDisruptionBudget.enabled` | `true` | `minAvailable: 1` |
+| `networkPolicy.enabled` | `false` | Restrict ingress to named namespaces |
+| `serviceMonitor.enabled` | `false` | Requires the Prometheus operator |
+| `externalSecrets.clusterSecretStore.enabled` | `false` | See below |
+
+The pod runs as uid 10001 with a read-only root filesystem, no privilege
+escalation and all capabilities dropped.
+
+### Argo CD specifics
+
+`argocd/application.yaml` sets `ignoreDifferences` on
+`/spec/replicas`. Without it, Argo CD and the HorizontalPodAutoscaler fight
+over the replica count and the Application reports permanent drift.
+
+---
+
+## External Secrets Operator
+
+Aegis can act as a secret source for the [External Secrets
+Operator](https://external-secrets.io), so Kubernetes workloads get their
+credentials as ordinary Secrets and never hold credentials for Vault, CyberArk,
+Conjur or AWS themselves. Aegis brokers on their behalf and every fetch lands in
+the audit log attributed to the team's key.
+
+```
+GET /eso/v1/secret/{name}   ->  {"key": "...", "value": "..."}    jsonPath: $.value
+GET /eso/v1/secrets         ->  {"data": { ... }}                 jsonPath: $.data
+```
+
+Both use ESO's generic `webhook` provider. They are a response shape for ESO,
+not a second way in: authentication, policy enforcement, rate limiting,
+auditing and revocation are the same code path as `/secrets`.
+
+Enable the bundled store:
+
+```yaml
+externalSecrets:
+  clusterSecretStore:
+    enabled: true
+    apiKeySecret:
+      name: aegis-eso-credentials
+      namespace: external-secrets
+      key: api-key
+```
+
+Then reference it from a workload:
+
+```yaml
+apiVersion: external-secrets.io/v1beta1
+kind: ExternalSecret
+metadata:
+  name: payments-api-credentials
+  namespace: payments
+spec:
+  refreshInterval: 1h
+  secretStoreRef:
+    kind: ClusterSecretStore
+    name: aegis
+  target:
+    name: payments-api-credentials
+  data:
+    - secretKey: DB_PASSWORD
+      remoteRef:
+        key: payments_db_password
+```
+
+`remoteRef.key` is the Aegis object name and must belong to the registry the
+API key is bound to. Anything else returns a flat `404 Secret not found` — the
+message does not reveal whether the object exists elsewhere — and records a
+denial in the audit log.
+
+Worked examples, including whole-registry extraction, are in
+[`examples/eso/`](examples/eso/).
+
+### One operational tension
+
+Aegis rejects requests without an `X-Change-Number` while
+`change_number_required` is on, but ESO refreshes on a timer, not against a
+change record. The store therefore sends a standing identifier
+(`externalSecrets.clusterSecretStore.changeNumber`, default `ESO-SYNC`).
+
+If your change process needs every secret retrieval tied to a real change
+record, ESO is the wrong fetch mechanism for those secrets — the timer-driven
+refresh has no change to reference. Use the per-key endpoint from a pipeline
+that does have one.
 
 ---
 
@@ -1810,14 +2134,17 @@ secrets-broker/
 │   ├── broker.py               — Secret fetcher: groups objects by vendor, dispatches to functions.py
 │   ├── database.py             — SQLAlchemy engine, session factory, Base
 │   ├── functions.py            — Vendor-specific implementations (CyberArk, Vault, AWS, Conjur)
-│   ├── models.py               — ORM models (14 tables)
+│   ├── models.py               — ORM models (16 tables)
+│   ├── alerting.py             — Jira / ServiceNow / email / webhook alert sinks
 │   ├── rate_limit.py           — Redis-backed per-key rate limiter
+│   ├── scanning.py             — Semgrep / Gitleaks output normalisation and dedupe
+│   ├── url_guard.py            — SSRF validation for outbound URLs
 │   ├── scheduler.py            — Background scheduler: key expiry checks, rotation events
 │   ├── siem.py                 — SIEM adapters (stdout, Splunk, S3, Datadog)
 │   └── webhook.py              — Outgoing webhook delivery (HTTP + retry + HMAC signing)
 │                                 + Slack, MS Teams, Discord notification formatters
 ├── alembic/                    — Alembic migration environment
-│   └── versions/               — Migration scripts (001–010)
+│   └── versions/               — Migration scripts (001–011)
 ├── config/
 │   ├── auth.json               — Vault credentials (gitignored)
 │   ├── auth.json.example       — Template for auth.json
@@ -1835,7 +2162,13 @@ secrets-broker/
 │   └── 404.html                — Branded 404 page
 ├── terraform/                  — AWS infrastructure (ECS, RDS, ElastiCache, ALB, IAM, S3)
 ├── helm/                       — Kubernetes Helm chart
-│   └── values.yaml             — Default chart values
+│   ├── values.yaml             — Default chart values
+│   └── templates/              — Deployment, Service, Ingress, migration Job, HPA,
+│                                 PDB, NetworkPolicy, ServiceMonitor, ClusterSecretStore
+├── argocd/                     — Argo CD Application and app-of-apps manifests
+├── examples/
+│   ├── eso/                    — External Secrets Operator store and ExternalSecret examples
+│   └── ci/                     — Secret-scanning workflow, pre-commit and allowlist templates
 ├── tests/
 │   ├── conftest.py             — pytest fixtures (TestClient, DB, FakeRedis)
 │   ├── test_policy.py          — Unit tests: IP allowlist and time-window policy helpers
@@ -1845,12 +2178,15 @@ secrets-broker/
 ├── .github/
 │   ├── dependabot.yml          — Automated dependency updates (pip, docker, terraform, actions)
 │   └── workflows/
-│       ├── ci.yml              — Lint + integration tests on every push/PR
+│       ├── ci.yml              — Lint, tests, Helm chart and image validation
+│       ├── secret-scan.yml     — Reusable secret-scanning workflow for any repository
 │       └── release.yml         — Build + push GHCR image + GitHub release on v* tags
 ├── alembic.ini
 ├── docker-compose.yml          — Local development stack (Aegis + PostgreSQL + Redis + exporter)
 ├── docker-compose.prod.yml     — Production stack variant
 ├── Dockerfile
+├── docker-entrypoint.sh        — Applies migrations unless RUN_MIGRATIONS=false
+├── ruff.toml                   — Pinned lint rule selection
 ├── Makefile                    — Dev, test, build, backup, Helm, and Terraform targets
 ├── requirements.txt            — Runtime Python dependencies
 ├── requirements-dev.txt        — Dev/test dependencies (pytest, fakeredis, httpx, ruff)
