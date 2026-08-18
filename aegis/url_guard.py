@@ -17,14 +17,15 @@ Config:
                               or as a parent domain (example.com matches
                               hooks.example.com).
   WEBHOOK_ALLOW_PRIVATE_IPS — "true" permits loopback/RFC1918/link-local
-                              targets and skips DNS resolution. Local
-                              development only; never set this in production.
+                              targets. Local development only; never set this
+                              in production.
+  WEBHOOK_PIN_DNS           — "false" disables connection pinning (default on).
 
-Note on TOCTOU: a hostname validated here can be re-pointed at a private
-address before the request is made (DNS rebinding). Re-validating at delivery
-time narrows that window but does not close it. Closing it entirely requires
-pinning the resolved address for the connection, which is why the host
-allowlist exists for deployments that need a hard guarantee.
+DNS rebinding: a hostname validated here could be re-pointed at a private
+address before the request is made. request() closes that window by connecting
+to the address validation actually resolved, while TLS and the Host header keep
+using the hostname. Set WEBHOOK_PIN_DNS=false to fall back to ordinary
+resolution.
 """
 
 import ipaddress
@@ -106,26 +107,38 @@ def check_url(url: str, allow_private: bool = False) -> str | None:
     if allow_private or _allow_private():
         return None
 
-    # A literal IP needs no lookup; a name has to be resolved, and *every*
-    # address it resolves to must be public.
+    addresses, reason = _resolve(hostname, parsed.port or 443)
+    return reason
+
+
+def _resolve(hostname: str, port: int, allow_private: bool = False) -> tuple[list[str], str | None]:
+    """
+    Resolve a hostname and check every address it maps to.
+
+    Returns (addresses, None) when acceptable, or ([], reason) otherwise. A
+    literal IP needs no lookup and is checked directly. allow_private skips the
+    address check but still returns the resolved addresses, so a caller can pin
+    the connection even where private targets are permitted.
+    """
     try:
         ipaddress.ip_address(hostname)
         addresses = [hostname]
     except ValueError:
         try:
-            infos = socket.getaddrinfo(hostname, parsed.port or 443, proto=socket.IPPROTO_TCP)
+            infos = socket.getaddrinfo(hostname, port, proto=socket.IPPROTO_TCP)
         except socket.gaierror as exc:
-            return f"host '{hostname}' could not be resolved: {exc}"
+            return [], f"host '{hostname}' could not be resolved: {exc}"
         addresses = [info[4][0] for info in infos]
 
     if not addresses:
-        return f"host '{hostname}' did not resolve to any address"
+        return [], f"host '{hostname}' did not resolve to any address"
 
-    for addr in addresses:
-        if _is_blocked_ip(addr):
-            return f"host '{hostname}' resolves to non-public address {addr}"
+    if not allow_private:
+        for addr in addresses:
+            if _is_blocked_ip(addr):
+                return [], f"host '{hostname}' resolves to non-public address {addr}"
 
-    return None
+    return addresses, None
 
 
 def validate_url(url: str, field: str = "url", allow_private: bool = False) -> str:
@@ -138,3 +151,89 @@ def validate_url(url: str, field: str = "url", allow_private: bool = False) -> s
 
 def is_safe(url: str, allow_private: bool = False) -> bool:
     return check_url(url, allow_private=allow_private) is None
+
+
+# ---------------------------------------------------------------------------
+# Pinned requests — closing the DNS rebinding window
+# ---------------------------------------------------------------------------
+#
+# Validating a hostname and then letting the HTTP client resolve it again leaves
+# a gap: an attacker controlling DNS with a short TTL can answer with a public
+# address for the check and a private one for the connection. Re-checking at
+# delivery narrows that gap to milliseconds but does not close it.
+#
+# request() closes it by connecting to the address that was actually validated.
+# The URL is rewritten to that address while the Host header and TLS SNI keep
+# the original hostname, so virtual hosting and certificate verification behave
+# exactly as they would have.
+
+import requests                                   # noqa: E402
+from requests.adapters import HTTPAdapter         # noqa: E402
+
+
+class _PinnedAdapter(HTTPAdapter):
+    """Route to a fixed address while presenting the original hostname to TLS."""
+
+    def __init__(self, hostname: str, **kwargs):
+        self._hostname = hostname
+        super().__init__(**kwargs)
+
+    def init_poolmanager(self, *args, **kwargs):
+        # server_hostname drives SNI; assert_hostname keeps certificate
+        # verification bound to the name rather than the literal address.
+        kwargs["server_hostname"] = self._hostname
+        kwargs["assert_hostname"] = self._hostname
+        super().init_poolmanager(*args, **kwargs)
+
+
+def pin_url(url: str, address: str) -> str:
+    """Rewrite `url` so the connection targets `address`, preserving path and port."""
+    parsed = urlparse(url)
+    host = f"[{address}]" if ":" in address else address
+    netloc = f"{host}:{parsed.port}" if parsed.port else host
+    return parsed._replace(netloc=netloc).geturl()
+
+
+def pinning_enabled() -> bool:
+    return os.environ.get("WEBHOOK_PIN_DNS", "true").strip().lower() != "false"
+
+
+def request(method: str, url: str, *, allow_private: bool = False, **kwargs):
+    """
+    Make an outbound request only if the URL validates, connecting to the
+    address that validation actually saw.
+
+    Raises ValueError if the URL must not be requested at all.
+    """
+    reason = check_url(url, allow_private=allow_private)
+    if reason:
+        raise ValueError(reason)
+
+    parsed = urlparse(url.strip())
+    hostname = (parsed.hostname or "").lower()
+
+    # Pinning only means anything for a name that had to be resolved. A literal
+    # IP is already unambiguous, and when private targets are permitted there is
+    # nothing the rebind could escalate to.
+    is_literal_ip = True
+    try:
+        ipaddress.ip_address(hostname)
+    except ValueError:
+        is_literal_ip = False
+
+    if not pinning_enabled() or is_literal_ip:
+        return requests.request(method, url, **kwargs)
+
+    addresses, reason = _resolve(hostname, parsed.port or 443,
+                                 allow_private=allow_private or _allow_private())
+    if reason:
+        raise ValueError(reason)
+
+    headers = dict(kwargs.pop("headers", None) or {})
+    headers.setdefault("Host", parsed.netloc)
+
+    with requests.Session() as session:
+        session.mount("https://", _PinnedAdapter(hostname))
+        session.mount("http://", HTTPAdapter())
+        return session.request(method, pin_url(url, addresses[0]),
+                               headers=headers, **kwargs)

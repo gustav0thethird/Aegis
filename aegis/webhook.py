@@ -15,7 +15,6 @@ import logging
 import time
 from datetime import datetime, timezone
 
-import requests
 
 from aegis import url_guard
 
@@ -113,8 +112,11 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
         success     = False
         error       = None
         try:
-            resp        = requests.post(webhook.url, data=payload_str,
-                                        headers=headers, timeout=WEBHOOK_TIMEOUT)
+            # url_guard.request re-validates and pins the connection to the
+            # address it resolved, so a short-TTL rebind between the check
+            # above and this call cannot redirect the payload.
+            resp        = url_guard.request("POST", webhook.url, data=payload_str,
+                                            headers=headers, timeout=WEBHOOK_TIMEOUT)
             status_code = resp.status_code
             success     = resp.ok
             if not success:
@@ -241,8 +243,8 @@ def notify_channels(team, event: str, registry: dict | None = None,
     slack_url = _channel_url(team, "slack_webhook_url", event)
     if slack_url:
         try:
-            requests.post(
-                slack_url,
+            url_guard.request(
+                "POST", slack_url,
                 json=_slack_payload(event, team_dict, registry, detail),
                 timeout=WEBHOOK_TIMEOUT,
             )
@@ -253,8 +255,8 @@ def notify_channels(team, event: str, registry: dict | None = None,
     ms_teams_url = _channel_url(team, "ms_teams_webhook_url", event)
     if ms_teams_url:
         try:
-            requests.post(
-                ms_teams_url,
+            url_guard.request(
+                "POST", ms_teams_url,
                 json=_ms_teams_payload(event, team_dict, registry, detail),
                 timeout=WEBHOOK_TIMEOUT,
             )
@@ -265,8 +267,8 @@ def notify_channels(team, event: str, registry: dict | None = None,
     discord_url = _channel_url(team, "discord_webhook_url", event)
     if discord_url:
         try:
-            requests.post(
-                discord_url,
+            url_guard.request(
+                "POST", discord_url,
                 json=_discord_payload(event, team_dict, registry, detail),
                 timeout=WEBHOOK_TIMEOUT,
             )

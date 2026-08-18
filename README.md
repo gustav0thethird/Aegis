@@ -657,6 +657,7 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `WEBHOOK_ALLOWED_SCHEMES` | No | `https` | Comma-separated URL schemes accepted for outbound webhook and notification URLs. |
 | `WEBHOOK_ALLOWED_HOSTS` | No | — | Comma-separated host allowlist for outbound URLs. Empty means any public host. An entry matches exactly or as a parent domain. |
 | `WEBHOOK_ALLOW_PRIVATE_IPS` | No | `false` | Permit webhook targets on loopback/RFC1918/link-local addresses. Local development only. |
+| `WEBHOOK_PIN_DNS` | No | `true` | Connect outbound webhooks to the address that validation resolved, closing the DNS-rebinding window between check and connect. TLS still verifies against the hostname. |
 | `LOG_DESTINATIONS` | No | `stdout` | Comma-separated SIEM targets. Used as fallback if DB setting is absent. |
 | `SPLUNK_HEC_URL` | No | — | Splunk HEC endpoint URL |
 | `SPLUNK_HEC_TOKEN` | No | — | Splunk HEC authentication token |
@@ -1585,6 +1586,8 @@ Design decisions worth knowing:
   space is a normal deployment, so operator-configured URLs skip the
   private-address check that user-supplied webhook URLs are subject to. The
   scheme rule still applies — alerts are never posted over plaintext HTTP.
+  Operator destinations are not DNS-pinned either: the operator chose the URL,
+  so there is no rebinding threat to close.
 
 ### Triage
 
