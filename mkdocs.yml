@@ -1,8 +1,9 @@
 site_name: Aegis
-site_description: Source of truth. Mirrored out to github.com/gustav0thethird/Aegis.
+site_description: Vault-agnostic API broker with audit logging, built on FastAPI
 
 plugins:
   - techdocs-core
 
 nav:
   - Home: index.md
+  - Readme: readme.md
