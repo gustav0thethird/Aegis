@@ -1,0 +1,8 @@
+site_name: Aegis
+site_description: Source of truth. Mirrored out to github.com/gustav0thethird/Aegis.
+
+plugins:
+  - techdocs-core
+
+nav:
+  - Home: index.md

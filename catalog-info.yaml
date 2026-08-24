@@ -1,0 +1,16 @@
+apiVersion: backstage.io/v1alpha1
+kind: Component
+metadata:
+  name: Aegis
+  description: Source of truth. Mirrored out to github.com/gustav0thethird/Aegis.
+  annotations:
+    # Tells TechDocs the docs live in this repo, built from mkdocs.yml.
+    backstage.io/techdocs-ref: dir:.
+    gitlab.com/project-slug: yditj/projects/apps/Aegis
+  tags:
+    - apps
+spec:
+  type: service
+  lifecycle: production
+  owner: gtully
+  system: apps
