@@ -1,9 +1,13 @@
 site_name: Aegis
 site_description: Vault-agnostic API broker with audit logging, built on FastAPI
-
 plugins:
-  - techdocs-core
-
+- techdocs-core
 nav:
-  - Home: index.md
-  - Readme: readme.md
+- Overview: index.md
+- Architecture: architecture.md
+- Configuration: configuration.md
+- Usage: usage.md
+- Deployment: deployment.md
+- Secret Scanning: secret_scanning.md
+- Testing: testing.md
+- Contributing: contributing.md
