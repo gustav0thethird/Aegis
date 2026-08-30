@@ -1,0 +1,7 @@
+# Standardised yditj CI: AI documentation (multi-page MkDocs + Backstage
+# catalog, self-merging) and FF-only GitHub mirror. Templates: yditj/ci-templates.
+include:
+  - project: yditj/ci-templates
+    file: ai-docs.yml
+  - project: yditj/ci-templates
+    file: mirror.yml
