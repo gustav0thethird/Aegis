@@ -3,10 +3,14 @@ kind: Component
 metadata:
   name: Aegis
   description: Aegis is a vendor-agnostic secrets broker and PAM gateway for managing
-    API keys and secrets.
+    API keys and secrets securely.
   annotations:
     backstage.io/techdocs-ref: dir:.
     gitlab.com/project-slug: yditj/projects/apps/Aegis
+    yditj.home/capabilities: Vendor-agnostic secrets management; Scoped API keys per
+      team; Self-service webhook and notification management; Audit logging of all
+      actions; Key rotation management; Team dashboard for metrics and configurations;
+      Admin panel for centralized management
   links:
   - url: https://github.com/gustav0thethird/Aegis
     title: GitHub
@@ -14,11 +18,55 @@ metadata:
   tags:
   - secrets-broker
   - api-management
+  - team-self-service
   - security
-  - devops
-  - python
+  - logging
 spec:
   type: service
   lifecycle: production
   owner: gtully
   system: apps
+  providesApis:
+  - Aegis-api
+
+---
+apiVersion: backstage.io/v1alpha1
+kind: API
+metadata:
+  name: Aegis-api
+  description: HTTP API exposed by Aegis
+spec:
+  type: openapi
+  lifecycle: production
+  owner: gtully
+  definition: "openapi: 3.0.0\ninfo:\n  title: Aegis API\n  version: 1.0.0\npaths:\n\
+    \  /health:\n    get:\n      summary: Health check endpoint.\n      responses:\n\
+    \        '200':\n          description: OK\n  /secrets:\n    get:\n      summary:\
+    \ Fetch secrets using a scoped API key and change number.\n      responses:\n\
+    \        '200':\n          description: OK\n  /api/login:\n    post:\n      summary:\
+    \ Authenticate user and return session token.\n      responses:\n        '200':\n\
+    \          description: OK\n  /api/logout:\n    post:\n      summary: Log out\
+    \ the user.\n      responses:\n        '200':\n          description: OK\n  /api/me:\n\
+    \    get:\n      summary: Retrieve information about the authenticated user.\n\
+    \      responses:\n        '200':\n          description: OK\n  /api/me/theme:\n\
+    \    put:\n      summary: Update the theme for the authenticated user.\n     \
+    \ responses:\n        '200':\n          description: OK\n  /api/my-teams:\n  \
+    \  get:\n      summary: Get the teams associated with the authenticated user.\n\
+    \      responses:\n        '200':\n          description: OK\n  /api/my-webhook:\n\
+    \    get:\n      summary: View the webhook and notification channels for the authenticated\
+    \ user.\n      responses:\n        '200':\n          description: OK\n    put:\n\
+    \      summary: Configure outgoing webhook and notifications for the authenticated\n\
+    \        user.\n      responses:\n        '200':\n          description: OK\n\
+    \    delete:\n      summary: Remove the webhook for the authenticated user.\n\
+    \      responses:\n        '200':\n          description: OK\n  /api/my-metrics:\n\
+    \    get:\n      summary: Get team-scoped audit counts and key statistics.\n \
+    \     responses:\n        '200':\n          description: OK\n  /api/my-metrics/prometheus:\n\
+    \    get:\n      summary: Get team-scoped Prometheus metrics.\n      responses:\n\
+    \        '200':\n          description: OK\n  /api/inbound/{team_id}:\n    post:\n\
+    \      summary: Inbound webhook receiver for CI/CD triggers.\n      responses:\n\
+    \        '200':\n          description: OK\n  /admin/api/ping:\n    get:\n   \
+    \   summary: Ping the admin API.\n      responses:\n        '200':\n         \
+    \ description: OK\n  /admin/api/settings:\n    get:\n      summary: Retrieve admin\
+    \ settings.\n      responses:\n        '200':\n          description: OK\n   \
+    \ put:\n      summary: Update admin settings.\n      responses:\n        '200':\n\
+    \          description: OK\n"

@@ -3,11 +3,11 @@ site_description: Vault-agnostic API broker with audit logging, built on FastAPI
 plugins:
 - techdocs-core
 nav:
-- Overview: index.md
+- Aegis Overview: index.md
 - Architecture: architecture.md
-- Configuration: configuration.md
 - Usage: usage.md
+- Configuration: configuration.md
 - Deployment: deployment.md
-- Secret Scanning: secret_scanning.md
-- Testing: testing.md
-- Contributing: contributing.md
+- Team Self-Service Model: self_service.md
+- Audit and Change Logging: audit_logging.md
+- Security Model: security_model.md

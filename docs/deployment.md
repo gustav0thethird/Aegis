@@ -1,97 +1,80 @@
 # Deployment
 
-## Local Deployment
+This document provides guidelines for deploying Aegis in various environments, specifically focusing on Kubernetes and AWS.
 
-To deploy Aegis locally, you can use Docker Compose. Follow these steps:
+## Kubernetes Deployment
 
-1. **Clone the Repository:**
+Aegis can be deployed on Kubernetes using Helm. The following steps outline the deployment process:
+
+1. **Install Helm**: Ensure that Helm is installed on your local machine. You can follow the [Helm installation guide](https://helm.sh/docs/intro/install/) for instructions.
+
+2. **Add Aegis Helm Repository**:
+   ```bash
+   helm repo add aegis https://github.com/gustav0thethird/Aegis
+   helm repo update
+   ```
+
+3. **Deploy Aegis**:
+   Use the following command to install Aegis:
+   ```bash
+   helm install aegis aegis/aegis
+   ```
+
+4. **Configuration**:
+   You can customize the deployment by providing a `values.yaml` file. This file can include configurations for environment variables, resource limits, and other settings specific to your deployment.
+
+5. **Accessing Aegis**:
+   After deployment, you can access Aegis through the service created by Helm. Use `kubectl get services` to find the external IP or service name.
+
+6. **Monitoring and Logging**:
+   Ensure that you have monitoring and logging set up for your Kubernetes cluster to track the performance and health of the Aegis deployment.
+
+## AWS Deployment
+
+Aegis can also be deployed on AWS using Terraform. The following steps outline the deployment process:
+
+1. **Prerequisites**:
+   - Ensure you have Terraform installed. Follow the [Terraform installation guide](https://www.terraform.io/downloads.html) for instructions.
+   - Configure your AWS credentials.
+
+2. **Clone the Repository**:
+   Clone the Aegis repository to your local machine:
    ```bash
    git clone https://github.com/gustav0thethird/Aegis.git
-   cd Aegis
+   cd Aegis/terraform
    ```
 
-2. **Create a `.env` File:**
-   Copy the `.env.example` to `.env` and modify the environment variables as needed.
+3. **Configure Variables**:
+   Edit the `variables.tf` file to set your AWS region, application name, and other necessary configurations.
 
-3. **Start the Services:**
-   Run the following command to start the services defined in `docker-compose.yml`:
-   ```bash
-   docker-compose up
-   ```
-
-4. **Access the Application:**
-   The application will be accessible at `http://localhost:8080`.
-
-## Cloud Deployment
-
-### Using Helm
-
-To deploy Aegis in a Kubernetes environment using Helm, follow these steps:
-
-1. **Install Helm:**
-   Ensure that you have Helm installed on your local machine.
-
-2. **Add the Aegis Helm Chart:**
-   Navigate to the directory containing the Helm chart and install it:
-   ```bash
-   helm install aegis ./helm
-   ```
-
-3. **Configure Values:**
-   You can customize the deployment by modifying the `values.yaml` file in the Helm chart directory. Key configurations include:
-   - `replicaCount`: Number of replicas for the application.
-   - `service.port`: Port for the service.
-   - `ingress.enabled`: Enable ingress for external access.
-
-4. **Run Migrations:**
-   If migrations are required, ensure that the migration job is executed:
-   ```bash
-   kubectl apply -f helm/templates/migration-job.yaml
-   ```
-
-5. **Access the Application:**
-   If ingress is enabled, access the application using the specified host.
-
-### Using Terraform
-
-To deploy Aegis using Terraform, follow these steps:
-
-1. **Install Terraform:**
-   Ensure that Terraform is installed on your local machine.
-
-2. **Configure Terraform Variables:**
-   Modify `terraform/variables.tf` to set up the necessary variables for your environment.
-
-3. **Initialize Terraform:**
+4. **Initialize Terraform**:
    Run the following command to initialize Terraform:
    ```bash
    terraform init
    ```
 
-4. **Apply the Configuration:**
-   Deploy the infrastructure by running:
+5. **Plan the Deployment**:
+   Generate an execution plan:
+   ```bash
+   terraform plan
+   ```
+
+6. **Apply the Deployment**:
+   Deploy Aegis to AWS:
    ```bash
    terraform apply
    ```
 
-5. **Access the Application:**
-   Similar to the Helm deployment, access the application using the configured endpoints.
+7. **Accessing Aegis**:
+   After deployment, you can access Aegis via the Application Load Balancer (ALB) created by Terraform. The ALB DNS name will be outputted after the `terraform apply` command completes.
 
-## Environment Variables
+8. **Monitoring and Logging**:
+   Ensure that you have AWS CloudWatch set up for monitoring logs and metrics related to the Aegis deployment.
 
-Ensure that the following environment variables are set for both local and cloud deployments:
+## Additional Considerations
 
-- `POSTGRES_DB`: Database name (default: `aegis`)
-- `POSTGRES_USER`: Database user (default: `broker`)
-- `POSTGRES_PASSWORD`: Database password (default: `changeme`)
-- `ADMIN_PASSWORD`: Admin password (default: `changeme`)
-- `SECRET_KEY`: Secret key for the application (default: `dev-secret-replace-in-prod`)
+- **Security**: Ensure that IAM roles and policies are correctly configured to allow Aegis to access necessary AWS resources, such as Secrets Manager and S3.
+- **Scaling**: Both Kubernetes and AWS deployments should be monitored for scaling needs based on the number of teams and secrets being managed.
+- **Backup and Recovery**: Implement a backup strategy for your Aegis deployment to ensure data integrity and availability.
 
-## Health Checks
-
-Aegis includes health checks to monitor the application status. Ensure that the health endpoints are accessible:
-
-- **Liveness Probe:** `/healthz`
-- **Readiness Probe:** `/readyz`
-
-These endpoints can be used to verify that the application is running correctly.
+By following these guidelines, you can successfully deploy Aegis in your chosen environment.
