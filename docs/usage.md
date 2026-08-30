@@ -1,14 +1,14 @@
 # Usage
 
-Aegis serves as a vendor-agnostic secrets broker and PAM gateway, allowing teams to manage their secrets securely and efficiently. This document provides instructions on how to use Aegis, including API calls and integration with CI/CD pipelines.
+Aegis provides a set of API endpoints for fetching secrets and managing team self-service functionalities. Below is a detailed guide on how to utilize these features effectively.
 
-## API Calls
+## API Endpoints
 
-### Authentication
+### Secrets Endpoint
 
-To interact with Aegis, you must authenticate using a scoped API key. Each team is assigned a unique API key that corresponds to a specific team-registry pair.
+The primary endpoint for retrieving secrets is `/secrets`. This endpoint allows authenticated teams to fetch their secrets based on their scoped API key.
 
-#### Example Request
+#### Request
 
 ```http
 GET /secrets
@@ -16,57 +16,86 @@ X-API-Key: sk_...
 X-Change-Number: CHG123
 ```
 
-### Secrets Endpoint
+#### Parameters
 
-The primary endpoint for fetching secrets is `/secrets`. When a request is made, Aegis performs the following actions:
+- **X-API-Key**: The API key assigned to the team.
+- **X-Change-Number**: An optional change number for tracking changes.
 
-1. Hashes the API key to look up the associated team and registry.
-2. Enforces policies based on the provided change number, IP address, and rate limits.
-3. Fetches the secrets from the appropriate upstream vault (e.g., CyberArk, HashiCorp Vault, AWS Secrets Manager).
-4. Writes an audit log detailing the request.
-5. Emits a SIEM event for monitoring.
+#### Response
+
+On a successful request, the response will contain the requested secrets in JSON format:
+
+```json
+{
+  "secret_name": "value"
+}
+```
+
+#### Error Handling
+
+If the API key is invalid or not provided, a `401 Unauthorized` error will be returned.
 
 ### User Self-Service API
 
-Teams can manage their own webhook subscriptions, notification channels, and CI/CD key rotations through the User Self-Service API. This allows for greater autonomy without needing to involve the security team.
+Aegis also provides endpoints for team self-service functionalities, allowing teams to manage their own webhooks, key rotations, and notifications.
 
-## CI/CD Integration
+#### Fetching Team Information
 
-Aegis can be integrated into CI/CD pipelines to automate key rotations and secret scanning. Below is an example of how to set up a GitHub Actions workflow for secret scanning.
+To retrieve information about the teams a user belongs to, use the following endpoint:
 
-### GitHub Actions Workflow
-
-To implement secret scanning in your repository, create a file named `.github/workflows/secret-scan.yml` and include the following configuration:
-
-```yaml
-name: Secret scan
-
-on:
-  push:
-    branches: [main]
-  pull_request:
-  schedule:
-    - cron: "0 3 * * 1"
-
-jobs:
-  secret-scan:
-    uses: gustav0thethird/Aegis/.github/workflows/secret-scan.yml@main
-    with:
-      aegis-url: https://aegis.example.com
-      team-id: 00000000-0000-0000-0000-000000000000
-      fail-on-findings: true
-    secrets:
-      aegis-token: ${{ secrets.AEGIS_TOKEN }}
+```http
+GET /api/my-teams
 ```
 
-### Setup Instructions
+#### Response
 
-1. **Enable Inbound Webhook**: In Aegis, enable the team's inbound webhook and copy its signing secret.
-2. **Add Repository Secret**: Add the signing secret as a repository secret named `AEGIS_TOKEN`.
-3. **Replace Team ID**: Update the `team-id` field with your team's UUID.
+This endpoint returns a JSON object containing details about the teams, including active keys and associated registries.
 
-By following these steps, your CI/CD pipeline will automatically trigger secret scans on code pushes and pull requests, ensuring that sensitive information is not inadvertently committed.
+```json
+{
+  "id": "team_id",
+  "name": "team_name",
+  "registries": [
+    {
+      "id": "registry_id",
+      "name": "registry_name",
+      "objects": ["object1", "object2"],
+      "key_preview": "key_preview",
+      "expires_at": "expiration_date"
+    }
+  ],
+  "objects": [
+    {
+      "name": "object_name",
+      "vendor": "vendor_name",
+      "path": "object_path",
+      "platform": "platform_name",
+      "safe": "safe_name"
+    }
+  ]
+}
+```
+
+#### Error Handling
+
+If the user is an admin, a `400 Bad Request` error will be returned, as admins should use the admin API.
+
+## Team Self-Service Functionalities
+
+Teams can self-manage various functionalities through their dashboard, including:
+
+- **Webhook Subscriptions**: Teams can create and manage webhooks for notifications.
+- **Key Rotation**: Teams can trigger key rotations without requiring admin intervention.
+- **Notification Channels**: Teams can configure their preferred notification channels (e.g., Slack, Teams, Discord).
+
+### Managing Webhooks
+
+To manage webhooks, teams can use the relevant endpoints provided in the self-service API. This allows teams to subscribe to events and receive notifications based on their configurations.
+
+### Key Rotation
+
+Key rotations can be triggered directly through CI/CD pipelines using auto-generated inbound webhook URLs. This enables teams to maintain security without needing to involve the security team for every rotation.
 
 ## Conclusion
 
-Aegis provides a robust framework for managing secrets across multiple vendors while allowing teams to operate independently. By utilizing the API and integrating with CI/CD pipelines, organizations can enhance their security posture and streamline operations.
+Aegis provides a robust API for managing secrets and team functionalities. By utilizing the `/secrets` endpoint and the self-service API, teams can efficiently handle their secret management needs while maintaining security and compliance.

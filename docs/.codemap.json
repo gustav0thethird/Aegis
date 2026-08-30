@@ -29,7 +29,7 @@
   },
   ".gitleaks.toml": {
     "sha": "e717b54d52fa",
-    "summary": "Defines the configuration for Gitleaks to scan for sensitive information in the repository."
+    "summary": "Defines Gitleaks configuration to scan for sensitive information in the repository."
   },
   "Dockerfile": {
     "sha": "34eb707a3878",
@@ -37,19 +37,19 @@
   },
   "Makefile": {
     "sha": "7b5611372129",
-    "summary": "Facilitates project management tasks such as building, running, and managing Docker containers."
+    "summary": "Provides a set of commands to manage the development and production environments for the project."
   },
   "aegis/__init__.py": {
     "sha": "da39a3ee5e6b",
-    "summary": "Initializes the Aegis package, potentially setting up module-level variables or configurations."
+    "summary": "Initializes the Aegis package, potentially setting up necessary configurations."
   },
   "aegis/alerting.py": {
     "sha": "b4e1d46494cf",
-    "summary": "Handles alerting mechanisms for detected secrets in source code, notifying teams through various channels."
+    "summary": "Handles alerting mechanisms when secrets are detected in source code."
   },
   "aegis/api.py": {
     "sha": "54572f3dd03d",
-    "summary": "Defines the FastAPI service for Aegis, including endpoints for user authentication, admin functions, and UI navigation."
+    "summary": "Defines the FastAPI service for Aegis, including user authentication, admin functionalities, and API endpoints."
   },
   "aegis/broker.py": {
     "sha": "150f3192a241",
@@ -89,7 +89,7 @@
   },
   "aegis/routers/admin_core.py": {
     "sha": "1a3535bfca2b",
-    "summary": "Provides admin API endpoints for pinging the server and managing objects and registries."
+    "summary": "Provides API endpoints for admin functionalities like pinging and managing objects."
   },
   "aegis/routers/admin_logs.py": {
     "sha": "2d21534ce447",
@@ -97,27 +97,27 @@
   },
   "aegis/routers/admin_teams.py": {
     "sha": "ec9950bcf05c",
-    "summary": "Handles API endpoints for managing admin teams, including listing, creating, and deleting teams."
+    "summary": "Handles admin operations for managing teams, including listing, creating, and deleting teams."
   },
   "aegis/routers/admin_users.py": {
     "sha": "b4bd3e709bf2",
-    "summary": "Manages API endpoints for admin users, including listing, creating, and updating user accounts."
+    "summary": "Manages admin operations for user accounts, including listing, creating, and updating users."
   },
   "aegis/routers/admin_webhooks.py": {
     "sha": "c9224c50b091",
-    "summary": "Provides API endpoints for configuring and managing webhooks for admin teams."
+    "summary": "Facilitates the configuration and management of webhooks for admin teams."
   },
   "aegis/routers/eso.py": {
     "sha": "6096183bda30",
-    "summary": "Implements API endpoints for the External Secrets Operator to fetch secrets securely."
+    "summary": "Provides endpoints for the External Secrets Operator to access secrets securely."
   },
   "aegis/routers/health.py": {
     "sha": "60d92c553340",
-    "summary": "Offers health check endpoints for liveness, readiness, and dependency status of the application."
+    "summary": "Implements health check endpoints for liveness and readiness of the application."
   },
   "aegis/routers/metrics.py": {
     "sha": "722569505c0e",
-    "summary": "Exposes Prometheus metrics for monitoring application performance and usage statistics."
+    "summary": "Exposes Prometheus metrics for monitoring application performance and usage."
   },
   "aegis/routers/scanning.py": {
     "sha": "632da038508d",
@@ -133,11 +133,11 @@
   },
   "aegis/routers/session.py": {
     "sha": "ff83bb001d29",
-    "summary": "Manages user session authentication, including login, logout, and session information retrieval."
+    "summary": "Manages session authentication, including login, logout, and user information retrieval."
   },
   "aegis/routers/ui.py": {
     "sha": "dc68d54484dc",
-    "summary": "Serves static HTML files for the admin user interface and related routes."
+    "summary": "Serves static files for the admin user interface, including login and dashboard pages."
   },
   "aegis/scanning.py": {
     "sha": "7aa3ed1c9556",
@@ -145,15 +145,15 @@
   },
   "aegis/scheduler.py": {
     "sha": "758dce29dda8",
-    "summary": "Contains background job definitions for managing key expiry and rotation in Aegis."
+    "summary": "Contains background job definitions for managing key expiry and rotation using APScheduler."
   },
   "aegis/secret_cache.py": {
     "sha": "e3ed3a7b292b",
-    "summary": "Implements a short-lived in-process cache for storing brokered secret fetches to reduce load on upstream vaults."
+    "summary": "Implements a short-lived in-process cache for brokered secret fetches to reduce load on upstream vaults."
   },
   "aegis/siem.py": {
     "sha": "977108c1326a",
-    "summary": "Provides configurable log adapters for sending events to various logging destinations like stdout, Splunk, S3, and Datadog."
+    "summary": "Provides configurable log adapters for sending events to various destinations like stdout, Splunk, S3, and Datadog."
   },
   "aegis/url_guard.py": {
     "sha": "8a55516bcdc2",
@@ -161,19 +161,19 @@
   },
   "aegis/webhook.py": {
     "sha": "4f99c465e2aa",
-    "summary": "Handles HTTP webhook delivery and notifications for various events related to key management and policy violations."
+    "summary": "Handles HTTP webhook delivery and notifications for various events related to key management."
   },
   "alembic.ini": {
     "sha": "bc3b8b27b413",
-    "summary": "Configuration file for Alembic, specifying database connection details and logging settings."
+    "summary": "Configuration file for Alembic, specifying database connection and logging settings."
   },
   "alembic/env.py": {
     "sha": "0ff9f3c217e8",
-    "summary": "Configures and runs database migrations using Alembic."
+    "summary": "Configures and runs database migrations using Alembic, setting up the connection and target metadata."
   },
   "alembic/versions/001_initial_schema.py": {
     "sha": "2a0ab0e15729",
-    "summary": "Creates the initial database schema with tables for objects, registries, and teams."
+    "summary": "Defines the initial database schema, creating tables for objects, registries, and their relationships."
   },
   "alembic/versions/002_change_log.py": {
     "sha": "bbb324b0a486",
@@ -181,19 +181,19 @@
   },
   "alembic/versions/003_users_settings.py": {
     "sha": "1e39b8553a32",
-    "summary": "Introduces users and settings tables, including seeding default settings."
+    "summary": "Creates users and settings tables, including seeding default settings for the application."
   },
   "alembic/versions/004_changelog_diff.py": {
     "sha": "e619a6c8fa7f",
-    "summary": "Adds a diff column to the change_log table to store structured change data."
+    "summary": "Adds a diff column to the change_log table to store structured before/after change data."
   },
   "alembic/versions/005_team_registry_keys.py": {
     "sha": "a138050cb0a2",
-    "summary": "Moves API keys to team-registry assignments and updates the audit_log to track team information."
+    "summary": "Moves API keys from registries to team-registry assignments, enhancing traceability and modifying the audit_log."
   },
   "alembic/versions/006_policies_webhooks_key_expiry.py": {
     "sha": "5a611856c5ce",
-    "summary": "This file adds tables for policies, webhooks, and webhook logs, including their respective columns and indexes to manage key expiry and webhook events."
+    "summary": "This file adds tables for policies, webhooks, and webhook logs, including their respective columns and indexes, to manage key expiry and webhook events."
   },
   "alembic/versions/007_webhook_optional_signing.py": {
     "sha": "49efff816c62",
@@ -213,31 +213,31 @@
   },
   "alembic/versions/011_scan_findings.py": {
     "sha": "b5145f31c8c2",
-    "summary": "This file introduces tables for scan runs and scan findings to store results from secret-scanning processes, including relevant metadata and findings."
+    "summary": "This file creates tables for scan runs and scan findings to store results from secret scanning processes, including relevant metadata and findings."
   },
   "argocd/app-of-apps.yaml": {
     "sha": "c9135c4a5a59",
-    "summary": "Defines the root application for Argo CD, which manages multiple Aegis applications across different environments."
+    "summary": "Defines the root Argo CD application that manages multiple Aegis applications across different environments."
   },
   "argocd/application.yaml": {
     "sha": "4b5fd38500a3",
-    "summary": "Specifies an Argo CD application for deploying a single Aegis environment with configuration values and sync policies."
+    "summary": "Specifies an Argo CD application for deploying a single Aegis environment with configuration values."
   },
   "catalog-info.yaml": {
-    "sha": "840149793393",
-    "summary": "Contains metadata about the Aegis component, including its description, owner, and relevant links for documentation."
+    "sha": "9c52b9bd2118",
+    "summary": "Contains metadata and API specifications for the Aegis service, detailing its capabilities and providing links to documentation."
   },
   "docker-compose.prod.yml": {
     "sha": "1c72b50249c5",
-    "summary": "Defines the production environment for Aegis, including services like PostgreSQL, Redis, and the Aegis broker with their configurations."
+    "summary": "Defines the production environment services for Aegis, including PostgreSQL, Redis, and the broker, with health checks and resource limits."
   },
   "docker-compose.yml": {
     "sha": "acb6a74eabd1",
-    "summary": "Sets up a development environment for Aegis with services like PostgreSQL, Redis, and the broker, including health checks and environment variables."
+    "summary": "Sets up the development environment services for Aegis, including PostgreSQL and Redis, with default configurations and health checks."
   },
   "docker-entrypoint.sh": {
     "sha": "315f8a9e0662",
-    "summary": "Handles database migrations during container startup, allowing for opt-out migration behavior based on the RUN_MIGRATIONS environment variable."
+    "summary": "Handles database migrations during container startup, allowing for opt-out migration behavior based on environment variables."
   },
   "examples/ci/github-actions-secret-scan.yml": {
     "sha": "4c6255d10d8e",
@@ -245,7 +245,7 @@
   },
   "examples/ci/gitleaks.toml": {
     "sha": "92105325e5c7",
-    "summary": "This file contains optional configuration for Gitleaks, specifying rules and allowlists for detecting sensitive information in the codebase."
+    "summary": "This file contains optional configuration for Gitleaks, specifying rules and allowlists for detecting sensitive information in the repository."
   },
   "examples/ci/pre-commit-config.yaml": {
     "sha": "df069043a8ea",
@@ -253,7 +253,7 @@
   },
   "examples/eso/clustersecretstore.yaml": {
     "sha": "d6bbf40041a9",
-    "summary": "This file defines a ClusterSecretStore that connects to Aegis to securely manage and audit secret retrieval for workloads."
+    "summary": "This file defines a ClusterSecretStore that connects to Aegis, allowing workloads to securely fetch secrets without holding credentials."
   },
   "examples/eso/externalsecret-extract-all.yaml": {
     "sha": "e62e6a8d0e63",
@@ -261,39 +261,39 @@
   },
   "examples/eso/externalsecret.yaml": {
     "sha": "fa137eb5b048",
-    "summary": "This file defines an ExternalSecret that retrieves individual secrets by name from Aegis, ensuring access control and auditing."
+    "summary": "This file defines an ExternalSecret that retrieves individual secrets by name from Aegis, ensuring secure access to sensitive data."
   },
   "helm/Chart.yaml": {
     "sha": "b50c785c67ec",
-    "summary": "Defines the metadata and versioning for the Aegis Helm chart."
+    "summary": "Defines the Helm chart metadata for the Aegis application, including its name, version, and description."
   },
   "helm/templates/configmap.yaml": {
     "sha": "ab139f0f0d43",
-    "summary": "Creates a ConfigMap to store application configuration settings for Aegis."
+    "summary": "Creates a ConfigMap for storing configuration data used by the Aegis application."
   },
   "helm/templates/deployment.yaml": {
     "sha": "c3abdbe025f6",
-    "summary": "Specifies the Deployment resource for running Aegis pods in the Kubernetes cluster."
+    "summary": "Specifies the Deployment resource for the Aegis application, managing its pods and container specifications."
   },
   "helm/templates/eso-clustersecretstore.yaml": {
     "sha": "2958ee16f25f",
-    "summary": "Generates a ClusterSecretStore for integrating Aegis with the External Secrets Operator to manage secrets."
+    "summary": "Generates a ClusterSecretStore resource for integrating with the External Secrets Operator to manage secrets."
   },
   "helm/templates/hpa.yaml": {
     "sha": "32634dffaff1",
-    "summary": "Defines a Horizontal Pod Autoscaler to automatically scale Aegis pods based on CPU utilization."
+    "summary": "Defines a Horizontal Pod Autoscaler to automatically scale the Aegis deployment based on CPU utilization."
   },
   "helm/templates/ingress.yaml": {
     "sha": "8d40d54926d1",
-    "summary": "Configures an Ingress resource to manage external access to the Aegis service."
+    "summary": "Creates an Ingress resource to manage external access to the Aegis application via HTTP."
   },
   "helm/templates/migration-job.yaml": {
     "sha": "9f83fcf4acf7",
-    "summary": "Defines a Kubernetes Job to run database migrations before new pods are rolled out, ensuring migrations do not conflict with multiple replicas."
+    "summary": "Defines a Kubernetes Job for running database migrations before new pods are rolled out."
   },
   "helm/templates/networkpolicy.yaml": {
     "sha": "a13fb71574ff",
-    "summary": "Creates a NetworkPolicy to control ingress and egress traffic for pods, enhancing security by restricting network access."
+    "summary": "Creates a NetworkPolicy to control ingress and egress traffic for the application pods."
   },
   "helm/templates/poddisruptionbudget.yaml": {
     "sha": "209c6f4cf19b",
@@ -301,15 +301,15 @@
   },
   "helm/templates/secret.yaml": {
     "sha": "401d04014895",
-    "summary": "Generates a Kubernetes Secret to store sensitive information like database URLs and passwords, with a focus on development convenience."
+    "summary": "Generates a Kubernetes Secret containing sensitive information required by the application, if not using an existing secret."
   },
   "helm/templates/service.yaml": {
     "sha": "89b92418667a",
-    "summary": "Defines a Kubernetes Service to expose the application, specifying the service type and port configuration."
+    "summary": "Defines a Kubernetes Service to expose the application, specifying its type and port configuration."
   },
   "helm/templates/serviceaccount.yaml": {
     "sha": "84f0a3a9cd06",
-    "summary": "Creates a ServiceAccount for the application, allowing it to interact with the Kubernetes API while controlling token access."
+    "summary": "Creates a ServiceAccount for the application, allowing it to interact with the Kubernetes API."
   },
   "helm/templates/servicemonitor.yaml": {
     "sha": "d5a3329411fb",
@@ -320,24 +320,24 @@
     "summary": "Contains default configuration values for the Aegis Helm chart, including settings for replicas, image, service, and security."
   },
   "mkdocs.yml": {
-    "sha": "6407875ff5b7",
+    "sha": "318c95f9b794",
     "summary": "Configures the documentation site for Aegis, specifying the site name, description, and navigation structure."
   },
   "requirements.txt": {
     "sha": "91906942283d",
-    "summary": "Lists the Python package dependencies required for the Aegis project, specifying exact versions for consistency."
+    "summary": "Lists the Python package dependencies required for the Aegis project, specifying exact versions for each package."
   },
   "ruff.toml": {
     "sha": "08c472ddfee4",
-    "summary": "Configures the Ruff linter settings for the project, specifying which linting rules to apply and ignoring certain rules in tests."
+    "summary": "Configures the Ruff linter settings, specifying which linting rules to apply and ignoring certain rules for test files."
   },
   "terraform/alb.tf": {
     "sha": "25081fa19c46",
-    "summary": "Defines the AWS infrastructure for an Application Load Balancer, including target groups and listeners for HTTP and HTTPS traffic."
+    "summary": "Defines AWS resources for an Application Load Balancer, including the load balancer, target group, and listener configurations."
   },
   "terraform/ecs.tf": {
     "sha": "e5c305774643",
-    "summary": "Defines the ECS cluster, task definition, and service for deploying the broker application using AWS Fargate."
+    "summary": "Defines the ECS cluster, task definition, and service for the application, including container configurations and networking."
   },
   "terraform/iam.tf": {
     "sha": "38090653e304",
@@ -349,7 +349,7 @@
   },
   "terraform/outputs.tf": {
     "sha": "142819ec57f6",
-    "summary": "Defines output variables for important resources like ALB DNS name, ECR repository URL, and RDS cluster endpoint."
+    "summary": "Specifies output values for key resources such as ALB DNS name, ECR repository URL, and RDS cluster endpoint."
   },
   "terraform/rds.tf": {
     "sha": "6037295f6ebb",
@@ -357,7 +357,7 @@
   },
   "terraform/redis.tf": {
     "sha": "c06900af9b40",
-    "summary": "Sets up an ElastiCache Redis replication group for caching and rate-limiting, including security and authentication configurations."
+    "summary": "Sets up an ElastiCache Redis replication group for caching and session management, including security and authentication."
   },
   "terraform/secrets.tf": {
     "sha": "72ec3e1df7d4",
@@ -373,7 +373,7 @@
   },
   "tests/__init__.py": {
     "sha": "da39a3ee5e6b",
-    "summary": "This file marks the tests directory as a Python package, allowing for structured testing of the project."
+    "summary": "This file marks the tests directory as a Python package, allowing for structured testing."
   },
   "tests/conftest.py": {
     "sha": "25f9651bb908",
@@ -381,31 +381,31 @@
   },
   "tests/test_admin_auth.py": {
     "sha": "9e6239f46e15",
-    "summary": "This file contains integration tests for admin authentication, verifying that the authentication mechanism works correctly with various scenarios."
+    "summary": "This file contains integration tests for admin authentication, verifying that the authentication mechanism correctly handles valid and invalid credentials."
   },
   "tests/test_alerting.py": {
     "sha": "06268e3caa33",
-    "summary": "Contains unit tests for alerting functionality, ensuring alerts are correctly processed and reported."
+    "summary": "Contains unit tests for alerting functionality, ensuring alerts are correctly processed and do not duplicate notifications."
   },
   "tests/test_broker.py": {
     "sha": "f1fb4a7ca7ce",
-    "summary": "Includes unit tests for authentication configuration lookup and vendor routing in the broker module."
+    "summary": "Includes unit tests for authentication configuration lookup and vendor routing, verifying that secrets are fetched correctly from various sources."
   },
   "tests/test_eso.py": {
     "sha": "90c319f5ead3",
-    "summary": "Houses integration tests for the External Secrets Operator provider endpoints, ensuring they enforce security policies."
+    "summary": "Houses integration tests for the External Secrets Operator provider endpoints, ensuring they enforce authentication and policy correctly."
   },
   "tests/test_imports.py": {
     "sha": "82c361249b64",
-    "summary": "Checks for unqualified intra-package imports to prevent import errors in the aegis package."
+    "summary": "Tests for unqualified intra-package imports to prevent import errors that could occur at runtime."
   },
   "tests/test_inbound_webhook.py": {
     "sha": "ab4573e02b4a",
-    "summary": "Tests the inbound webhook receiver to ensure key rotation actions conform to expected formats."
+    "summary": "Contains integration tests for the inbound webhook receiver, focusing on key rotation and ensuring consistent key formats."
   },
   "tests/test_key_expiry.py": {
     "sha": "0bca263ef15c",
-    "summary": "Validates API key expiry functionality, ensuring expired keys are rejected and auditing is performed."
+    "summary": "Includes integration tests for API key expiry, verifying that expired keys are rejected and auditing is performed correctly."
   },
   "tests/test_policy.py": {
     "sha": "8c8fbb0c05f1",
@@ -413,23 +413,23 @@
   },
   "tests/test_rate_limit.py": {
     "sha": "173fd143bb3b",
-    "summary": "Includes unit tests for the Redis sliding-window rate limiter using FakeRedis, verifying rate limiting functionality without a real Redis instance."
+    "summary": "Includes unit tests for the Redis sliding-window rate limiter using FakeRedis to simulate Redis functionality without a real connection."
   },
   "tests/test_scan_ingest.py": {
     "sha": "11f0e91bb288",
-    "summary": "Houses integration tests for scan ingest, triage, and alerting, requiring a PostgreSQL database and validating the ingestion process with authentication."
+    "summary": "Houses integration tests for scan ingest, triage, and alerting, requiring a PostgreSQL database and validating authentication and data processing."
   },
   "tests/test_scanning.py": {
     "sha": "8b27518dcdcb",
-    "summary": "Contains unit tests for secret-scanner output normalization, ensuring that sensitive information is not retained in findings."
+    "summary": "Contains unit tests for secret-scanner output normalization, ensuring sensitive information is not retained in findings."
   },
   "tests/test_secret_cache.py": {
     "sha": "237479a6a2a0",
-    "summary": "Tests the behavior of a short-lived brokered-secret cache, ensuring it operates correctly and securely with respect to team-specific entries."
+    "summary": "Tests the behavior of a short-lived brokered-secret cache, verifying its functionality and security properties."
   },
   "tests/test_secrets.py": {
     "sha": "c2a7189afb42",
-    "summary": "Integration tests for the GET /secrets endpoint, validating the fetching of secrets with various authentication scenarios."
+    "summary": "Integration tests for the GET /secrets endpoint, validating access control and secret retrieval from a PostgreSQL database."
   },
   "tests/test_url_guard.py": {
     "sha": "7e4587c30f97",
@@ -437,6 +437,6 @@
   },
   "tests/test_url_pinning.py": {
     "sha": "f05fe872d9c1",
-    "summary": "Tests the DNS-pinned outbound requests to ensure secure hostname validation against potential DNS attacks."
+    "summary": "Tests DNS-pinned outbound requests to ensure secure hostname validation against potential DNS spoofing attacks."
   }
 }
