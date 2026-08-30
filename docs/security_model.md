@@ -1,27 +1,40 @@
 # Security Model
 
-Aegis implements a robust security model designed to manage access to secrets while ensuring accountability and traceability. This model encompasses API key management and access control mechanisms that facilitate secure interactions between applications and secrets storage.
+## Overview
 
-## API Key Management
+The security model implemented in Aegis focuses on robust authentication, authorization, and protection mechanisms to ensure secure access to secrets. Aegis serves as a vendor-agnostic secrets broker and PAM gateway, allowing teams to manage their own access to secrets while maintaining strict security controls.
 
-Aegis utilizes scoped API keys to authenticate teams. Each team is assigned a unique API key that is tied to a specific team-registry pair. This design ensures that:
+## Authentication
 
-- **Isolation of Access**: If Team A and Team B need access to the same registry, they will use different API keys. This isolation means that if one key is compromised, only the affected team’s access needs to be rotated, leaving the other team unaffected.
-- **Key Generation and Hashing**: API keys are generated using a secure method and are never stored in plaintext. Instead, Aegis hashes the keys using SHA-256 before storing them, ensuring that even if the database is compromised, the keys remain secure.
-- **Key Preview**: Aegis provides a short display form of the keys for use in user interfaces and audit records, which helps maintain usability without compromising security.
+Aegis employs a session-based authentication mechanism. Users authenticate by providing a username and password, which are verified against stored credentials. Upon successful authentication, a session token is generated, allowing users to interact with the Aegis API securely.
 
-The key management functionality is implemented in the `aegis/keys.py` file, which handles the generation, hashing, and formatting of API keys.
+- **Login Endpoint**: Users can log in via the `/api/login` endpoint, which validates credentials and returns a session token.
+- **Logout Endpoint**: Users can log out via the `/api/logout` endpoint, which invalidates the session token.
+- **User Information Retrieval**: The `/api/me` endpoint allows users to retrieve their profile information, including roles and team memberships, using the session token.
 
-## Access Control
+## Authorization
 
-Access control in Aegis is enforced through a combination of policies and team configurations:
+Authorization in Aegis is managed through scoped API keys. Each team is assigned a unique API key that is tied to specific registries. This ensures that teams can only access the secrets they are authorized to see.
 
-- **Scoped Access**: Each API key is scoped to a specific team and registry, ensuring that teams can only access the secrets they are authorized to see. This scoped access is a fundamental aspect of Aegis's security model, allowing for fine-grained control over secret retrieval.
-- **Policy Enforcement**: Aegis enforces various policies during API requests, including checks for change numbers, IP addresses, and rate limits. These policies are configurable and can be adjusted by administrators through the admin panel.
-- **Audit Logging**: Every action taken through the Aegis API is logged with detailed information, including the team identity, registry accessed, objects fetched, source IP, and change number. This immutable logging provides a comprehensive audit trail that can be used for compliance and security reviews.
+- **Scoped API Keys**: Each API key is scoped to a specific team-registry pair, limiting access to secrets based on team membership.
+- **Multi-Team Membership**: Users can belong to multiple teams, and authorization checks are performed to ensure that access is granted only to the appropriate secrets.
 
-The access control mechanisms are managed through the `aegis/routers/admin_config.py` file, which allows administrators to define and update settings and policies.
+## Protection Mechanisms
 
-## Conclusion
+Aegis implements several protection mechanisms to safeguard against unauthorized access and potential attacks:
 
-The security model of Aegis is designed to provide a secure, auditable, and manageable way for teams to access secrets across various vaults. With scoped API keys, stringent access controls, and comprehensive logging, Aegis ensures that sensitive information is protected while allowing teams the flexibility to manage their own access and configurations.
+1. **Session Management**: Sessions are created with a time-to-live (TTL) to limit the duration of access. Tokens are invalidated upon logout or expiration.
+  
+2. **Rate Limiting**: Aegis includes rate limiting to prevent abuse of the API and to mitigate denial-of-service attacks.
+
+3. **Webhook Security**: Aegis validates user-supplied outbound URLs to prevent Server-Side Request Forgery (SSRF) attacks. The validation process ensures that only allowed schemes and hosts are accepted for webhook notifications.
+
+4. **Audit Logging**: Every action taken within Aegis is logged, including API requests, secret fetches, and configuration changes. This logging includes details such as team identity, registry accessed, and source IP, ensuring full accountability and traceability.
+
+5. **Change Management**: Aegis enforces policies around change management, requiring change numbers and validating requests based on time windows and IP addresses.
+
+6. **Immutable Logs**: All logs are immutable, providing a reliable audit trail for security reviews and compliance purposes.
+
+7. **SIEM Integration**: Aegis can emit events to Security Information and Event Management (SIEM) systems for real-time monitoring and alerting.
+
+By combining these authentication, authorization, and protection mechanisms, Aegis ensures a secure environment for managing sensitive secrets across multiple teams and registries.

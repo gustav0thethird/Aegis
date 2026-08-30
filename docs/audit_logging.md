@@ -1,57 +1,65 @@
 # Audit and Change Logging
 
-Aegis provides comprehensive audit logging features that ensure every action taken within the system is logged, attributed, and queryable. This functionality is crucial for maintaining security and compliance, allowing teams to monitor and review changes effectively.
+Aegis provides comprehensive audit logging features that ensure every action taken within the system is recorded, attributed, and can be queried. This functionality is crucial for maintaining security and compliance in managing sensitive secrets.
 
-## Overview
+## Logging Features
 
-Aegis logs every interaction with the secrets infrastructure, capturing essential details about each action. This includes:
+### Immutable Logs
+Every action performed through Aegis is logged in an immutable format. This includes:
 
-- **Team Identity**: The team that initiated the action.
-- **Registry Accessed**: The specific secrets registry from which secrets were fetched.
-- **Objects Fetched**: A list of the secrets that were accessed.
+- Fetching secrets
+- Rotating keys
+- Making configuration changes
+
+Each log entry contains structured before-and-after diffs, allowing for clear visibility into what changes were made.
+
+### Logged Information
+The logs capture essential details for each action, including:
+
+- **Team Identity**: The team that performed the action.
+- **Registry Accessed**: The specific secrets registry that was accessed.
+- **Objects Fetched**: A list of the secrets or objects that were retrieved.
 - **Source IP**: The IP address from which the request originated.
-- **Change Number**: An identifier for tracking changes associated with IT Service Management (ITSM).
+- **Change Number**: An ITSM change number associated with the action.
 
-These logs are immutable and structured, providing before-and-after diffs for configuration changes, which enhances traceability and accountability.
+This level of detail ensures that there is no way to fetch a secret without leaving a trace, enhancing accountability and traceability.
 
-## Logging Mechanisms
+## Querying Logs
 
-### Audit Logs
+Aegis provides an API for querying both change logs and audit logs, allowing administrators to filter and paginate through log entries.
 
-Audit logs capture detailed records of actions performed within Aegis. Each entry includes:
+### Change Log API
+The change log can be accessed via the following endpoint:
 
-- **Timestamp**: When the action occurred.
-- **Action**: The specific operation performed (e.g., fetch, rotate).
-- **Entity Type**: The type of entity affected (e.g., secret, configuration).
-- **Entity ID**: The unique identifier of the entity.
-- **Performed By**: The user or system that executed the action.
-- **Outcome**: The result of the action (success or failure).
+```
+GET /admin/api/changelog
+```
 
-These logs can be accessed through the admin API, allowing administrators to filter and paginate through entries based on various criteria.
+#### Query Parameters
+- `page`: The page number for pagination (default is 1).
+- `limit`: The number of entries per page (default is 50).
+- `entity_type`: Filter by the type of entity changed.
+- `entity_id`: Filter by the specific entity ID.
+- `action`: Filter by the action performed.
 
-### Change Logs
+The response includes the total number of entries, the current page, and the rows of log entries.
 
-Change logs track modifications made to the configuration and settings within Aegis. Each log entry includes:
+### Audit Log API
+The audit log can be accessed via the following endpoint:
 
-- **Action**: The type of change made (e.g., update, delete).
-- **Entity Type**: The type of entity that was changed.
-- **Entity ID**: The unique identifier of the changed entity.
-- **Detail**: A description of the change.
-- **Diff**: The differences before and after the change.
+```
+GET /admin/api/audit
+```
 
-Similar to audit logs, change logs are accessible via the admin API, enabling administrators to review changes over time and maintain an accurate history of modifications.
+#### Query Parameters
+- `page`: The page number for pagination (default is 1).
+- `limit`: The number of entries per page (default is 50).
+- `registry_id`: Filter by the specific registry ID.
+- `change_number`: Filter by the change number associated with the action.
+- `outcome`: Filter by the outcome of the action.
 
-## Accessing Logs
+Similar to the change log, the audit log response provides pagination details and the relevant log entries.
 
-Logs can be accessed through the following endpoints in the Aegis admin API:
+## Conclusion
 
-- **Audit Log**: `/admin/api/audit`
-- **Change Log**: `/admin/api/changelog`
-
-Both endpoints support pagination and filtering options, allowing users to retrieve specific log entries based on parameters such as entity type, entity ID, action, and more.
-
-## Security and Compliance
-
-The logging features in Aegis are designed to support security and compliance requirements. By maintaining a detailed record of all actions, organizations can ensure accountability and facilitate audits. The structured nature of the logs allows for easy integration with Security Information and Event Management (SIEM) systems, enhancing the overall security posture of the organization.
-
-In summary, Aegis's audit and change logging capabilities provide a robust framework for monitoring actions, ensuring compliance, and maintaining security across the secrets management lifecycle.
+The audit logging features of Aegis are designed to provide a robust framework for tracking and managing actions related to secret management. By ensuring that every action is logged with detailed attribution, Aegis enhances security and compliance, making it easier for teams to manage their secrets responsibly.

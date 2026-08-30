@@ -1,59 +1,52 @@
 # Architecture
 
-## Overview
-
-Aegis is designed as a vendor-agnostic secrets broker and PAM (Privileged Access Management) gateway. It acts as an intermediary between applications and various secrets management systems, allowing teams to manage their secrets securely and efficiently. The architecture is built to support scalability and ease of use, enabling teams to self-manage their secret access without needing to involve a central security team for routine operations.
+Aegis is designed as a vendor-agnostic secrets broker and PAM (Privileged Access Management) gateway, facilitating secure access to secrets stored across various vaults. The architecture comprises several key components that interact to manage secrets effectively.
 
 ## Components
 
 ### Applications
-
-The architecture includes various applications that interact with Aegis:
-
-- **App / Pipeline**: These are the applications or CI/CD pipelines that request secrets from Aegis.
-- **CI Runner**: This component triggers key rotations and other automated tasks.
+- **Applications**: These include any client applications or CI/CD pipelines that interact with Aegis to retrieve secrets.
 - **Service Mesh**: Facilitates communication between microservices and Aegis.
 
-### Aegis
+### Aegis Core
+- **FastAPI Service**: The core of Aegis is built using FastAPI, which handles incoming requests and routes them to appropriate handlers.
+- **API Endpoints**:
+  - `GET /secrets`: Main endpoint for fetching secrets, requiring an API key and change number.
+  - Authentication endpoints for user sessions and self-service functionalities.
+  
+### Rate Limiter
+- **Rate Limiter**: Ensures that requests to the Aegis service are controlled to prevent abuse and manage load effectively.
 
-Aegis itself is built using FastAPI and Python, and consists of several key components:
+### Authentication
+- **Key Authentication**: Each request to Aegis must include a scoped API key that identifies the team and registry, ensuring that only authorized requests are processed.
 
-- **API Gateway**: Handles incoming requests for secrets and other operations.
-- **Rate Limiter**: Controls the rate of incoming requests to prevent abuse.
-- **Authentication Module**: Validates API keys and manages user sessions.
-- **Broker**: Responsible for fetching secrets from various upstream vaults based on the requests it receives.
-- **Logging and Auditing**: Maintains an immutable log of all actions taken, including secret fetches, rotations, and configuration changes.
+### Broker
+- **Secrets Broker**: The `broker.py` component fetches secrets from various upstream vaults by grouping objects by vendor and acquiring necessary authentication sessions. It supports multiple vaults, including CyberArk, HashiCorp Vault, AWS Secrets Manager, and Conjur.
 
-### Upstream Vaults
+### Database
+- **Database Layer**: Utilizes SQLAlchemy for ORM, managing the storage of secrets, registries, teams, and access control policies. The database schema includes:
+  - **Objects**: Definitions of secrets, including vendor and location.
+  - **Registries**: Collections of objects.
+  - **Teams**: Metadata for team management.
+  - **Policies**: Access control rules governing secret retrieval.
 
-Aegis interacts with multiple upstream vaults, including:
+### Logging and Auditing
+- **Audit Logging**: Every action taken through Aegis is logged, capturing details such as team identity, registry accessed, and the specific secrets fetched. This immutable log supports compliance and security auditing.
 
-- **CyberArk**
-- **HashiCorp Vault**
-- **AWS Secrets Manager**
-- **Conjur**
+### Webhooks and Notifications
+- **Webhook Configuration**: Teams can configure their own webhooks for notifications and CI/CD integrations, allowing for automated key rotations and alerts without needing security team intervention.
 
-These vaults store the actual secrets that Aegis retrieves based on the requests it receives.
+### Metrics and Monitoring
+- **Metrics Collection**: Aegis provides team-scoped metrics for monitoring usage and performance, which can be integrated with systems like Prometheus for visualization.
 
 ## Interaction Flow
 
-1. **Request Handling**: Applications send requests to Aegis using the `/secrets` endpoint, including an API key and a change number.
-2. **Authentication**: Aegis verifies the API key and checks the associated team and registry.
-3. **Policy Enforcement**: Aegis enforces access policies based on the request parameters, such as the change number and source IP.
-4. **Secret Retrieval**: Aegis fetches the requested secrets from the appropriate upstream vault.
-5. **Logging**: Every action taken is logged, including the team identity, registry accessed, and objects fetched.
-6. **Response**: Aegis returns the requested secrets to the application.
-
-## Data Model
-
-The data model in Aegis is structured to manage various entities effectively:
-
-- **Objects**: Atomic secret definitions that include vendor, authentication reference, and location.
-- **Registries**: Named collections of objects that group related secrets.
-- **Teams**: Metadata for teams that access secrets, with many-to-many relationships to registries.
-- **Users**: Operator accounts that manage access and permissions.
-- **Policies**: Access control rules that govern how teams interact with registries and secrets.
+1. **Request Handling**: Applications send requests to Aegis using the `GET /secrets` endpoint, including the necessary API key and change number.
+2. **Authentication**: Aegis verifies the API key and enforces policies based on the request context (e.g., IP address, time window).
+3. **Secrets Retrieval**: The broker fetches the requested secrets from the appropriate vault based on the registry configuration.
+4. **Logging**: Aegis logs the request details, including team identity and fetched secrets, to maintain an immutable audit trail.
+5. **Response**: The secrets are returned to the requesting application in a structured format.
 
 ## Conclusion
 
-The architecture of Aegis is designed to provide a robust, scalable, and secure solution for secret management. By acting as a centralized broker, Aegis simplifies the process of accessing secrets across multiple vaults while ensuring that all actions are logged and attributed for accountability. This architecture supports the self-service model, empowering teams to manage their own secret access and notifications without compromising security.
+The architecture of Aegis is built to provide a robust, scalable solution for managing secrets across various vaults while ensuring security and compliance through detailed logging and auditing. Each component plays a critical role in facilitating seamless interactions between applications and the underlying secrets infrastructure.

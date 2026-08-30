@@ -1,98 +1,79 @@
 # Configuration
 
-This document provides details on configuring Aegis, including environment variables, runtime settings, and vendor configurations.
+This document outlines the configuration options available for Aegis, including environment variables and vendor-specific settings.
 
 ## auth.json
 
-The `auth.json` file is essential for defining the authentication settings for Aegis. It specifies the API keys and their associated permissions. Each entry in this file should map a specific API key to a team and its allowed actions.
+The `auth.json` file is used to configure authentication settings for Aegis. It defines the API keys and associated team-registry pairs. Each entry in this file should follow the structure:
 
-### Example Structure
 ```json
 {
   "api_keys": {
-    "sk_teamA_registry1": {
-      "team": "teamA",
-      "registry": "registry1",
-      "permissions": ["read", "write"]
-    },
-    "sk_teamB_registry2": {
-      "team": "teamB",
-      "registry": "registry2",
-      "permissions": ["read"]
+    "team_name": {
+      "registry": "registry_name",
+      "key": "api_key_value"
     }
   }
 }
 ```
 
+Ensure that the API keys are unique and scoped to the appropriate teams and registries.
+
 ## Vendor Configuration Reference
 
-Aegis supports multiple secret management vendors. Each vendor may require specific configurations to connect and authenticate. Below are the general configurations for supported vendors:
+Aegis supports multiple secret management vendors. Each vendor may have specific configuration requirements. Below are the general settings that can be configured for each vendor:
 
-### CyberArk
-- **API URL**: The endpoint to access CyberArk.
-- **Credentials**: API key or username/password for authentication.
+- **CyberArk**
+  - `cyberark_url`: URL of the CyberArk instance.
+  - `cyberark_app_id`: Application ID used for authentication.
 
-### HashiCorp Vault
-- **API URL**: The Vault server URL.
-- **Token**: The authentication token for accessing secrets.
+- **HashiCorp Vault**
+  - `vault_address`: Address of the Vault server.
+  - `vault_token`: Token for authenticating with Vault.
 
-### AWS Secrets Manager
-- **Region**: The AWS region where the secrets are stored.
-- **Access Key ID**: AWS access key for authentication.
-- **Secret Access Key**: AWS secret key for authentication.
+- **AWS Secrets Manager**
+  - `aws_region`: AWS region where the secrets are stored.
+  - `aws_access_key_id`: Access key ID for AWS.
+  - `aws_secret_access_key`: Secret access key for AWS.
 
-### Conjur
-- **API URL**: The endpoint for Conjur.
-- **Account**: The Conjur account name.
-- **API Key**: The API key for authentication.
+- **Conjur**
+  - `conjur_url`: URL of the Conjur instance.
+  - `conjur_account`: Conjur account name.
+  - `conjur_appliance_url`: URL of the Conjur appliance.
+
+Ensure that the configuration for each vendor is correctly set to enable Aegis to interact with the respective secret management systems.
 
 ## Environment Variables
 
-Aegis uses several environment variables to configure its runtime behavior. Below is a list of important environment variables:
+Aegis can be configured using environment variables. Below are the key environment variables that can be set:
 
-- **DATABASE_URL**: Connection string for the PostgreSQL database.
-- **REDIS_URL**: Connection string for the Redis instance.
-- **AUTH_PATH**: Path to the `auth.json` file.
-- **ADMIN_PASSWORD**: Password for the admin interface.
-- **SECRET_KEY**: Secret key used for cryptographic operations.
-- **RATE_LIMIT_RPM**: Rate limit for requests per minute.
-- **LOG_DESTINATIONS**: Where to send logs (e.g., stdout, file, etc.).
+- `ESO_ALLOW_REGISTRY_EXTRACT`: Controls whether the `/eso/v1/secrets` endpoint can hand a workload an entire registry. Defaults to `true`.
+- `SESSION_TTL_HOURS`: Specifies the session time-to-live in hours. Default is set to `24`.
+- `CHANGE_NUMBER_REQUIRED`: Indicates whether a change number is required for API requests. Defaults to `true`.
+- `RATE_LIMIT_RPM`: Sets the rate limit in requests per minute. Default is `60`.
+- `LOG_RETENTION_DAYS`: Defines the number of days to retain logs. Default is `30`.
 
-### Example
-```bash
-export DATABASE_URL="postgresql://broker:changeme@localhost:5432/aegis"
-export REDIS_URL="redis://localhost:6379"
-export AUTH_PATH="/config/auth.json"
-export ADMIN_PASSWORD="your_admin_password"
-export SECRET_KEY="your_secret_key"
-export RATE_LIMIT_RPM=60
-export LOG_DESTINATIONS="stdout"
-```
+These environment variables can be set in your deployment environment to customize the behavior of Aegis.
 
 ## Runtime Settings
 
-Aegis can be configured with various runtime settings that control its behavior. These settings can be adjusted in the `docker-compose.yml` file or through environment variables.
+Aegis allows for runtime configuration through its admin API. The following settings can be modified:
 
-### Key Runtime Settings
-- **Health Checks**: Ensure that the services are running correctly.
-- **Service Dependencies**: Define dependencies between services (e.g., Aegis depends on PostgreSQL and Redis).
-- **Ports**: Configure the ports on which Aegis will listen for incoming requests.
+- **SIEM Destinations**
+  - `siem_destinations`: List of destinations for sending SIEM events.
 
-### Example Configuration in `docker-compose.yml`
-```yaml
-services:
-  broker:
-    build: .
-    ports:
-      - "8080:8080"
-    environment:
-      DATABASE_URL: postgresql://broker:changeme@postgres:5432/aegis
-      REDIS_URL: redis://redis:6379
-      AUTH_PATH: /config/auth.json
-      ADMIN_PASSWORD: changeme
-      SECRET_KEY: dev-secret-replace-in-prod
-      RATE_LIMIT_RPM: 60
-      LOG_DESTINATIONS: stdout
-```
+- **Logging Configuration**
+  - `s3_log_bucket`: S3 bucket for storing logs.
+  - `splunk_hec_url`: URL for sending logs to Splunk.
+  - `splunk_hec_token`: Token for authenticating with Splunk.
 
-This configuration sets up Aegis to connect to a PostgreSQL database and a Redis instance, while also specifying the authentication path and other runtime parameters. Adjust these settings according to your deployment environment and requirements.
+- **Rate Limiting**
+  - `rate_limit_rpm`: Maximum requests allowed per minute.
+
+- **Session Management**
+  - `session_ttl_hours`: Duration for which a session remains valid.
+
+- **Log Retention**
+  - `log_retention_days`: Duration for which logs are retained.
+
+These settings can be accessed and modified through the admin API, allowing for dynamic configuration without requiring a restart of the Aegis service.

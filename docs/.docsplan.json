@@ -2,11 +2,11 @@
   "pages": [
     {
       "path": "index.md",
-      "title": "Aegis Overview",
+      "title": "Overview",
       "globs": [
         "README.md"
       ],
-      "summary": "An introduction to Aegis, a vendor-agnostic secrets broker and PAM gateway that allows teams to manage their own secrets securely."
+      "summary": "An introduction to Aegis, a vendor-agnostic secrets broker and PAM gateway that allows teams to manage their own API keys and secrets securely."
     },
     {
       "path": "architecture.md",
@@ -14,46 +14,40 @@
       "globs": [
         "aegis/api.py",
         "aegis/broker.py",
+        "aegis/database.py",
         "aegis/models.py"
       ],
-      "summary": "Overview of the Aegis architecture, including its components and how they interact to provide secure secret management."
+      "summary": "Details the architecture of Aegis, including its components and how they interact to manage secrets across various vaults."
+    },
+    {
+      "path": "configuration.md",
+      "title": "Configuration",
+      "globs": [
+        "README.md",
+        "aegis/deps.py",
+        "aegis/routers/admin_config.py"
+      ],
+      "summary": "Covers the configuration options available for Aegis, including environment variables and vendor-specific settings."
     },
     {
       "path": "usage.md",
       "title": "Usage",
       "globs": [
         "README.md",
-        "examples/ci/github-actions-secret-scan.yml"
+        "aegis/routers/secrets.py",
+        "aegis/routers/self_service.py"
       ],
-      "summary": "Instructions on how to use Aegis, including API calls and integration with CI/CD pipelines."
-    },
-    {
-      "path": "configuration.md",
-      "title": "Configuration",
-      "globs": [
-        "aegis/keys.py",
-        "aegis/deps.py",
-        "docker-compose.yml"
-      ],
-      "summary": "Details on configuring Aegis, including environment variables, runtime settings, and vendor configurations."
+      "summary": "Explains how to use Aegis, including API endpoints for fetching secrets and managing team self-service functionalities."
     },
     {
       "path": "deployment.md",
       "title": "Deployment",
       "globs": [
-        "terraform/*.tf",
-        "helm/Chart.yaml"
+        "docker-compose.yml",
+        "helm/Chart.yaml",
+        "terraform/main.tf"
       ],
-      "summary": "Guidelines for deploying Aegis in various environments, including Kubernetes and AWS."
-    },
-    {
-      "path": "self_service.md",
-      "title": "Team Self-Service Model",
-      "globs": [
-        "aegis/routers/self_service.py",
-        "README.md"
-      ],
-      "summary": "Explains the self-service capabilities for teams, including webhook subscriptions and key rotation."
+      "summary": "Guidelines for deploying Aegis in various environments, including Docker, Helm, and Terraform configurations."
     },
     {
       "path": "audit_logging.md",
@@ -62,16 +56,26 @@
         "aegis/routers/admin_logs.py",
         "aegis/scanning.py"
       ],
-      "summary": "Overview of the audit logging features in Aegis, detailing how actions are logged and monitored."
+      "summary": "Describes the audit logging features of Aegis, detailing how actions are logged and can be queried."
+    },
+    {
+      "path": "key_management.md",
+      "title": "Key Management",
+      "globs": [
+        "aegis/keys.py",
+        "aegis/routers/admin_teams.py"
+      ],
+      "summary": "Information on how Aegis manages API keys, including generation, rotation, and suspension."
     },
     {
       "path": "security_model.md",
       "title": "Security Model",
       "globs": [
-        "aegis/routers/admin_config.py",
-        "aegis/keys.py"
+        "README.md",
+        "aegis/url_guard.py",
+        "aegis/routers/session.py"
       ],
-      "summary": "Description of the security model in Aegis, including API key management and access control."
+      "summary": "Overview of the security model implemented in Aegis, including authentication, authorization, and protection mechanisms."
     }
   ]
 }
