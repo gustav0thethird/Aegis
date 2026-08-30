@@ -1,55 +1,98 @@
 # Configuration
 
-## Configuration Files
+This document provides details on configuring Aegis, including environment variables, runtime settings, and vendor configurations.
 
-### `.env.example`
-This file serves as a template for environment variables required for the application. It is not used directly but should be copied to a `.env` file and modified to suit your environment.
+## auth.json
 
-### `config/auth.json.example`
-This file is an example of the authentication configuration required by the application. It should be copied to `config/auth.json` and populated with the necessary credentials.
+The `auth.json` file is essential for defining the authentication settings for Aegis. It specifies the API keys and their associated permissions. Each entry in this file should map a specific API key to a team and its allowed actions.
+
+### Example Structure
+```json
+{
+  "api_keys": {
+    "sk_teamA_registry1": {
+      "team": "teamA",
+      "registry": "registry1",
+      "permissions": ["read", "write"]
+    },
+    "sk_teamB_registry2": {
+      "team": "teamB",
+      "registry": "registry2",
+      "permissions": ["read"]
+    }
+  }
+}
+```
+
+## Vendor Configuration Reference
+
+Aegis supports multiple secret management vendors. Each vendor may require specific configurations to connect and authenticate. Below are the general configurations for supported vendors:
+
+### CyberArk
+- **API URL**: The endpoint to access CyberArk.
+- **Credentials**: API key or username/password for authentication.
+
+### HashiCorp Vault
+- **API URL**: The Vault server URL.
+- **Token**: The authentication token for accessing secrets.
+
+### AWS Secrets Manager
+- **Region**: The AWS region where the secrets are stored.
+- **Access Key ID**: AWS access key for authentication.
+- **Secret Access Key**: AWS secret key for authentication.
+
+### Conjur
+- **API URL**: The endpoint for Conjur.
+- **Account**: The Conjur account name.
+- **API Key**: The API key for authentication.
 
 ## Environment Variables
 
-The application relies on several environment variables for configuration. Below are the key variables and their purposes:
+Aegis uses several environment variables to configure its runtime behavior. Below is a list of important environment variables:
 
-- `DATABASE_URL`: Specifies the connection string for the PostgreSQL database. Example:
-  ```
-  postgresql://<username>:<password>@<host>:<port>/<database>
-  ```
+- **DATABASE_URL**: Connection string for the PostgreSQL database.
+- **REDIS_URL**: Connection string for the Redis instance.
+- **AUTH_PATH**: Path to the `auth.json` file.
+- **ADMIN_PASSWORD**: Password for the admin interface.
+- **SECRET_KEY**: Secret key used for cryptographic operations.
+- **RATE_LIMIT_RPM**: Rate limit for requests per minute.
+- **LOG_DESTINATIONS**: Where to send logs (e.g., stdout, file, etc.).
 
-- `ADMIN_PASSWORD`: Sets the password for the admin user.
+### Example
+```bash
+export DATABASE_URL="postgresql://broker:changeme@localhost:5432/aegis"
+export REDIS_URL="redis://localhost:6379"
+export AUTH_PATH="/config/auth.json"
+export ADMIN_PASSWORD="your_admin_password"
+export SECRET_KEY="your_secret_key"
+export RATE_LIMIT_RPM=60
+export LOG_DESTINATIONS="stdout"
+```
 
-- `SECRET_KEY`: A secret key used for cryptographic signing. It should be a long, random string.
+## Runtime Settings
 
-- `AUTH_PATH`: Path to the authentication configuration file. Default is `config/auth.json`.
+Aegis can be configured with various runtime settings that control its behavior. These settings can be adjusted in the `docker-compose.yml` file or through environment variables.
 
-- `REDIS_URL`: Specifies the connection string for the Redis service. Example:
-  ```
-  redis://<host>:<port>
-  ```
+### Key Runtime Settings
+- **Health Checks**: Ensure that the services are running correctly.
+- **Service Dependencies**: Define dependencies between services (e.g., Aegis depends on PostgreSQL and Redis).
+- **Ports**: Configure the ports on which Aegis will listen for incoming requests.
 
-## GitHub Actions Configuration
+### Example Configuration in `docker-compose.yml`
+```yaml
+services:
+  broker:
+    build: .
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql://broker:changeme@postgres:5432/aegis
+      REDIS_URL: redis://redis:6379
+      AUTH_PATH: /config/auth.json
+      ADMIN_PASSWORD: changeme
+      SECRET_KEY: dev-secret-replace-in-prod
+      RATE_LIMIT_RPM: 60
+      LOG_DESTINATIONS: stdout
+```
 
-### CI Workflow (`.github/workflows/ci.yml`)
-The CI workflow is configured to run on pushes and pull requests to specific branches. It includes jobs for linting, testing, and Helm chart validation. The following environment variables are set during the test job:
-
-- `DATABASE_URL`: Set to connect to a test database.
-- `ADMIN_PASSWORD`: Used for the admin user during tests.
-- `SECRET_KEY`: A test secret key.
-- `AUTH_PATH`: Points to the authentication configuration for tests.
-- `REDIS_URL`: Connection string for Redis during tests.
-
-### Secret Scanning Workflow (`.github/workflows/secret-scan.yml`)
-This workflow is designed to scan for secrets in the repository. It requires the following inputs:
-
-- `aegis-url`: Base URL of the Aegis deployment.
-- `team-id`: Aegis team UUID that owns the repository.
-- `fail-on-findings`: Boolean to determine if the job should fail when a secret is detected.
-- `semgrep-config`: Path to the Semgrep ruleset.
-
-It also requires a secret:
-
-- `aegis-token`: The team's Aegis inbound webhook secret.
-
-## Additional Notes
-Ensure that all required environment variables are set before running the application. The `.env` file should not be committed to version control to avoid exposing sensitive information.
+This configuration sets up Aegis to connect to a PostgreSQL database and a Redis instance, while also specifying the authentication path and other runtime parameters. Adjust these settings according to your deployment environment and requirements.

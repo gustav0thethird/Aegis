@@ -2,67 +2,58 @@
 
 ## Overview
 
-The Aegis system is designed to manage and secure sensitive information, primarily focusing on secret management. It consists of several components that work together to provide a robust and scalable solution.
+Aegis is designed as a vendor-agnostic secrets broker and PAM (Privileged Access Management) gateway. It acts as an intermediary between applications and various secrets management systems, allowing teams to manage their secrets securely and efficiently. The architecture is built to support scalability and ease of use, enabling teams to self-manage their secret access without needing to involve a central security team for routine operations.
 
 ## Components
 
-### 1. FastAPI Service
+### Applications
 
-The core of Aegis is built using FastAPI, which serves as the web framework for handling HTTP requests. It provides various endpoints for user authentication, secret management, and administrative tasks.
+The architecture includes various applications that interact with Aegis:
 
-- **Endpoints**:
-  - `/health`: Health check endpoint.
-  - `/api/login`: User authentication.
-  - `/api/my-teams`: Retrieve user teams.
-  - `/admin/api`: Administrative functions for managing users, teams, and registries.
+- **App / Pipeline**: These are the applications or CI/CD pipelines that request secrets from Aegis.
+- **CI Runner**: This component triggers key rotations and other automated tasks.
+- **Service Mesh**: Facilitates communication between microservices and Aegis.
 
-### 2. Database Layer
+### Aegis
 
-Aegis uses SQLAlchemy as its ORM to interact with a PostgreSQL database. The database schema includes several tables:
+Aegis itself is built using FastAPI and Python, and consists of several key components:
 
-- **Objects**: Defines atomic secret definitions.
-- **Registries**: Collections of objects.
-- **Users**: Operator accounts with roles and team memberships.
-- **Policies**: Access control rules.
+- **API Gateway**: Handles incoming requests for secrets and other operations.
+- **Rate Limiter**: Controls the rate of incoming requests to prevent abuse.
+- **Authentication Module**: Validates API keys and manages user sessions.
+- **Broker**: Responsible for fetching secrets from various upstream vaults based on the requests it receives.
+- **Logging and Auditing**: Maintains an immutable log of all actions taken, including secret fetches, rotations, and configuration changes.
 
-The database connection is managed through a session factory, ensuring efficient database interactions.
+### Upstream Vaults
 
-### 3. Secret Management
+Aegis interacts with multiple upstream vaults, including:
 
-Aegis integrates with various secret management vendors, including CyberArk, HashiCorp Vault, AWS Secrets Manager, and Conjur. The `broker.py` module is responsible for fetching secrets from these vendors based on the configuration provided in `auth.json`.
+- **CyberArk**
+- **HashiCorp Vault**
+- **AWS Secrets Manager**
+- **Conjur**
 
-### 4. Alerting System
+These vaults store the actual secrets that Aegis retrieves based on the requests it receives.
 
-The alerting module (`alerting.py`) is responsible for notifying teams when secrets are found in source code. It supports multiple notification sinks, including Jira, ServiceNow, email, and webhooks. Alerts are configured through environment variables.
+## Interaction Flow
 
-### 5. Scanning and Scheduler
+1. **Request Handling**: Applications send requests to Aegis using the `/secrets` endpoint, including an API key and a change number.
+2. **Authentication**: Aegis verifies the API key and checks the associated team and registry.
+3. **Policy Enforcement**: Aegis enforces access policies based on the request parameters, such as the change number and source IP.
+4. **Secret Retrieval**: Aegis fetches the requested secrets from the appropriate upstream vault.
+5. **Logging**: Every action taken is logged, including the team identity, registry accessed, and objects fetched.
+6. **Response**: Aegis returns the requested secrets to the application.
 
-Aegis includes a scanning component that identifies secrets in code repositories. The `scheduler.py` module manages the scheduling of these scans and the processing of findings.
+## Data Model
 
-### 6. API Key Management
+The data model in Aegis is structured to manage various entities effectively:
 
-The `keys.py` module handles the generation and hashing of API keys. It ensures that keys are stored securely and are indistinguishable regardless of their source.
-
-### 7. Routers
-
-The application is organized into several routers, each handling specific functionalities:
-
-- **Admin Routers**: Manage users, teams, and logs.
-- **Self-Service Routers**: Allow users to manage their own settings and webhooks.
-- **Health and Metrics Routers**: Provide health status and metrics for monitoring.
-
-### 8. Configuration Management
-
-Configuration is managed through environment variables and a configuration file (`auth.json`). This allows for flexible deployment in various environments.
-
-### 9. Deployment
-
-Aegis can be deployed using Docker and Docker Compose, with configurations provided for both local and production environments. The deployment process is facilitated by a `Makefile` and CI/CD workflows defined in the `.github` directory.
-
-### 10. Logging and Monitoring
-
-Logging is integrated throughout the application, providing insights into operations and errors. The application can also be configured to send logs to external destinations like S3.
+- **Objects**: Atomic secret definitions that include vendor, authentication reference, and location.
+- **Registries**: Named collections of objects that group related secrets.
+- **Teams**: Metadata for teams that access secrets, with many-to-many relationships to registries.
+- **Users**: Operator accounts that manage access and permissions.
+- **Policies**: Access control rules that govern how teams interact with registries and secrets.
 
 ## Conclusion
 
-The architecture of Aegis is modular and designed for extensibility, allowing for easy integration with various secret management solutions and notification systems. Each component is responsible for a specific aspect of the application, ensuring a clear separation of concerns and maintainability.
+The architecture of Aegis is designed to provide a robust, scalable, and secure solution for secret management. By acting as a centralized broker, Aegis simplifies the process of accessing secrets across multiple vaults while ensuring that all actions are logged and attributed for accountability. This architecture supports the self-service model, empowering teams to manage their own secret access and notifications without compromising security.

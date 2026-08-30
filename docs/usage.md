@@ -1,109 +1,72 @@
 # Usage
 
-## API Endpoints
+Aegis serves as a vendor-agnostic secrets broker and PAM gateway, allowing teams to manage their secrets securely and efficiently. This document provides instructions on how to use Aegis, including API calls and integration with CI/CD pipelines.
 
-### Health Check
-- **GET** `/health`
-  - Returns the health status of the service.
+## API Calls
 
 ### Authentication
-- **POST** `/api/login`
-  - Request: `{"username": "your_username", "password": "your_password"}`
-  - Response: Session token.
 
-- **POST** `/api/logout`
-  - Logs out the current session.
+To interact with Aegis, you must authenticate using a scoped API key. Each team is assigned a unique API key that corresponds to a specific team-registry pair.
 
-- **GET** `/api/me`
-  - Returns the current user's information.
+#### Example Request
 
-- **PUT** `/api/me/theme`
-  - Request: `{"theme": "new_theme"}`
-  - Updates the user's theme preference.
-
-### User Endpoints (Role: User)
-- **GET** `/api/my-teams`
-  - Returns the teams the user is a member of.
-
-- **GET** `/api/my-webhook`
-  - Returns the user's configured webhook and notification channels.
-
-- **PUT** `/api/my-webhook`
-  - Request: `{"url": "webhook_url", "events": ["event1", "event2"], "enabled": true}`
-  - Configures the outgoing webhook and notifications.
-
-- **DELETE** `/api/my-webhook`
-  - Removes the user's configured webhook.
-
-- **GET** `/api/my-metrics`
-  - Returns team-scoped audit counts and key statistics.
-
-- **GET** `/api/my-metrics/prometheus`
-  - Returns team-scoped Prometheus metrics for Grafana.
-
-- **POST** `/api/inbound/{team_id}`
-  - Request: Inbound webhook receiver for CI/CD trigger.
-  - Requires Bearer token as signing secret.
-
-### Admin Endpoints (Role: Admin)
-- **GET** `/admin/api/ping`
-  - Returns a ping response to check if the admin API is reachable.
-
-- **GET** `/admin/api/objects`
-  - Lists all objects.
-
-- **POST** `/admin/api/objects`
-  - Request: `{"name": "object_name", "vendor": "vendor_name", "auth_ref": "auth_reference", "path": "object_path"}`
-  - Creates a new object.
-
-- **GET** `/admin/api/teams`
-  - Lists all teams.
-
-- **POST** `/admin/api/teams`
-  - Request: `{"name": "team_name"}`
-  - Creates a new team.
-
-- **GET** `/admin/api/users`
-  - Lists all users.
-
-- **POST** `/admin/api/users`
-  - Request: `{"username": "new_username", "password": "new_password", "role": "user", "team_ids": ["team_id1", "team_id2"], "theme": "default"}`
-  - Creates a new user.
-
-- **GET** `/admin/api/changelog`
-  - Returns the change log.
-
-- **GET** `/admin/api/audit`
-  - Returns the audit log.
-
-### Webhook Management
-- **GET** `/admin/api/teams/{team_id}/webhook`
-  - Returns the webhook configuration for a specific team.
-
-- **PUT** `/admin/api/teams/{team_id}/webhook`
-  - Request: `{"url": "webhook_url", "events": ["event1", "event2"], "enabled": true, "signing_enabled": false}`
-  - Configures the webhook for a specific team.
-
-## Examples
-
-### Login Example
-```bash
-curl -X POST http://localhost:8000/api/login -H "Content-Type: application/json" -d '{"username": "admin", "password": "password"}'
+```http
+GET /secrets
+X-API-Key: sk_...
+X-Change-Number: CHG123
 ```
 
-### Get User Teams
-```bash
-curl -X GET http://localhost:8000/api/my-teams -H "Authorization: Bearer your_token"
+### Secrets Endpoint
+
+The primary endpoint for fetching secrets is `/secrets`. When a request is made, Aegis performs the following actions:
+
+1. Hashes the API key to look up the associated team and registry.
+2. Enforces policies based on the provided change number, IP address, and rate limits.
+3. Fetches the secrets from the appropriate upstream vault (e.g., CyberArk, HashiCorp Vault, AWS Secrets Manager).
+4. Writes an audit log detailing the request.
+5. Emits a SIEM event for monitoring.
+
+### User Self-Service API
+
+Teams can manage their own webhook subscriptions, notification channels, and CI/CD key rotations through the User Self-Service API. This allows for greater autonomy without needing to involve the security team.
+
+## CI/CD Integration
+
+Aegis can be integrated into CI/CD pipelines to automate key rotations and secret scanning. Below is an example of how to set up a GitHub Actions workflow for secret scanning.
+
+### GitHub Actions Workflow
+
+To implement secret scanning in your repository, create a file named `.github/workflows/secret-scan.yml` and include the following configuration:
+
+```yaml
+name: Secret scan
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  schedule:
+    - cron: "0 3 * * 1"
+
+jobs:
+  secret-scan:
+    uses: gustav0thethird/Aegis/.github/workflows/secret-scan.yml@main
+    with:
+      aegis-url: https://aegis.example.com
+      team-id: 00000000-0000-0000-0000-000000000000
+      fail-on-findings: true
+    secrets:
+      aegis-token: ${{ secrets.AEGIS_TOKEN }}
 ```
 
-### Create a New Team
-```bash
-curl -X POST http://localhost:8000/admin/api/teams -H "Authorization: Bearer your_admin_token" -H "Content-Type: application/json" -d '{"name": "new_team"}'
-```
+### Setup Instructions
 
-### Configure Webhook
-```bash
-curl -X PUT http://localhost:8000/admin/api/teams/{team_id}/webhook -H "Authorization: Bearer your_admin_token" -H "Content-Type: application/json" -d '{"url": "https://example.com/webhook", "events": ["event1", "event2"], "enabled": true, "signing_enabled": false}'
-```
+1. **Enable Inbound Webhook**: In Aegis, enable the team's inbound webhook and copy its signing secret.
+2. **Add Repository Secret**: Add the signing secret as a repository secret named `AEGIS_TOKEN`.
+3. **Replace Team ID**: Update the `team-id` field with your team's UUID.
 
-This documentation provides a concise overview of how to use the Aegis API, including available endpoints and example requests.
+By following these steps, your CI/CD pipeline will automatically trigger secret scans on code pushes and pull requests, ensuring that sensitive information is not inadvertently committed.
+
+## Conclusion
+
+Aegis provides a robust framework for managing secrets across multiple vendors while allowing teams to operate independently. By utilizing the API and integrating with CI/CD pipelines, organizations can enhance their security posture and streamline operations.

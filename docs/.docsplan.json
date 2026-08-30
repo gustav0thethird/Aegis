@@ -2,76 +2,76 @@
   "pages": [
     {
       "path": "index.md",
-      "title": "Overview",
+      "title": "Aegis Overview",
       "globs": [
-        "README.md",
-        "docs/index.md"
+        "README.md"
       ],
-      "summary": "Introduction to Aegis, its purpose, and key features."
+      "summary": "An introduction to Aegis, a vendor-agnostic secrets broker and PAM gateway that allows teams to manage their own secrets securely."
     },
     {
       "path": "architecture.md",
       "title": "Architecture",
       "globs": [
-        "aegis/**",
-        "docs/readme.md"
+        "aegis/api.py",
+        "aegis/broker.py",
+        "aegis/models.py"
       ],
-      "summary": "Overview of the system architecture and components."
-    },
-    {
-      "path": "configuration.md",
-      "title": "Configuration",
-      "globs": [
-        "config/**",
-        "docs/deploy-cloud-hybrid.md",
-        "docs/deploy-local.md"
-      ],
-      "summary": "Details on configuration files and environment variables."
+      "summary": "Overview of the Aegis architecture, including its components and how they interact to provide secure secret management."
     },
     {
       "path": "usage.md",
       "title": "Usage",
       "globs": [
-        "aegis/api.py",
-        "aegis/routers/**"
+        "README.md",
+        "examples/ci/github-actions-secret-scan.yml"
       ],
-      "summary": "How to use Aegis, including API endpoints and examples."
+      "summary": "Instructions on how to use Aegis, including API calls and integration with CI/CD pipelines."
+    },
+    {
+      "path": "configuration.md",
+      "title": "Configuration",
+      "globs": [
+        "aegis/keys.py",
+        "aegis/deps.py",
+        "docker-compose.yml"
+      ],
+      "summary": "Details on configuring Aegis, including environment variables, runtime settings, and vendor configurations."
     },
     {
       "path": "deployment.md",
       "title": "Deployment",
       "globs": [
-        "Dockerfile",
-        "docker-compose.yml",
-        "helm/**"
+        "terraform/*.tf",
+        "helm/Chart.yaml"
       ],
-      "summary": "Instructions for deploying Aegis in various environments."
+      "summary": "Guidelines for deploying Aegis in various environments, including Kubernetes and AWS."
     },
     {
-      "path": "secret_scanning.md",
-      "title": "Secret Scanning",
+      "path": "self_service.md",
+      "title": "Team Self-Service Model",
       "globs": [
-        "aegis/scanning.py",
-        "docs/readme.md"
+        "aegis/routers/self_service.py",
+        "README.md"
       ],
-      "summary": "Overview of secret scanning features and configurations."
+      "summary": "Explains the self-service capabilities for teams, including webhook subscriptions and key rotation."
     },
     {
-      "path": "testing.md",
-      "title": "Testing",
+      "path": "audit_logging.md",
+      "title": "Audit and Change Logging",
       "globs": [
-        "tests/**",
-        "docs/readme.md"
+        "aegis/routers/admin_logs.py",
+        "aegis/scanning.py"
       ],
-      "summary": "Guidelines for testing Aegis and running test cases."
+      "summary": "Overview of the audit logging features in Aegis, detailing how actions are logged and monitored."
     },
     {
-      "path": "contributing.md",
-      "title": "Contributing",
+      "path": "security_model.md",
+      "title": "Security Model",
       "globs": [
-        "CONTRIBUTING.md"
+        "aegis/routers/admin_config.py",
+        "aegis/keys.py"
       ],
-      "summary": "Guidelines for contributing to the Aegis project."
+      "summary": "Description of the security model in Aegis, including API key management and access control."
     }
   ]
 }
