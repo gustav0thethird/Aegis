@@ -1,0 +1,77 @@
+{
+  "pages": [
+    {
+      "path": "index.md",
+      "title": "Overview",
+      "globs": [
+        "README.md",
+        "docs/index.md"
+      ],
+      "summary": "Introduction to Aegis, its purpose, and key features."
+    },
+    {
+      "path": "architecture.md",
+      "title": "Architecture",
+      "globs": [
+        "aegis/**",
+        "docs/deploy-cloud-hybrid.md",
+        "docs/deploy-local.md"
+      ],
+      "summary": "Overview of the system architecture and components."
+    },
+    {
+      "path": "configuration.md",
+      "title": "Configuration",
+      "globs": [
+        "config/**",
+        ".env.example"
+      ],
+      "summary": "Details on configuration files and environment variables."
+    },
+    {
+      "path": "usage.md",
+      "title": "Usage",
+      "globs": [
+        "aegis/api.py",
+        "aegis/routers/**"
+      ],
+      "summary": "How to use Aegis, including API endpoints and examples."
+    },
+    {
+      "path": "deployment.md",
+      "title": "Deployment",
+      "globs": [
+        "docker-compose.yml",
+        "Dockerfile",
+        "helm/**"
+      ],
+      "summary": "Instructions for deploying Aegis in various environments."
+    },
+    {
+      "path": "secret_scanning.md",
+      "title": "Secret Scanning",
+      "globs": [
+        "aegis/scanning.py",
+        "docs/readme.md"
+      ],
+      "summary": "Information on secret scanning capabilities and configurations."
+    },
+    {
+      "path": "testing.md",
+      "title": "Testing",
+      "globs": [
+        "tests/**",
+        "requirements-dev.txt"
+      ],
+      "summary": "Guidelines for testing Aegis, including setup and running tests."
+    },
+    {
+      "path": "contributing.md",
+      "title": "Contributing",
+      "globs": [
+        "CONTRIBUTING.md"
+      ],
+      "summary": "How to contribute to the Aegis project."
+    }
+  ]
+}

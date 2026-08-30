@@ -2,20 +2,21 @@ apiVersion: backstage.io/v1alpha1
 kind: Component
 metadata:
   name: Aegis
-  description: Vault-agnostic API broker with audit logging, built on FastAPI
+  description: Aegis is a vendor-agnostic secrets broker and PAM gateway for managing
+    API keys and secrets.
   annotations:
     backstage.io/techdocs-ref: dir:.
     gitlab.com/project-slug: yditj/projects/apps/Aegis
   links:
-    - url: https://github.com/gustav0thethird/Aegis
-      title: GitHub
-      icon: github
+  - url: https://github.com/gustav0thethird/Aegis
+    title: GitHub
+    icon: github
   tags:
-    - python
-    - fastapi
-    - secrets
-    - devops
-    - apps
+  - secrets-broker
+  - api-gateway
+  - key-rotation
+  - self-service
+  - logging
 spec:
   type: service
   lifecycle: production
