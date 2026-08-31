@@ -9,18 +9,17 @@ metadata:
     gitlab.com/project-slug: yditj/projects/apps/Aegis
     yditj.home/capabilities: Vendor-agnostic secrets management; Scoped API keys per
       team; Self-service webhook and notification management; Audit logging of all
-      actions; Team-based access control; CI/CD integration for key rotation; Admin
-      management of policies and settings
+      actions; Team-based access control; CI/CD integration for key rotation
   links:
   - url: https://github.com/gustav0thethird/Aegis
     title: GitHub
     icon: github
   tags:
-  - secrets-management
-  - api-gateway
+  - secrets-broker
+  - api-management
   - team-self-service
-  - logging
   - security
+  - logging
 spec:
   type: service
   lifecycle: production
@@ -49,9 +48,9 @@ spec:
     \ and invalidate session token.\n      responses:\n        '200':\n          description:\
     \ OK\n  /api/me:\n    get:\n      summary: Retrieve information about the authenticated\
     \ user.\n      responses:\n        '200':\n          description: OK\n  /api/me/theme:\n\
-    \    put:\n      summary: Update the theme for the authenticated user.\n     \
-    \ responses:\n        '200':\n          description: OK\n  /api/my-teams:\n  \
-    \  get:\n      summary: Retrieve teams associated with the authenticated user.\n\
+    \    put:\n      summary: Update the theme settings for the authenticated user.\n\
+    \      responses:\n        '200':\n          description: OK\n  /api/my-teams:\n\
+    \    get:\n      summary: Retrieve teams associated with the authenticated user.\n\
     \      responses:\n        '200':\n          description: OK\n  /api/my-webhook:\n\
     \    get:\n      summary: View webhook and notification channels for the authenticated\
     \ user.\n      responses:\n        '200':\n          description: OK\n    put:\n\

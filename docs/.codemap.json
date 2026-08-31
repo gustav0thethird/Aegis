@@ -224,8 +224,8 @@
     "summary": "Specifies an Argo CD application for deploying a single Aegis environment with configuration values."
   },
   "catalog-info.yaml": {
-    "sha": "9c52b9bd2118",
-    "summary": "Contains metadata and API specifications for the Aegis service, detailing its capabilities and providing links to documentation."
+    "sha": "8f9c8476a47e",
+    "summary": "Defines the Aegis component and its API, detailing its purpose as a vendor-agnostic secrets broker and PAM gateway."
   },
   "docker-compose.prod.yml": {
     "sha": "1c72b50249c5",
@@ -320,8 +320,8 @@
     "summary": "Contains default configuration values for the Aegis Helm chart, including settings for replicas, image, service, and security."
   },
   "mkdocs.yml": {
-    "sha": "318c95f9b794",
-    "summary": "Configures the documentation site for Aegis, specifying the site name, description, and navigation structure."
+    "sha": "aaf610a1db42",
+    "summary": "Configures the documentation site for Aegis, outlining its structure and content related to the API broker."
   },
   "requirements.txt": {
     "sha": "91906942283d",
