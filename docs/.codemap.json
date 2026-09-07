@@ -224,8 +224,8 @@
     "summary": "Specifies an Argo CD application for deploying a single Aegis environment with configuration values."
   },
   "catalog-info.yaml": {
-    "sha": "8f9c8476a47e",
-    "summary": "Defines the Aegis component and its API, detailing its purpose as a vendor-agnostic secrets broker and PAM gateway."
+    "sha": "ee188c7c8a3b",
+    "summary": "Defines the Aegis component, detailing its purpose as a vendor-agnostic secrets broker and API management service."
   },
   "docker-compose.prod.yml": {
     "sha": "1c72b50249c5",
