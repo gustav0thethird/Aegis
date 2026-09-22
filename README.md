@@ -21,6 +21,9 @@
   <a href="https://github.com/gustav0thethird/Aegis/releases">
     <img src="https://img.shields.io/github/v/release/gustav0thethird/Aegis" alt="Latest release">
   </a>
+  <a href="https://artifacthub.io/packages/search?repo=aegis-secrets-broker">
+    <img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/aegis-secrets-broker" alt="Artifact Hub">
+  </a>
   <a href="https://github.com/gustav0thethird/Aegis/pkgs/container/aegis">
     <img src="https://img.shields.io/badge/container-ghcr.io-blue" alt="GHCR">
   </a>
