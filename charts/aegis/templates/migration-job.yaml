@@ -51,11 +51,11 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           command: ["alembic", "upgrade", "head"]
+          # Only the Secret-backed settings: the migration needs DATABASE_URL
+          # and nothing from the ConfigMap, which - like the ServiceAccount -
+          # does not exist yet when this runs as a pre-install hook.
           env:
             {{- include "aegis.secretEnv" . | nindent 12 }}
-          envFrom:
-            - configMapRef:
-                name: {{ include "aegis.fullname" . }}-config
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
           volumeMounts:
