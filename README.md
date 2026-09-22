@@ -12,8 +12,8 @@
   <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/ci.yml">
     <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
-  <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/bandit.yml">
-    <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/bandit.yml/badge.svg" alt="Bandit">
+  <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/security.yml">
+    <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/security.yml/badge.svg" alt="Security">
   </a>
   <a href="https://scorecard.dev/viewer/?uri=github.com/gustav0thethird/Aegis">
     <img src="https://api.scorecard.dev/projects/github.com/gustav0thethird/Aegis/badge" alt="OpenSSF Scorecard">
@@ -21,10 +21,10 @@
   <a href="https://github.com/gustav0thethird/Aegis/releases">
     <img src="https://img.shields.io/github/v/release/gustav0thethird/Aegis" alt="Latest release">
   </a>
-  <a href="https://github.com/gustav0thethird/Aegis/pkgs/container/Aegis">
+  <a href="https://github.com/gustav0thethird/Aegis/pkgs/container/aegis">
     <img src="https://img.shields.io/badge/container-ghcr.io-blue" alt="GHCR">
   </a>
-  <img src="https://img.shields.io/badge/python-3.12-blue" alt="Python 3.12">
+  <img src="https://img.shields.io/badge/python-3.12%2B-blue" alt="Python 3.12+">
   <a href="https://github.com/gustav0thethird/Aegis/blob/main/LICENSE">
     <img src="https://img.shields.io/badge/license-AGPL--3.0-blue" alt="License">
   </a>
@@ -464,10 +464,24 @@ sequenceDiagram
 - One or more supported upstream vaults (CyberArk, HashiCorp Vault, AWS, Conjur)
 - Credentials for those vaults ready to drop into `auth.json`
 
+Every tagged release publishes a container image to GHCR, signed with
+Sigstore and carrying an SBOM and SLSA provenance. To run a release rather
+than build from source, set `BROKER_IMAGE` and use the production compose
+file:
+
+```bash
+docker pull ghcr.io/gustav0thethird/aegis:v0.2.0
+cosign verify ghcr.io/gustav0thethird/aegis:v0.2.0 \
+  --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com
+```
+
+The steps below build from source, which is the quickest way to try it.
+
 ### 1. Clone and configure credentials
 
 ```bash
-git clone <repo-url> aegis
+git clone https://github.com/gustav0thethird/Aegis.git aegis
 cd aegis
 
 cp config/auth.json.example config/auth.json
@@ -1932,7 +1946,18 @@ Tests require a running Postgres. The `DATABASE_URL` is automatically overridden
 
 ### CI
 
-Tests run automatically on every push and PR via `.github/workflows/ci.yml`. The workflow spins up a PostgreSQL 16 service container — no external dependencies needed.
+Every push and pull request runs the full pipeline; `main` requires all of it green before a merge.
+
+| Workflow | What runs |
+|---|---|
+| `ci.yml` | ruff, pytest against a PostgreSQL 16 service container, Helm lint + render + kubeconform, `terraform fmt`/`validate`/tflint, image build and non-root check, pip-audit, Gitleaks |
+| `security.yml` | Trivy (repository: dependencies, IaC misconfiguration, secrets; and the built image), Semgrep, Hadolint — results land in the Security tab as SARIF |
+| `bandit.yml` | Bandit static analysis (medium severity and above) |
+| CodeQL | GitHub default setup for Python and Actions |
+| `scorecard.yml` | OpenSSF Scorecard on `main`, weekly |
+| `release.yml` | On `v*` tags: build, Trivy-scan, push to GHCR with SBOM + SLSA provenance, sign with Sigstore, create the GitHub release |
+
+Every action is pinned to a commit SHA and the base image to a digest; Dependabot keeps both current. See [SECURITY.md](SECURITY.md) for the disclosure policy.
 
 ---
 
@@ -2133,7 +2158,7 @@ make tf-init                     # terraform init
 
 # Create a terraform.tfvars file:
 cat > terraform/terraform.tfvars <<EOF
-image_uri       = "ghcr.io/<your-org>/secrets-broker:latest"
+image_uri       = "ghcr.io/gustav0thethird/aegis:v0.2.0"
 domain_name     = "aegis.example.com"
 admin_password  = "$(openssl rand -hex 16)"
 secret_key      = "$(openssl rand -hex 32)"
@@ -2176,7 +2201,7 @@ See `docs/deploy-cloud-hybrid.md` for full deployment guidance including hybrid 
 ## Project Structure
 
 ```
-secrets-broker/
+Aegis/
 ├── aegis/                      — Python application package
 │   ├── __init__.py
 │   ├── api.py                  — Application assembly: creates the app, wires routers,
@@ -2214,7 +2239,8 @@ secrets-broker/
 │   ├── auth.json               — Vault credentials (gitignored)
 │   ├── auth.json.example       — Template for auth.json
 │   └── Caddyfile               — Caddy reverse-proxy config
-├── docs/
+├── docs/                       — MkDocs / TechDocs site (architecture, configuration,
+│   │                             usage, deployment, security model, ...)
 │   ├── deploy-local.md         — Local Docker Compose deployment guide
 │   └── deploy-cloud-hybrid.md  — Cloud / hybrid deployment guide
 ├── static/
@@ -2226,6 +2252,7 @@ secrets-broker/
 │   ├── login.html              — Login page
 │   └── 404.html                — Branded 404 page
 ├── terraform/                  — AWS infrastructure (ECS, RDS, ElastiCache, ALB, IAM, S3)
+│   └── .tflint.hcl             — tflint rulesets (terraform recommended + AWS)
 ├── helm/                       — Kubernetes Helm chart
 │   ├── values.yaml             — Default chart values
 │   └── templates/              — Deployment, Service, Ingress, migration Job, HPA,
@@ -2243,18 +2270,25 @@ secrets-broker/
 ├── .github/
 │   ├── dependabot.yml          — Automated dependency updates (pip, docker, terraform, actions)
 │   └── workflows/
-│       ├── ci.yml              — Lint, tests, Helm chart and image validation
+│       ├── ci.yml              — Lint, tests, Helm, Terraform, image and dependency checks
+│       ├── security.yml        — Trivy, Semgrep and Hadolint → Security tab (SARIF)
+│       ├── bandit.yml          — Bandit static analysis
+│       ├── scorecard.yml       — OpenSSF Scorecard
+│       ├── dependabot-automerge.yml — Auto-merge patch/minor Dependabot PRs
 │       ├── secret-scan.yml     — Reusable secret-scanning workflow for any repository
-│       └── release.yml         — Build + push GHCR image + GitHub release on v* tags
+│       └── release.yml         — Build, scan, push signed GHCR image + GitHub release on v* tags
 ├── alembic.ini
 ├── docker-compose.yml          — Local development stack (Aegis + PostgreSQL + Redis + exporter)
 ├── docker-compose.prod.yml     — Production stack variant
 ├── Dockerfile
 ├── docker-entrypoint.sh        — Applies migrations unless RUN_MIGRATIONS=false
 ├── ruff.toml                   — Pinned lint rule selection
+├── .gitleaks.toml              — Gitleaks configuration and allowlist
+├── .trivyignore                — Accepted IaC findings, each with its rationale
 ├── Makefile                    — Dev, test, build, backup, Helm, and Terraform targets
 ├── requirements.txt            — Runtime Python dependencies
-├── requirements-dev.txt        — Dev/test dependencies (pytest, fakeredis, httpx, ruff)
+├── requirements-dev.txt        — Dev/test dependencies (pytest, fakeredis, httpx, ruff, bandit)
 ├── .env.example                — Environment variable template (copy to .env)
+├── SECURITY.md                 — Vulnerability disclosure policy
 └── README.md
 ```
