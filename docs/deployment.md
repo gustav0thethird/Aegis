@@ -1,10 +1,10 @@
 # Deployment
 
-This document outlines the guidelines for deploying Aegis in various environments, including Docker, Helm, and Terraform configurations.
+This document provides guidelines for deploying Aegis in various environments, including Docker, Helm, and Terraform configurations.
 
 ## Docker Deployment
 
-Aegis can be deployed using Docker by utilizing the provided `docker-compose.yml` file. This file sets up the necessary services, including PostgreSQL and Redis, with default configurations and health checks.
+Aegis can be deployed using Docker by utilizing the provided `docker-compose.yml` file. This file defines the necessary services, including PostgreSQL, Redis, and the Aegis broker.
 
 ### Steps to Deploy with Docker
 
@@ -14,46 +14,61 @@ Aegis can be deployed using Docker by utilizing the provided `docker-compose.yml
    cd Aegis
    ```
 
-2. **Build and Start Services**:
+2. **Set Environment Variables**:
+   You can set environment variables in a `.env` file or directly in your shell. The following variables are available:
+   - `POSTGRES_DB`: Database name (default: `aegis`)
+   - `POSTGRES_USER`: Database user (default: `broker`)
+   - `POSTGRES_PASSWORD`: Database password (default: `changeme`)
+   - `ADMIN_PASSWORD`: Admin password (leave unset for random generation)
+   - `SECRET_KEY`: Secret key for the application (default: `dev-secret-replace-in-prod`)
+   - `RATE_LIMIT_RPM`: Rate limit in requests per minute (default: `60`)
+   - `LOG_DESTINATIONS`: Log destinations (default: `stdout`)
+
+3. **Start the Services**:
+   Run the following command to start all services defined in the `docker-compose.yml`:
    ```bash
-   docker-compose up --build
+   docker-compose up -d
    ```
 
-3. **Access Aegis**:
+4. **Access Aegis**:
    Aegis will be accessible at `http://localhost:8080`.
 
-### Configuration
-
-- **PostgreSQL**: The database configuration can be modified in the `docker-compose.yml` file under the `postgres` service.
-- **Redis**: Configuration for Redis is also available in the same file under the `redis` service.
-- **Broker Service**: The Aegis broker service can be configured with environment variables such as `DATABASE_URL`, `REDIS_URL`, and `ADMIN_PASSWORD`.
+5. **Check Service Health**:
+   Ensure that all services are healthy by checking their logs:
+   ```bash
+   docker-compose logs
+   ```
 
 ## Helm Deployment
 
-Aegis can be deployed on Kubernetes using Helm. The chart lives in `charts/aegis/` and is published as an OCI artifact at `oci://ghcr.io/gustav0thethird/charts/aegis`.
+For Kubernetes environments, Aegis can be deployed using Helm. Ensure you have Helm installed and configured to communicate with your Kubernetes cluster.
 
 ### Steps to Deploy with Helm
 
-1. **Add the Helm Repository**:
+1. **Add the Aegis Helm Repository**:
    ```bash
    helm repo add aegis https://github.com/gustav0thethird/Aegis
+   helm repo update
    ```
 
-2. **Install the Chart**:
+2. **Install Aegis**:
+   You can install Aegis with the following command:
    ```bash
    helm install aegis aegis/aegis
    ```
 
-3. **Access Aegis**:
-   After installation, you can access Aegis using the service created by Helm.
+3. **Configure Values**:
+   You can customize the deployment by creating a `values.yaml` file. This file can include configurations for database settings, Redis settings, and other environment variables.
 
-### Configuration
-
-- The Helm chart allows customization through values files. You can specify configurations such as replicas, image tags, and resource limits in a custom `values.yaml` file.
+4. **Upgrade Aegis**:
+   If you need to update your deployment, modify the `values.yaml` file and run:
+   ```bash
+   helm upgrade aegis aegis/aegis -f values.yaml
+   ```
 
 ## Terraform Deployment
 
-Aegis can also be deployed using Terraform, which sets up the foundational AWS infrastructure.
+Aegis can also be deployed using Terraform, specifically for AWS infrastructure. The provided `terraform/main.tf` file sets up the foundational AWS infrastructure, including VPC, subnets, internet and NAT gateways, route tables, and security groups.
 
 ### Steps to Deploy with Terraform
 
@@ -63,25 +78,36 @@ Aegis can also be deployed using Terraform, which sets up the foundational AWS i
    cd Aegis/terraform
    ```
 
-2. **Initialize Terraform**:
+2. **Configure Variables**:
+   Create a `terraform.tfvars` file to specify your variables:
+   ```hcl
+   app_name = "aegis"
+   environment = "production"
+   vpc_cidr = "10.0.0.0/16"
+   aws_region = "us-west-2"
+   ```
+
+3. **Initialize Terraform**:
+   Run the following command to initialize Terraform:
    ```bash
    terraform init
    ```
 
-3. **Plan the Deployment**:
+4. **Plan the Deployment**:
+   Generate an execution plan:
    ```bash
    terraform plan
    ```
 
-4. **Apply the Configuration**:
+5. **Apply the Deployment**:
+   Deploy the infrastructure:
    ```bash
    terraform apply
    ```
 
-### Configuration
-
-- The `main.tf` file contains the configuration for the VPC, subnets, internet and NAT gateways, and route tables. You can modify the variables such as `app_name`, `environment`, and `vpc_cidr` to suit your deployment needs.
+6. **Access Aegis**:
+   After deployment, configure your application to connect to the Aegis service using the provided endpoints.
 
 ## Conclusion
 
-This document provides a concise overview of deploying Aegis in different environments. Ensure to review the respective configuration files for customization options based on your specific requirements.
+This document outlines the basic steps for deploying Aegis in Docker, Helm, and Terraform environments. Ensure to review the configurations and customize them according to your specific requirements.
