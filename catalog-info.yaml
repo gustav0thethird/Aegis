@@ -8,18 +8,18 @@ metadata:
     backstage.io/techdocs-ref: dir:.
     gitlab.com/project-slug: yditj/projects/apps/Aegis
     yditj.home/capabilities: Vendor-agnostic secrets management; Scoped API keys per
-      team; Self-service webhook and notification management; Audit logging of all
-      actions; Team-based access control; CI/CD integration for key rotation
+      team; Self-service webhook management; Key rotation management; Audit logging
+      of all actions; Policy management for access control
   links:
   - url: https://github.com/gustav0thethird/Aegis
     title: GitHub
     icon: github
   tags:
-  - secrets-broker
-  - api-management
+  - secrets-management
+  - api-gateway
   - team-self-service
-  - security
   - logging
+  - security
 spec:
   type: service
   lifecycle: production
@@ -39,33 +39,13 @@ spec:
   lifecycle: production
   owner: gtully
   definition: "openapi: 3.0.0\ninfo:\n  title: Aegis API\n  version: 1.0.0\npaths:\n\
-    \  /health:\n    get:\n      summary: Health check endpoint.\n      responses:\n\
-    \        '200':\n          description: OK\n  /secrets:\n    get:\n      summary:\
-    \ Fetch secrets using a scoped API key and change number.\n      responses:\n\
-    \        '200':\n          description: OK\n  /api/login:\n    post:\n      summary:\
-    \ Authenticate user and return session token.\n      responses:\n        '200':\n\
-    \          description: OK\n  /api/logout:\n    post:\n      summary: Logout user\
-    \ and invalidate session token.\n      responses:\n        '200':\n          description:\
-    \ OK\n  /api/me:\n    get:\n      summary: Retrieve information about the authenticated\
-    \ user.\n      responses:\n        '200':\n          description: OK\n  /api/me/theme:\n\
-    \    put:\n      summary: Update the theme settings for the authenticated user.\n\
-    \      responses:\n        '200':\n          description: OK\n  /api/my-teams:\n\
-    \    get:\n      summary: Retrieve teams associated with the authenticated user.\n\
-    \      responses:\n        '200':\n          description: OK\n  /api/my-webhook:\n\
-    \    get:\n      summary: View webhook and notification channels for the authenticated\
-    \ user.\n      responses:\n        '200':\n          description: OK\n    put:\n\
-    \      summary: Configure outgoing webhook and notifications for the authenticated\n\
-    \        user.\n      responses:\n        '200':\n          description: OK\n\
-    \    delete:\n      summary: Remove webhook for the authenticated user.\n    \
-    \  responses:\n        '200':\n          description: OK\n  /api/my-metrics:\n\
-    \    get:\n      summary: Retrieve team-scoped audit counts and key statistics.\n\
-    \      responses:\n        '200':\n          description: OK\n  /api/my-metrics/prometheus:\n\
-    \    get:\n      summary: Retrieve team-scoped Prometheus metrics.\n      responses:\n\
-    \        '200':\n          description: OK\n  /api/inbound/{team_id}:\n    post:\n\
-    \      summary: Inbound webhook receiver for CI/CD trigger.\n      responses:\n\
-    \        '200':\n          description: OK\n  /admin/api/ping:\n    get:\n   \
-    \   summary: Ping endpoint for admin check.\n      responses:\n        '200':\n\
-    \          description: OK\n  /admin/api/settings:\n    get:\n      summary: Retrieve\
-    \ admin settings.\n      responses:\n        '200':\n          description: OK\n\
-    \    put:\n      summary: Update admin settings.\n      responses:\n        '200':\n\
-    \          description: OK\n"
+    \  /admin/api/settings:\n    get:\n      summary: Retrieve admin settings.\n \
+    \     responses:\n        '200':\n          description: OK\n    put:\n      summary:\
+    \ Update admin settings.\n      responses:\n        '200':\n          description:\
+    \ OK\n  /admin/api/ping:\n    get:\n      summary: Ping the admin API to check\
+    \ if it's alive.\n      responses:\n        '200':\n          description: OK\n\
+    \  /admin/api/objects:\n    get:\n      summary: List all objects managed by the\
+    \ admin.\n      responses:\n        '200':\n          description: OK\n    post:\n\
+    \      summary: Create a new object.\n      responses:\n        '200':\n     \
+    \     description: OK\n  /admin/api/changelog:\n    get:\n      summary: Retrieve\
+    \ the change log.\n      responses:\n        '200':\n          description: OK\n"

@@ -3,25 +3,33 @@
     "sha": "bfac1563ae25",
     "summary": "Configures Dependabot to automatically check for updates in Python, Docker, Terraform, and GitHub Actions dependencies on a weekly basis."
   },
-  ".github/workflows/ci.yml": {
-    "sha": "01b6aa672e04",
-    "summary": "Defines a continuous integration workflow that includes linting, testing, and Helm chart validation for the project."
+  ".github/workflows/bandit.yml": {
+    "sha": "f34ce4045365",
+    "summary": "This file defines a GitHub Actions workflow that runs a security scan using Bandit on specified branches and schedules."
   },
-  ".github/workflows/codeql.yml": {
-    "sha": "d0ed6e185312",
-    "summary": "Sets up a scheduled security scan using Bandit to identify vulnerabilities in the codebase."
+  ".github/workflows/ci.yml": {
+    "sha": "2817d7043083",
+    "summary": "This file sets up a continuous integration workflow that includes linting, testing, and Helm chart validation for the project."
   },
   ".github/workflows/dependabot-automerge.yml": {
-    "sha": "e10e4d54ffb1",
-    "summary": "Automates the merging of Dependabot pull requests for patch and minor version updates on the main branch."
+    "sha": "8775991fa1db",
+    "summary": "This file automates the merging of Dependabot pull requests for patch and minor version updates on the main branch."
   },
   ".github/workflows/release.yml": {
-    "sha": "ebc507903c07",
-    "summary": "Handles the release process by creating GitHub releases, building Docker images, and scanning for vulnerabilities before pushing the images."
+    "sha": "c17fc03d093d",
+    "summary": "This file outlines a release workflow that triggers on version tag pushes, creating a GitHub release and building a Docker image."
+  },
+  ".github/workflows/scorecard.yml": {
+    "sha": "f520657c590e",
+    "summary": "This file runs an OpenSSF Scorecard analysis to audit the repository's supply-chain hygiene and uploads the results to GitHub."
   },
   ".github/workflows/secret-scan.yml": {
-    "sha": "a44f9046f0c4",
-    "summary": "Provides a reusable workflow for scanning the repository for secrets using Gitleaks and Semgrep, reporting findings to Aegis."
+    "sha": "786f184a273a",
+    "summary": "This file defines a reusable workflow for scanning secrets using Gitleaks and Semgrep, reporting findings to Aegis."
+  },
+  ".github/workflows/security.yml": {
+    "sha": "3852c5dbb53f",
+    "summary": "This file defines a GitHub Actions workflow for static security scanning on every push and pull request, uploading findings as SARIF to the repository's security tab."
   },
   ".gitlab-ci.yml": {
     "sha": "a40e37e20408",
@@ -32,8 +40,8 @@
     "summary": "Defines Gitleaks configuration to scan for sensitive information in the repository."
   },
   "Dockerfile": {
-    "sha": "34eb707a3878",
-    "summary": "Specifies the instructions to build a Docker image for the Aegis application."
+    "sha": "7f5bc1d8264e",
+    "summary": "This file contains instructions to build a Docker image for the Aegis application, including setting up the environment, dependencies, and entry point."
   },
   "Makefile": {
     "sha": "7b5611372129",
@@ -48,8 +56,8 @@
     "summary": "Handles alerting mechanisms when secrets are detected in source code."
   },
   "aegis/api.py": {
-    "sha": "54572f3dd03d",
-    "summary": "Defines the FastAPI service for Aegis, including user authentication, admin functionalities, and API endpoints."
+    "sha": "2142ce3fa6fd",
+    "summary": "This file implements a FastAPI service for the Aegis application, providing various endpoints for user authentication, team management, and administrative functions."
   },
   "aegis/broker.py": {
     "sha": "150f3192a241",
@@ -156,8 +164,8 @@
     "summary": "Provides configurable log adapters for sending events to various destinations like stdout, Splunk, S3, and Datadog."
   },
   "aegis/url_guard.py": {
-    "sha": "8a55516bcdc2",
-    "summary": "Validates user-supplied outbound URLs to prevent SSRF attacks and ensure safe webhook delivery."
+    "sha": "126c174ce054",
+    "summary": "This file provides validation functions for user-supplied outbound URLs to prevent SSRF vulnerabilities in the Aegis application."
   },
   "aegis/webhook.py": {
     "sha": "4f99c465e2aa",
@@ -220,8 +228,8 @@
     "summary": "Defines the root Argo CD application that manages multiple Aegis applications across different environments."
   },
   "argocd/application.yaml": {
-    "sha": "4b5fd38500a3",
-    "summary": "Specifies an Argo CD application for deploying a single Aegis environment with configuration values."
+    "sha": "b7fc8f499f41",
+    "summary": "This file defines an Argo CD application configuration for deploying the Aegis application in a Kubernetes environment."
   },
   "catalog-info.yaml": {
     "sha": "ee188c7c8a3b",
@@ -264,8 +272,8 @@
     "summary": "This file defines an ExternalSecret that retrieves individual secrets by name from Aegis, ensuring secure access to sensitive data."
   },
   "helm/Chart.yaml": {
-    "sha": "b50c785c67ec",
-    "summary": "Defines the Helm chart metadata for the Aegis application, including its name, version, and description."
+    "sha": "e29012f350d7",
+    "summary": "This file contains metadata for the Helm chart of the Aegis application, including its version, description, and maintainers."
   },
   "helm/templates/configmap.yaml": {
     "sha": "ab139f0f0d43",
@@ -316,44 +324,44 @@
     "summary": "Defines a ServiceMonitor resource for monitoring the application's metrics if enabled in the values."
   },
   "helm/values.yaml": {
-    "sha": "e0dd8e52e8ea",
-    "summary": "Contains default configuration values for the Aegis Helm chart, including settings for replicas, image, service, and security."
+    "sha": "14617e64af84",
+    "summary": "Contains default configuration values for the Aegis Helm chart, including settings for replicas, image, service, ingress, resources, and security contexts."
   },
   "mkdocs.yml": {
     "sha": "aaf610a1db42",
     "summary": "Configures the documentation site for Aegis, outlining its structure and content related to the API broker."
   },
   "requirements.txt": {
-    "sha": "91906942283d",
-    "summary": "Lists the Python package dependencies required for the Aegis project, specifying exact versions for each package."
+    "sha": "9414732e1a3f",
+    "summary": "Lists the Python package dependencies required for the project, specifying exact versions for each package."
   },
   "ruff.toml": {
     "sha": "08c472ddfee4",
     "summary": "Configures the Ruff linter settings, specifying which linting rules to apply and ignoring certain rules for test files."
   },
   "terraform/alb.tf": {
-    "sha": "25081fa19c46",
-    "summary": "Defines AWS resources for an Application Load Balancer, including the load balancer, target group, and listener configurations."
+    "sha": "5c6fed502964",
+    "summary": "Defines the AWS Application Load Balancer (ALB) and its associated target group and listeners for routing traffic."
   },
   "terraform/ecs.tf": {
-    "sha": "e5c305774643",
-    "summary": "Defines the ECS cluster, task definition, and service for the application, including container configurations and networking."
+    "sha": "6a687212a17f",
+    "summary": "Configures the AWS ECS cluster, task definition, and service for deploying the Aegis broker application using Fargate."
   },
   "terraform/iam.tf": {
     "sha": "38090653e304",
     "summary": "Creates IAM roles and policies for ECS task execution and access to AWS resources like Secrets Manager and S3."
   },
   "terraform/main.tf": {
-    "sha": "6dd47b8ccab5",
-    "summary": "Sets up the VPC, subnets, internet and NAT gateways, route tables, and security groups for the project infrastructure."
+    "sha": "948f391a1f9a",
+    "summary": "Sets up the foundational AWS infrastructure, including VPC, subnets, internet and NAT gateways, route tables, and security groups."
   },
   "terraform/outputs.tf": {
     "sha": "142819ec57f6",
     "summary": "Specifies output values for key resources such as ALB DNS name, ECR repository URL, and RDS cluster endpoint."
   },
   "terraform/rds.tf": {
-    "sha": "6037295f6ebb",
-    "summary": "Configures an RDS Aurora PostgreSQL cluster and its instances, including subnet groups and security settings."
+    "sha": "ec8e93557973",
+    "summary": "Creates an AWS RDS cluster and instances for PostgreSQL, including subnet groups and security configurations."
   },
   "terraform/redis.tf": {
     "sha": "c06900af9b40",
