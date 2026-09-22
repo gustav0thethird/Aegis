@@ -7,7 +7,10 @@ LABEL org.opencontainers.image.title="Aegis" \
 WORKDIR /app
 
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+# pip is removed after installing: a runtime image has no need for a package
+# manager, and pip's vendored dependencies (msgpack, setuptools) otherwise
+# show up in image scans as CVEs that nothing here actually uses.
+RUN pip install --no-cache-dir -r requirements.txt     && python -m pip uninstall -y pip
 
 COPY aegis/ aegis/
 COPY static/ static/

@@ -5,6 +5,10 @@ resource "aws_lb" "main" {
   security_groups    = [aws_security_group.alb.id]
   subnets            = aws_subnet.public[*].id
 
+  # Reject requests with malformed headers at the edge rather than passing
+  # them through to the broker.
+  drop_invalid_header_fields = true
+
   tags = { Name = "${local.name}-alb" }
 }
 

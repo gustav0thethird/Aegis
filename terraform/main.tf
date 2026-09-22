@@ -23,6 +23,8 @@ resource "aws_vpc" "main" {
 }
 
 # ── Subnets ───────────────────────────────────────────────────────────────────
+# Only the ALB lives here; ECS tasks, RDS and Redis are in the private
+# subnets below. Public IPs on launch are required for the ALB ENIs.
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id

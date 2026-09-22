@@ -234,6 +234,5 @@ def request(method: str, url: str, *, allow_private: bool = False, **kwargs):
 
     with requests.Session() as session:
         session.mount("https://", _PinnedAdapter(hostname))
-        session.mount("http://", HTTPAdapter())
         return session.request(method, pin_url(url, addresses[0]),
                                headers=headers, **kwargs)

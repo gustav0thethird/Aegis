@@ -1,0 +1,147 @@
+# Static security scanning on every push and pull request.
+#
+# Findings are uploaded as SARIF so they appear in the repository's
+# Security > Code scanning tab alongside CodeQL, and each job also fails
+# the build on HIGH/CRITICAL so a regression is visible on the PR itself.
+#
+# Complements ci.yml (Bandit, pip-audit, Gitleaks) and release.yml (Trivy
+# image scan at tag time): this catches the same classes of problem on
+# the branch, before a release is cut.
+
+name: Security
+
+on:
+  push:
+    branches: [main, "feat/**", "feature/**", "fix/**", "chore/**", "refactor/**"]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * 1"  # Mondays 03:00 UTC — catch newly published CVEs
+
+permissions:
+  contents: read
+  security-events: write
+
+jobs:
+  trivy-fs:
+    name: Trivy (repo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # Pinned Python dependencies, Terraform/Helm/Dockerfile misconfiguration,
+      # and committed secrets. Deliberate IaC choices are listed in .trivyignore.
+      - name: Scan filesystem
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          severity: CRITICAL,HIGH
+          skip-dirs: brag-output
+          trivyignores: .trivyignore
+          format: sarif
+          output: trivy-fs.sarif
+          # Without this the action writes every severity to the SARIF and
+          # exit-code fires on LOW/MEDIUM findings too.
+          limit-severities-for-sarif: true
+          exit-code: "1"
+        env:
+          # Trivy renders the Helm chart to scan the resulting manifests; the
+          # chart refuses to render without these (same values ci.yml uses).
+          TRIVY_HELM_SET: auth.existingSecret=aegis-auth-json,secret.existingSecret=aegis-credentials
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  trivy-image:
+    name: Trivy (image)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Build image
+        run: docker build -t aegis:scan .
+
+      # OS packages in the base image plus the installed site-packages.
+      # release.yml runs the same scan against the tagged image; running it
+      # here means a base-image CVE blocks the PR, not the release.
+      - name: Scan image
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: aegis:scan
+          severity: CRITICAL,HIGH
+          ignore-unfixed: true
+          format: sarif
+          output: trivy-image.sarif
+          limit-severities-for-sarif: true
+          exit-code: "1"
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+  semgrep:
+    name: Semgrep
+    runs-on: ubuntu-latest
+    container:
+      image: semgrep/semgrep@sha256:34ab619bf1391a24bfda3f05debd0d8a6ce3093c2d5f9d39cfc00f83c1397823 # 1.176.1
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # helm/ is excluded: Go-templated YAML is not parseable as Kubernetes
+      # manifests. The rendered chart is validated by kubeconform in ci.yml.
+      #
+      # The public-subnet rule is excluded rather than nosemgrep'd because
+      # GitHub surfaces suppressed SARIF findings as open alerts anyway; the
+      # public subnets only hold the ALB (see terraform/main.tf).
+      - name: Scan
+        run: |
+          semgrep scan \
+            --config p/python \
+            --config p/secrets \
+            --config p/dockerfile \
+            --config p/github-actions \
+            --config p/terraform \
+            --exclude brag-output \
+            --exclude helm \
+            --exclude-rule terraform.aws.security.aws-subnet-has-public-ip-address.aws-subnet-has-public-ip-address \
+            --metrics=off \
+            --error \
+            --sarif --output semgrep.sarif
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: semgrep.sarif
+          category: semgrep
+
+  hadolint:
+    name: Hadolint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Lint Dockerfile
+        uses: hadolint/hadolint-action@54c9adbab1582c2ef04b2016b760714a4bfde3cf # v3.1.0
+        with:
+          dockerfile: Dockerfile
+          format: sarif
+          output-file: hadolint.sarif
+          failure-threshold: warning
+
+      - name: Upload results
+        if: always()
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
