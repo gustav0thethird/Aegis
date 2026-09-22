@@ -40,13 +40,13 @@ jobs:
           severity: CRITICAL,HIGH
           skip-dirs: brag-output
           trivyignores: .trivyignore
+          format: sarif
+          output: trivy-fs.sarif
+          exit-code: "1"
         env:
           # Trivy renders the Helm chart to scan the resulting manifests; the
           # chart refuses to render without these (same values ci.yml uses).
           TRIVY_HELM_SET: auth.existingSecret=aegis-auth-json,secret.existingSecret=aegis-credentials
-          format: sarif
-          output: trivy-fs.sarif
-          exit-code: "1"
 
       - name: Upload results
         if: always()
