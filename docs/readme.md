@@ -86,6 +86,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Database Schema](#database-schema)
 - [Themes](#themes)
 - [Admin account bootstrap](#admin-account-bootstrap)
+- [Workload Identity](#workload-identity)
 - [Key delivery on rotation](#key-delivery-on-rotation)
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
@@ -1878,6 +1879,96 @@ auth:
 Environment variables are read at pod start, so a refreshed Secret applies on
 the next roll; add a [Reloader](https://github.com/stakater/Reloader)
 annotation under `podAnnotations` to roll automatically.
+
+## Workload Identity
+
+A caller can authenticate with the OIDC token its platform already issued it,
+instead of an Aegis API key. A Kubernetes pod and a GitHub Actions job can
+both already prove what they are; an API key is a bearer secret that has to be
+created, delivered, stored, rotated and eventually leaked.
+
+```text
+projected ServiceAccount token          identity_bindings row
+  iss  https://kubernetes.default…  ──►   issuer   + audience
+  sub  system:serviceaccount:…            subject  + claim rules
+  aud  aegis                                    │
+                                                ▼
+                                          team + registry
+                                                │
+                                                ▼
+                                    policy, fetch, audit  (unchanged)
+```
+
+Authorisation is not changed by this. A verified identity resolves to the same
+team and registry an API key would, and everything after that — policy
+resolution, rate limiting, auditing, caching — is the existing path. Only the
+proof of who is calling is different.
+
+### Registering a binding
+
+```bash
+curl -X POST https://aegis.example.com/admin/api/identity-bindings \
+  -u admin:$ADMIN_PASSWORD \
+  -H 'Content-Type: application/json' \
+  -d '{
+        "name": "payments-api on prod cluster",
+        "issuer": "https://kubernetes.default.svc.cluster.local",
+        "audience": "aegis",
+        "subject": "system:serviceaccount:payments:api",
+        "team_id": "...",
+        "registry_id": "...",
+        "claim_rules": {}
+      }'
+```
+
+The workload then calls Aegis with its token in place of an API key:
+
+```bash
+TOKEN=$(cat /var/run/secrets/tokens/aegis)
+curl -H "Authorization: Bearer $TOKEN" -H 'X-Change-Number: CHG-123' \
+  https://aegis.example.com/secrets
+```
+
+For a Kubernetes pod, request a token with Aegis as its audience:
+
+```yaml
+volumes:
+  - name: aegis-token
+    projected:
+      sources:
+        - serviceAccountToken:
+            path: aegis
+            audience: aegis          # must match the binding
+            expirationSeconds: 3600
+```
+
+For GitHub Actions, the issuer is `https://token.actions.githubusercontent.com`,
+the subject looks like `repo:acme/payments:ref:refs/heads/main`, and
+`claim_rules` can pin further claims:
+
+```json
+{"repository": "acme/payments", "ref": "refs/heads/main"}
+```
+
+### What is verified
+
+| Check | Rule |
+|---|---|
+| Algorithm | Asymmetric only (`RS*`, `PS*`, `ES*`, `EdDSA`). `none` and the HMAC family are rejected — a verifier that accepts `HS256` against a key from a JWKS lets anyone who can read that public key sign their own tokens. |
+| Issuer | Must exactly match an enabled binding. No discovery of arbitrary issuers, and no outbound request is made for an issuer with no binding. |
+| Audience | Must match the binding. A token minted for another service is not replayable against Aegis, so `audience` is required rather than defaulting to "any". |
+| Signature | Verified against the issuer's JWKS, fetched through `url_guard` and cached for `IDENTITY_JWKS_TTL_SECONDS`. An unknown key id triggers one re-fetch, so a rotated signing key is picked up without waiting for the TTL. |
+| `exp` / `nbf` / `iat` | Required and enforced, with 60 seconds of clock skew allowed. |
+| Subject | Must exactly match the binding. |
+| Claim rules | Every rule must match. A claim that is absent does not satisfy a rule. |
+
+A binding is not a credential: issuer, audience, subject and claim rules are
+public facts about a workload, so the row grants nothing without a token the
+issuer actually signed.
+
+**Not solved:** replay of a still-valid token by someone who has obtained it.
+These tokens are short-lived and audience-bound, which is the usual
+mitigation; a nonce store would be the next step if that is not enough.
 
 ## Key delivery on rotation
 

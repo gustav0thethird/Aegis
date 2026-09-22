@@ -24,6 +24,7 @@ from fastapi.security import HTTPBasic, HTTPBearer
 from sqlalchemy.orm import Session
 
 from aegis import errors, keys, rate_limit, secret_cache, url_guard
+from aegis import identity as identity_mod
 from aegis import policy as policy_mod
 from aegis import webhook as wh
 from aegis.broker import fetch_secrets, load_auth
@@ -31,6 +32,7 @@ from aegis.database import get_db
 from aegis.models import (
     AuditLog,
     ChangeLog,
+    IdentityBinding,
     Object,
     Policy,
     Registry,
@@ -248,6 +250,119 @@ def _authenticate_registry_key(db: Session, api_key: str, source_ip, user_agent)
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid API key")
 
     return key_row
+
+
+class _IdentityPrincipal:
+    """
+    What a verified workload identity presents to the rest of the request path.
+
+    Deliberately the same shape as a TeamRegistryKey row, because everything
+    downstream - policy resolution, rate limiting, auditing, caching - is
+    shared. The difference between "proved an identity" and "presented a key"
+    stops here; only the audit trail records which it was.
+
+    `id` is the binding's id, so the rate-limit bucket is per binding just as
+    it is per key.
+    """
+
+    def __init__(self, binding, identity):
+        self.id = binding.id
+        self.team_id = binding.team_id
+        self.registry_id = binding.registry_id
+        self.team = binding.team
+        self.registry = binding.registry
+        self.binding = binding
+        self.identity = identity
+        self.expires_at = None
+        self.suspended = False
+        self.revoked_at = None
+
+    @property
+    def key_preview(self) -> str:
+        """Audit rows say which workload authenticated, not a key prefix."""
+        return f"identity:{self.identity.subject}"
+
+    @property
+    def key_hash(self) -> str:
+        """
+        Cache partition for this principal.
+
+        The secret cache is keyed on the credential so two callers never share
+        an entry. There is no stored secret here, so the binding and the
+        verified subject stand in - they are exactly what authorised the
+        fetch. Not a credential and never compared against one: the name
+        matches the attribute the fetch path reads.
+        """
+        return _hash_key(f"identity:{self.binding.id}:{self.identity.subject}")
+
+
+def _authenticate_workload_identity(db: Session, token: str, source_ip, user_agent):
+    """
+    Resolve an OIDC token to the binding it satisfies, or raise 401.
+
+    Only issuers with an enabled binding are considered; there is no discovery
+    of arbitrary issuers. Every candidate binding for that issuer is verified
+    against the token's audience, and the first whose subject and claim rules
+    match wins.
+    """
+    claimed_issuer = identity_mod.unverified_issuer(token)
+    if not claimed_issuer:
+        _write_audit(db, "auth.failed", "denied", source_ip=source_ip, user_agent=user_agent,
+                     error_detail="Token has no issuer")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    bindings = (db.query(IdentityBinding)
+                  .filter(IdentityBinding.issuer == claimed_issuer,
+                          IdentityBinding.enabled.is_(True))
+                  .all())
+    if not bindings:
+        logger.warning("No identity binding for issuer %s", claimed_issuer)
+        _write_audit(db, "auth.failed", "denied", source_ip=source_ip, user_agent=user_agent,
+                     error_detail=f"No binding for issuer {claimed_issuer}")
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    last_error = "no binding matched"
+    # Verification is per audience, so tokens minted for another service are
+    # rejected rather than accepted by whichever binding happens to be first.
+    for audience in sorted({b.audience for b in bindings}):
+        try:
+            verified = identity_mod.verify(token, issuer=claimed_issuer, audience=audience)
+        except identity_mod.IdentityError as exc:
+            last_error = str(exc)
+            continue
+
+        for binding in bindings:
+            if binding.audience != audience or binding.subject != verified.subject:
+                continue
+            if not identity_mod.claims_match(verified.claims, binding.claim_rules):
+                last_error = f"claim rules not satisfied for binding {binding.name}"
+                continue
+
+            binding.last_used_at = datetime.now(timezone.utc)
+            db.commit()
+            logger.info("Workload identity accepted subject=%s issuer=%s binding=%s",
+                        verified.subject, claimed_issuer, binding.name)
+            return _IdentityPrincipal(binding, verified)
+
+        last_error = f"no binding for subject {verified.subject}"
+
+    logger.warning("Rejected workload identity issuer=%s: %s", claimed_issuer, last_error)
+    _write_audit(db, "auth.failed", "denied", source_ip=source_ip, user_agent=user_agent,
+                 error_detail=f"Workload identity rejected: {last_error}")
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+
+def authenticate_bearer(db: Session, credential: str, source_ip, user_agent):
+    """
+    Authenticate either kind of credential presented as a bearer token.
+
+    One header, two mechanisms: an Aegis API key, or an OIDC token from a
+    platform the workload already trusts. Both resolve to a team and registry
+    and take the same path from here.
+    """
+    if identity_mod.looks_like_jwt(credential):
+        return _authenticate_workload_identity(db, credential, source_ip, user_agent)
+    return _authenticate_registry_key(db, credential, source_ip, user_agent)
 
 
 def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,

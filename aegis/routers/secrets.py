@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session
 
 from aegis.database import get_db
 from aegis.deps import (
-    _authenticate_registry_key,
     _fetch_for_key,
+    authenticate_bearer,
     bearer,
 )
 
@@ -38,7 +38,7 @@ def get_secrets(
 
     source_ip  = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
+    key_row = authenticate_bearer(db, credentials.credentials, source_ip, user_agent)
     return _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent)
 
 
