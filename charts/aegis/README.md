@@ -1,6 +1,6 @@
 # aegis
 
-![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.2.0](https://img.shields.io/badge/AppVersion-0.2.0-informational?style=flat-square)
+![Version: 0.3.1](https://img.shields.io/badge/Version-0.3.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.3.0](https://img.shields.io/badge/AppVersion-0.3.0-informational?style=flat-square)
 
 Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any vault, every action logged.
 
@@ -14,7 +14,7 @@ Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any va
 The chart is published as a signed OCI artifact alongside each release:
 
 ```bash
-helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.3.0 \
+helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.3.1 \
   --namespace aegis --create-namespace \
   --set secret.existingSecret=aegis-credentials \
   --set auth.existingSecret=aegis-auth-json \
@@ -34,7 +34,7 @@ Two Secrets must exist in the namespace before installing:
 Verify the chart's signature (keyless, bound to the release workflow):
 
 ```bash
-cosign verify oci://ghcr.io/gustav0thethird/charts/aegis:0.3.0 \
+cosign verify oci://ghcr.io/gustav0thethird/charts/aegis:0.3.1 \
   --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```

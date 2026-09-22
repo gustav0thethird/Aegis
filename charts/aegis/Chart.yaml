@@ -5,8 +5,8 @@ type: application
 # Chart version and appVersion are independent. Bump `version` whenever
 # templates or values change (ct enforces this on PRs); `appVersion` tracks the
 # image and is overridden at release time from the git tag.
-version: 0.3.0
-appVersion: "0.2.0"
+version: 0.3.1
+appVersion: "0.3.0"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/gustav0thethird/Aegis
 icon: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/Aegis-logo.png
@@ -40,8 +40,25 @@ annotations:
       url: https://github.com/gustav0thethird/Aegis/pkgs/container/aegis
   artifacthub.io/images: |
     - name: aegis
-      image: ghcr.io/gustav0thethird/aegis:v0.2.0
+      image: ghcr.io/gustav0thethird/aegis:v0.3.0
+  artifacthub.io/screenshots: |
+    - title: Admin dashboard - estate overview, objects by vendor, recent changes
+      url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/admin-dashboard.png
+    - title: Objects - atomic secret definitions across CyberArk, Vault, AWS and Conjur
+      url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/objects.png
+    - title: Registries - named collections of objects that teams are granted against
+      url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/registries.png
+    - title: Teams - scoped API keys, one per team-registry pair
+      url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/teams.png
+    - title: Audit log - every fetch and change, attributed and queryable
+      url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/audit-log.png
+    - title: Interactive API documentation
+      url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/api-docs.png
   artifacthub.io/changes: |
+    - kind: fixed
+      description: Chart appVersion now tracks the released image (was 0.2.0, so a local install defaulted to the old image)
+    - kind: added
+      description: Screenshots on the Artifact Hub listing
     - kind: added
       description: Generated admin password when secret.adminPassword is empty, stable across upgrades
     - kind: added
