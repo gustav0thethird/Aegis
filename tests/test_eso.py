@@ -10,9 +10,21 @@ does. Most of what is asserted here is that they are no weaker.
 
 import hashlib
 
+import pytest
+
 from aegis.models import AuditLog, TeamRegistryKey
 from tests.conftest import ADMIN_CREDS
 from tests.test_secrets import _auth_header, _create_scenario
+
+
+@pytest.fixture(autouse=True)
+def _allow_registry_extract(monkeypatch):
+    """
+    These tests cover /eso/v1/secrets, which returns a whole registry and is
+    opt-in since it hands over every object at once. The gate itself is tested
+    in test_secret_cache.TestRegistryExtractGate and test_blast_radius.
+    """
+    monkeypatch.setenv("ESO_ALLOW_REGISTRY_EXTRACT", "true")
 
 ALL = "/eso/v1/secrets"
 

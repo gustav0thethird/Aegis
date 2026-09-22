@@ -118,6 +118,9 @@ class TestRotatedKeyIsNotPersisted:
     """The plaintext key goes to the subscriber, not into webhook_log."""
 
     def test_delivery_record_is_redacted_but_the_request_body_is_not(self, db, monkeypatch):
+        # Broadcasting the key is opt-in; this test is about what happens to
+        # the delivery record when a deployment has opted in.
+        monkeypatch.setenv("WEBHOOK_INCLUDE_ROTATED_KEY", "true")
         team = Team(name=_unique("team"), created_by="test")
         db.add(team)
         db.commit()
@@ -164,6 +167,7 @@ class TestRotatedKeyIsNotPersisted:
         assert stored["event"] == "key.rotated"
 
     def test_blocked_delivery_is_also_redacted(self, db, monkeypatch):
+        monkeypatch.setenv("WEBHOOK_INCLUDE_ROTATED_KEY", "true")
         team = Team(name=_unique("team"), created_by="test")
         db.add(team)
         db.commit()

@@ -105,6 +105,8 @@
         "rateLimitFailMode": { "type": "string", "enum": ["open", "closed"] },
         "webhookAllowedSchemes": { "type": "string" },
         "webhookAllowedHosts": { "type": "string" },
+        "esoAllowRegistryExtract": { "type": "boolean" },
+        "webhookIncludeRotatedKey": { "type": "boolean" },
         "extraEnv": { "$ref": "#/definitions/stringMap" }
       }
     },

@@ -5,7 +5,7 @@ type: application
 # Chart version and appVersion are independent. Bump `version` whenever
 # templates or values change (ct enforces this on PRs); `appVersion` tracks the
 # image and is overridden at release time from the git tag.
-version: 0.3.1
+version: 0.4.0
 appVersion: "0.3.0"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/gustav0thethird/Aegis
@@ -55,6 +55,10 @@ annotations:
     - title: Interactive API documentation
       url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/api-docs.png
   artifacthub.io/changes: |
+    - kind: changed
+      description: "Breaking: the key.rotated webhook no longer carries the plaintext key (config.webhookIncludeRotatedKey restores it)"
+    - kind: changed
+      description: "Breaking: whole-registry ESO extraction is off by default (config.esoAllowRegistryExtract enables it)"
     - kind: fixed
       description: Chart appVersion now tracks the released image (was 0.2.0, so a local install defaulted to the old image)
     - kind: added

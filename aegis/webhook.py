@@ -47,6 +47,23 @@ def _sign(payload_str: str, secret: str) -> str:
     return hmac.new(secret.encode(), payload_str.encode(), hashlib.sha256).hexdigest()
 
 
+def include_rotated_key() -> bool:
+    """
+    Whether a key.rotated event carries the plaintext key.
+
+    Off by default. Signing proves an event came from Aegis; it says nothing
+    about what the receiver does with it, so shipping the credential to an
+    ordinary HTTP endpoint widens its trust boundary to that endpoint, its
+    proxy, its logs and its monitoring.
+
+    Subscribers learn that a rotation happened and which key it replaced. The
+    key itself is returned to whoever asked for the rotation, in the response
+    to their authenticated request - including the CI/CD inbound webhook,
+    which returns it to the caller that triggered it.
+    """
+    return os.environ.get("WEBHOOK_INCLUDE_ROTATED_KEY", "false").strip().lower() == "true"
+
+
 def build_payload(event: str, team: dict, registry: dict | None = None,
                   new_key: str | None = None, key_preview: str | None = None,
                   reason: str | None = None, detail: str | None = None) -> dict:
@@ -55,7 +72,9 @@ def build_payload(event: str, team: dict, registry: dict | None = None,
         "timestamp":  datetime.now(timezone.utc).isoformat(),
         "team":       team,
         "registry":   registry,
-        "new_key":    new_key,       # present only on key.rotated; None otherwise
+        # Opt-in; see include_rotated_key(). key_preview identifies which key
+        # rotated either way.
+        "new_key":    new_key if include_rotated_key() else None,
         "key_preview": key_preview,
         "reason":     reason,
         "detail":     detail,

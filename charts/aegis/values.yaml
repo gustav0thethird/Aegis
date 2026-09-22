@@ -119,6 +119,10 @@ config:
   webhookAllowedSchemes: https
   # -- Comma-separated host allowlist for outbound webhook and alert URLs. Empty means any public host; private and loopback targets are always rejected.
   webhookAllowedHosts: ""
+  # -- Allow one External Secrets Operator request to return a whole registry. Off by default: it hands every object in the registry to a single consumer.
+  esoAllowRegistryExtract: false
+  # -- Include the plaintext key in the key.rotated webhook payload. Off by default; the key is returned to whoever triggered the rotation instead.
+  webhookIncludeRotatedKey: false
   # -- Additional non-sensitive environment variables, rendered into the ConfigMap.
   extraEnv: {}
 

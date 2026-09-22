@@ -1,6 +1,6 @@
 # aegis
 
-![Version: 0.3.1](https://img.shields.io/badge/Version-0.3.1-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.3.0](https://img.shields.io/badge/AppVersion-0.3.0-informational?style=flat-square)
+![Version: 0.4.0](https://img.shields.io/badge/Version-0.4.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.3.0](https://img.shields.io/badge/AppVersion-0.3.0-informational?style=flat-square)
 
 Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any vault, every action logged.
 
@@ -14,7 +14,7 @@ Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any va
 The chart is published as a signed OCI artifact alongside each release:
 
 ```bash
-helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.3.1 \
+helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.4.0 \
   --namespace aegis --create-namespace \
   --set secret.existingSecret=aegis-credentials \
   --set auth.existingSecret=aegis-auth-json \
@@ -34,7 +34,7 @@ Two Secrets must exist in the namespace before installing:
 Verify the chart's signature (keyless, bound to the release workflow):
 
 ```bash
-cosign verify oci://ghcr.io/gustav0thethird/charts/aegis:0.3.1 \
+cosign verify oci://ghcr.io/gustav0thethird/charts/aegis:0.4.0 \
   --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -74,12 +74,14 @@ Kubernetes: `>=1.25.0-0`
 | autoscaling.maxReplicas | int | `6` | Maximum replicas. |
 | autoscaling.minReplicas | int | `2` | Minimum replicas. |
 | autoscaling.targetCPUUtilizationPercentage | int | `75` | Target average CPU utilisation. |
+| config.esoAllowRegistryExtract | bool | `false` | Allow one External Secrets Operator request to return a whole registry. Off by default: it hands every object in the registry to a single consumer. |
 | config.extraEnv | object | `{}` | Additional non-sensitive environment variables, rendered into the ConfigMap. |
 | config.logDestinations | string | `"stdout"` | Comma-separated audit log destinations: stdout, splunk, s3, datadog. |
 | config.rateLimitFailMode | string | `"open"` | Behaviour when Redis is unreachable: open serves without enforcing limits (availability first), closed rejects requests (security first). |
 | config.rateLimitRpm | string | `"60"` | Per-key requests per minute. |
 | config.webhookAllowedHosts | string | `""` | Comma-separated host allowlist for outbound webhook and alert URLs. Empty means any public host; private and loopback targets are always rejected. |
 | config.webhookAllowedSchemes | string | `"https"` | Comma-separated URL schemes accepted for outbound webhook and alert URLs. |
+| config.webhookIncludeRotatedKey | bool | `false` | Include the plaintext key in the key.rotated webhook payload. Off by default; the key is returned to whoever triggered the rotation instead. |
 | externalSecrets.authJson.enabled | bool | `false` | Materialise the auth.json Secret (auth.existingSecret) from an external store via an ExternalSecret. |
 | externalSecrets.authJson.refreshInterval | string | `"1h"` | How often ESO re-reads the store. |
 | externalSecrets.authJson.remoteRef | object | `{"key":"","property":""}` | Remote reference for the auth.json document (`key`, optional `property` and `version`). |

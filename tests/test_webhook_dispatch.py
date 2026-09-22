@@ -126,6 +126,7 @@ class TestDispatchIsOffTheRequestPath:
         monkeypatch.setattr("aegis.url_guard.request", ok_request)
         monkeypatch.setattr("aegis.url_guard.check_url", lambda url: None)
 
+        monkeypatch.setenv("WEBHOOK_INCLUDE_ROTATED_KEY", "true")
         webhook.fire(db, team, "key.rotated", new_key="k", key_preview="sk_ab...")
         assert done.wait(timeout=10), "delivery never ran"
 

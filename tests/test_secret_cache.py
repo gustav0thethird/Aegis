@@ -168,7 +168,19 @@ class TestEsoCaching:
 
 class TestRegistryExtractGate:
 
-    def test_allowed_by_default(self, client, db, monkeypatch):
+    def test_disabled_by_default(self, client, db, monkeypatch):
+        """
+        Whole-registry extraction hands every object in a registry to one
+        request, so it is opt-in: a compromised ESO consumer should reach the
+        secrets it names, not the bundle.
+        """
+        monkeypatch.delenv("ESO_ALLOW_REGISTRY_EXTRACT", raising=False)
+        _obj, _reg, _team, key = _create_scenario(db, client)
+        monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
+        assert client.get("/eso/v1/secrets", headers=_auth_header(key)).status_code == 403
+
+    def test_allowed_when_opted_in(self, client, db, monkeypatch):
+        monkeypatch.setenv("ESO_ALLOW_REGISTRY_EXTRACT", "true")
         _obj, _reg, _team, key = _create_scenario(db, client)
         monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
         assert client.get("/eso/v1/secrets", headers=_auth_header(key)).status_code == 200

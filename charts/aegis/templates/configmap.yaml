@@ -14,6 +14,8 @@ data:
   RATE_LIMIT_FAIL_MODE: {{ .Values.config.rateLimitFailMode | quote }}
   WEBHOOK_ALLOWED_SCHEMES: {{ .Values.config.webhookAllowedSchemes | quote }}
   WEBHOOK_ALLOWED_HOSTS: {{ .Values.config.webhookAllowedHosts | quote }}
+  ESO_ALLOW_REGISTRY_EXTRACT: {{ .Values.config.esoAllowRegistryExtract | quote }}
+  WEBHOOK_INCLUDE_ROTATED_KEY: {{ .Values.config.webhookIncludeRotatedKey | quote }}
   {{- range $key, $value := .Values.config.extraEnv }}
   {{ $key }}: {{ $value | quote }}
   {{- end }}

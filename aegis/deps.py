@@ -87,7 +87,10 @@ def _eso_registry_extract_allowed() -> bool:
     Convenient, but it grants everything in the registry to any workload holding
     the key. Deployments that want per-object grants turn it off.
     """
-    return os.environ.get("ESO_ALLOW_REGISTRY_EXTRACT", "true").strip().lower() != "false"
+    # Off by default: a registry is an authorisation unit, not a bundle to
+    # hand over wholesale. Per-object fetches keep a compromised ESO
+    # consumer to the secrets it actually names.
+    return os.environ.get("ESO_ALLOW_REGISTRY_EXTRACT", "false").strip().lower() == "true"
 
 
 def _key_expiry_enforced() -> bool:
