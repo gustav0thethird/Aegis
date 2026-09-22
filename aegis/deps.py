@@ -275,7 +275,8 @@ def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
         key_preview=key_preview, source_ip=source_ip, user_agent=user_agent,
         change_number=x_change_number,
     )
-    _enforce_policies(db, team, registry, source_ip, x_change_number, _base_audit)
+    _enforce_policies(db, team, registry, source_ip, x_change_number, _base_audit,
+                      key_row=key_row)
 
     # --- Fetch secrets ---
     object_rows = [
@@ -416,7 +417,7 @@ def _check_hours(allowed_from, allowed_to) -> bool:
 
 
 def _enforce_policies(db: Session, team, registry, source_ip: str | None,
-                      x_change_number: str | None, audit_kwargs: dict):
+                      x_change_number: str | None, audit_kwargs: dict, key_row=None):
     """
     Evaluate team and registry policies. Raises HTTPException on violation.
     Fires policy.violated webhook on block.
@@ -459,7 +460,12 @@ def _enforce_policies(db: Session, team, registry, source_ip: str | None,
         rpm = reg_policy.rate_limit_rpm
     else:
         rpm = _get_setting_int(db, "rate_limit_rpm", 60)
-    allowed, _ = rate_limit.check(str(team.id) + ":" + str(registry.id), rpm)
+    # Per key, as documented: a rotated key starts with a fresh window
+    # rather than inheriting the bucket of the key it replaced.
+    # key_row is optional so existing callers keep working; without it the
+    # bucket falls back to the team+registry pair.
+    bucket_id = str(key_row.id) if key_row is not None else f"{team.id}:{registry.id}"
+    allowed, _ = rate_limit.check(bucket_id, rpm)
     if not allowed:
         detail = "Rate limit exceeded"
         _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)

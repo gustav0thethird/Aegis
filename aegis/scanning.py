@@ -25,6 +25,7 @@ Config:
 import hashlib
 import hmac
 import os
+import secrets
 
 SEVERITIES = ["info", "low", "medium", "high", "critical"]
 
@@ -53,6 +54,42 @@ def meets_threshold(severity: str, threshold: str) -> bool:
     return severity_rank(severity) >= severity_rank(threshold)
 
 
+# Resolved once at startup by init_dedupe_key(); never a constant, because a
+# known key makes fingerprints precomputable from a candidate wordlist.
+_DEDUPE_KEY: bytes | None = None
+
+DEDUPE_KEY_SETTING = "scan.dedupe_key"
+
+
+def init_dedupe_key(db) -> str:
+    """
+    Resolve the key that dedupe fingerprints are computed with, and return
+    where it came from.
+
+    SECRET_KEY if set, otherwise a random per-installation key persisted in
+    `settings`. Rotating either makes previously seen findings look new, which
+    is why the generated one is stored rather than regenerated per start.
+    """
+    global _DEDUPE_KEY
+    from aegis.models import Setting
+
+    env_key = os.environ.get("SECRET_KEY", "")
+    if env_key:
+        _DEDUPE_KEY = env_key.encode()
+        return "SECRET_KEY"
+
+    row = db.query(Setting).filter(Setting.key == DEDUPE_KEY_SETTING).first()
+    if row and row.value:
+        _DEDUPE_KEY = row.value.encode()
+        return "settings"
+
+    generated = secrets.token_hex(32)
+    db.add(Setting(key=DEDUPE_KEY_SETTING, value=generated, updated_by="system"))
+    db.commit()
+    _DEDUPE_KEY = generated.encode()
+    return "generated"
+
+
 def hash_secret(secret: str) -> str:
     """
     Keyed hash of a matched secret, for dedupe only.
@@ -61,7 +98,17 @@ def hash_secret(secret: str) -> str:
     credential is trivially reversed with a wordlist, and these hashes sit in a
     table that is queried and exported.
     """
-    key = os.environ.get("SECRET_KEY", "").encode() or b"aegis-unkeyed"
+    key = _DEDUPE_KEY
+    if key is None:
+        # Startup has not run yet (a worker importing this module directly, or
+        # a unit test). SECRET_KEY alone is enough; what must never happen is
+        # falling back to a constant every installation shares.
+        env_key = os.environ.get("SECRET_KEY", "")
+        if not env_key:
+            raise RuntimeError(
+                "scan dedupe key is not initialised: call init_dedupe_key() at startup "
+                "or set SECRET_KEY")
+        key = env_key.encode()
     return hmac.new(key, (secret or "").encode(), hashlib.sha256).hexdigest()
 
 
