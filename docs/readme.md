@@ -668,10 +668,10 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `DATABASE_URL` | Yes | — | PostgreSQL DSN (`postgresql://user:pass@host/db`) |
 | `REDIS_URL` | Yes | — | Redis DSN (`redis://host:6379`) |
 | `AUTH_PATH` | Yes | — | Filesystem path to `auth.json` inside the container |
-| `ADMIN_PASSWORD` | No | generated | Bootstrap password for the `admin` account. Unset → a random one is generated on first start and written to `ADMIN_PASSWORD_OUTPUT`. See [Admin account bootstrap](#admin-account-bootstrap). |
+| `ADMIN_PASSWORD` | No | generated | Bootstrap password for the `admin` account. Unset → a random one is generated on first start and written to `ADMIN_BOOTSTRAP_OUTPUT`. See [Admin account bootstrap](#admin-account-bootstrap). |
 | `ADMIN_PASSWORD_FILE` | No | — | Read the admin password from a file instead. Takes precedence over `ADMIN_PASSWORD`; how Docker secrets, Kubernetes Secret mounts and ESO deliveries arrive. |
 | `ADMIN_PASSWORD_SYNC` | No | `bootstrap` | `bootstrap`: the configured value seeds the account on first start only. `always`: it is authoritative on every start — inject a new value and restart to rotate. Rotations are written to the change log. |
-| `ADMIN_PASSWORD_OUTPUT` | No | `/tmp/aegis-admin.password` | Where a generated password is written (mode 0600). Never logged. |
+| `ADMIN_BOOTSTRAP_OUTPUT` | No | `/tmp/aegis-admin.password` | Where a generated password is written (mode 0600). Never logged. |
 | `SECRET_KEY` | No | — | Keys the scan-finding dedupe hash so findings match across replicas and restarts (`openssl rand -hex 32`). Rotating it makes previously seen findings look new. |
 | `RATE_LIMIT_RPM` | No | `60` | Per-key requests per minute. Used as fallback if DB setting is absent. |
 | `RATE_LIMIT_FAIL_MODE` | No | `open` | Behaviour when Redis is unreachable. `open` keeps serving without enforcing limits; `closed` rejects requests. |
@@ -1819,7 +1819,7 @@ password in this order and seeds the `admin` account with it:
    this way, and the value never appears in `docker inspect` or `kubectl describe`.
 2. `ADMIN_PASSWORD` — the value itself. Fine for local development.
 3. Neither — a random 32-character password is generated and written **once**
-   to `ADMIN_PASSWORD_OUTPUT` (default `/tmp/aegis-admin.password`, mode 0600).
+   to `ADMIN_BOOTSTRAP_OUTPUT` (default `/tmp/aegis-admin.password`, mode 0600).
    It is never logged, because audit logs are shipped to SIEMs.
 
    ```bash

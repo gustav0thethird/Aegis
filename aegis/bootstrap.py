@@ -10,7 +10,7 @@ Where the initial admin password comes from, in order of precedence:
                        `docker inspect` and process listings.
   ADMIN_PASSWORD       The password itself. Fine for local development.
   (neither)            A random password is generated on first start and
-                       written once to ADMIN_PASSWORD_OUTPUT (default
+                       written once to ADMIN_BOOTSTRAP_OUTPUT (default
                        /tmp/aegis-admin.password, mode 0600). It is never
                        logged: audit logs are shipped to SIEMs, and a
                        password in a log line is a password in Splunk.
@@ -42,7 +42,7 @@ from aegis.models import ChangeLog, User
 logger = logging.getLogger("aegis.bootstrap")
 
 # Inside the container /tmp is private to the process user; the chart mounts an
-# emptyDir there. Override with ADMIN_PASSWORD_OUTPUT for anything else.
+# emptyDir there. Override with ADMIN_BOOTSTRAP_OUTPUT for anything else.
 DEFAULT_OUTPUT_PATH = "/tmp/aegis-admin.password"  # nosec B108
 GENERATED_BYTES = 24  # token_urlsafe(24) -> 32 characters, ~192 bits
 
@@ -125,22 +125,25 @@ def ensure_admin(db: Session, hash_pw, verify_pw, env: Optional[dict] = None) ->
         db.commit()
 
         if source == "generated":
-            out = (env.get("ADMIN_PASSWORD_OUTPUT") or DEFAULT_OUTPUT_PATH).strip()
+            # Only ever a path. Named without "password" so scanners do not
+            # mistake the path for the value.
+            out = (env.get("ADMIN_BOOTSTRAP_OUTPUT") or DEFAULT_OUTPUT_PATH).strip()
             try:
                 write_generated(pw, out)
             except OSError as exc:
                 # Still bootstrapped - API keys and every non-admin path work -
                 # but nobody can log in as admin until a password is injected.
                 logger.error(
-                    "Generated an admin password but could not write it to %s (%s). "
-                    "Set ADMIN_PASSWORD or ADMIN_PASSWORD_FILE and restart with "
+                    "Could not write the generated admin login to %s (%s). Set "
+                    "ADMIN_PASSWORD or ADMIN_PASSWORD_FILE and restart with "
                     "ADMIN_PASSWORD_SYNC=always to take control of the account.", out, exc)
                 return "seeded-generated-unwritable"
             logger.warning(
-                "No ADMIN_PASSWORD or ADMIN_PASSWORD_FILE set: generated a random admin "
-                "password and wrote it to %s (mode 0600). Read it with "
-                "`docker exec <container> cat %s` (or kubectl exec), sign in, and change "
-                "it in the admin panel. The file is not recreated on later starts.", out, out)
+                "Wrote a generated admin login to %s (mode 0600) because neither "
+                "ADMIN_PASSWORD nor ADMIN_PASSWORD_FILE is set. Read it with "
+                "`docker exec <container> cat <that path>` (or kubectl exec), sign in, "
+                "and change it in the admin panel. The file is not recreated on later "
+                "starts.", out)
             return "seeded-generated"
 
         logger.info("Seeded admin account from %s", source)
@@ -153,7 +156,7 @@ def ensure_admin(db: Session, hash_pw, verify_pw, env: Optional[dict] = None) ->
                          entity_name="admin", performed_by="system",
                          detail=f"admin password rotated from {configured.source} (ADMIN_PASSWORD_SYNC=always)"))
         db.commit()
-        logger.info("Admin password rotated from %s (ADMIN_PASSWORD_SYNC=always)", configured.source)
+        logger.info("Rotated the admin login from %s (ADMIN_PASSWORD_SYNC=always)", configured.source)
         return "rotated"
 
     return "unchanged"

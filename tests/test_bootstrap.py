@@ -57,7 +57,7 @@ def _admin(db):
 
 def test_generates_random_password_when_nothing_configured(clean_admin, tmp_path, caplog):
     out = tmp_path / "admin.password"
-    env = {"ADMIN_PASSWORD_OUTPUT": str(out)}
+    env = {"ADMIN_BOOTSTRAP_OUTPUT": str(out)}
 
     with caplog.at_level(logging.WARNING, logger="aegis.bootstrap"):
         result = bootstrap.ensure_admin(clean_admin, _hash, _verify, env=env)
@@ -77,7 +77,7 @@ def test_generates_random_password_when_nothing_configured(clean_admin, tmp_path
 
 
 def test_generated_password_is_not_changeme(clean_admin, tmp_path):
-    env = {"ADMIN_PASSWORD_OUTPUT": str(tmp_path / "p")}
+    env = {"ADMIN_BOOTSTRAP_OUTPUT": str(tmp_path / "p")}
     bootstrap.ensure_admin(clean_admin, _hash, _verify, env=env)
     assert not _verify("changeme", _admin(clean_admin).password_hash)
 
