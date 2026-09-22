@@ -1,4 +1,7 @@
 {{- if .Values.migrations.enabled }}
+{{- if and (eq .Values.migrations.hookProvider "helm") .Values.secret.create (not .Values.secret.existingSecret) }}
+{{- fail "migrations.hookProvider=helm cannot be combined with secret.create: the chart-managed Secret does not exist yet when the pre-install hook runs. Create the Secret out of band and set secret.existingSecret, or use hookProvider=none." }}
+{{- end }}
 {{/*
 Migrations run exactly once per sync, before the new pods roll out.
 

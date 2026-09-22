@@ -129,14 +129,16 @@ config:
 secret:
   # -- Name of an existing Secret with keys database-url, redis-url, admin-password and optionally secret-key. Required unless create is true.
   existingSecret: ""
-  # -- Render a Secret from the values below. Development convenience only: the values end up in Git.
+  # -- Render a Secret from the values below. Development convenience only: the values end up in Git. Not usable with migrations.hookProvider=helm (the Secret would not exist when the pre-install hook runs).
   create: false
   # -- PostgreSQL DSN (postgresql://user:pass@host/db). Only used when create is true.
   databaseUrl: ""
   # -- Redis DSN (redis://host:6379). Only used when create is true.
   redisUrl: ""
-  # -- Bootstrap password for the admin account. Only used when create is true.
+  # -- Bootstrap password for the admin account. Only used when create is true. Empty generates a random one, kept stable across upgrades; read it back with `kubectl get secret <release> -o jsonpath='{.data.admin-password}' | base64 -d`.
   adminPassword: ""
+  # -- What the Secret's admin-password means after first start: `bootstrap` (first start only; changes made in the admin panel stick) or `always` (the Secret is authoritative on every start, so rotating it and rolling the pods rotates the password - use with ESO or any secrets manager).
+  adminPasswordSync: bootstrap
   # -- Keys the scan-finding dedupe hash. Optional; set it so findings dedupe consistently across replicas and restarts. Only used when create is true.
   secretKey: ""
 
@@ -188,9 +190,38 @@ networkPolicy:
   egress: []
 
 # ── External Secrets Operator ────────────────────────────────────────────────
-# Optionally emit a ClusterSecretStore pointing at this release, so workloads
-# can pull brokered secrets through ESO without any further wiring.
+# Two directions. `credentials` and `authJson` make Aegis a CONSUMER: its own
+# Secrets are materialised from an external store. `clusterSecretStore` makes
+# Aegis a PROVIDER: other workloads pull brokered secrets through ESO.
 externalSecrets:
+  credentials:
+    # -- Materialise the credentials Secret (secret.existingSecret) from an external store via an ExternalSecret. Set secret.existingSecret to the name it should create.
+    enabled: false
+    # -- How often ESO re-reads the store. Pair with secret.adminPasswordSync=always and a Deployment roll (or Reloader) to apply rotations.
+    refreshInterval: 1h
+    secretStoreRef:
+      # -- Name of the SecretStore / ClusterSecretStore to read from.
+      name: ""
+      # -- Kind of the store reference.
+      kind: ClusterSecretStore
+    # -- Map of Secret key -> remote reference. Keys are database-url, redis-url, admin-password and optionally secret-key; each entry takes `key`, optional `property` and `version` as in ExternalSecret.spec.data[].remoteRef. Entries with an empty key are skipped.
+    remoteRefs:
+      database-url: {key: "", property: ""}
+      redis-url: {key: "", property: ""}
+      admin-password: {key: "", property: ""}
+      secret-key: {key: "", property: ""}
+  authJson:
+    # -- Materialise the auth.json Secret (auth.existingSecret) from an external store via an ExternalSecret.
+    enabled: false
+    # -- How often ESO re-reads the store.
+    refreshInterval: 1h
+    secretStoreRef:
+      # -- Name of the SecretStore / ClusterSecretStore to read from.
+      name: ""
+      # -- Kind of the store reference.
+      kind: ClusterSecretStore
+    # -- Remote reference for the auth.json document (`key`, optional `property` and `version`).
+    remoteRef: {key: "", property: ""}
   clusterSecretStore:
     # -- Emit a ClusterSecretStore pointing at this release so workloads can pull brokered secrets through the External Secrets Operator.
     enabled: false

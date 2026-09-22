@@ -117,6 +117,7 @@
         "databaseUrl": { "type": "string" },
         "redisUrl": { "type": "string" },
         "adminPassword": { "type": "string" },
+        "adminPasswordSync": { "type": "string", "enum": ["bootstrap", "always"] },
         "secretKey": { "type": "string" }
       }
     },
@@ -161,6 +162,29 @@
       "type": "object",
       "additionalProperties": false,
       "properties": {
+        "credentials": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "refreshInterval": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+            "secretStoreRef": { "$ref": "#/definitions/secretStoreRef" },
+            "remoteRefs": {
+              "type": "object",
+              "additionalProperties": { "$ref": "#/definitions/remoteRef" }
+            }
+          }
+        },
+        "authJson": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "enabled": { "type": "boolean" },
+            "refreshInterval": { "type": "string", "pattern": "^[0-9]+(ms|s|m|h)$" },
+            "secretStoreRef": { "$ref": "#/definitions/secretStoreRef" },
+            "remoteRef": { "$ref": "#/definitions/remoteRef" }
+          }
+        },
         "clusterSecretStore": {
           "type": "object",
           "additionalProperties": false,
@@ -183,6 +207,23 @@
     }
   },
   "definitions": {
+    "secretStoreRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string" },
+        "kind": { "type": "string", "enum": ["SecretStore", "ClusterSecretStore"] }
+      }
+    },
+    "remoteRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "key": { "type": "string" },
+        "property": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
     "stringMap": {
       "type": "object",
       "additionalProperties": { "type": ["string", "number", "boolean"] }

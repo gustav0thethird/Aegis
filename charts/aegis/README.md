@@ -1,6 +1,6 @@
 # aegis
 
-![Version: 0.2.0](https://img.shields.io/badge/Version-0.2.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.2.0](https://img.shields.io/badge/AppVersion-0.2.0-informational?style=flat-square)
+![Version: 0.3.0](https://img.shields.io/badge/Version-0.3.0-informational?style=flat-square) ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![AppVersion: 0.2.0](https://img.shields.io/badge/AppVersion-0.2.0-informational?style=flat-square)
 
 Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any vault, every action logged.
 
@@ -14,7 +14,7 @@ Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any va
 The chart is published as a signed OCI artifact alongside each release:
 
 ```bash
-helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.2.0 \
+helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.3.0 \
   --namespace aegis --create-namespace \
   --set secret.existingSecret=aegis-credentials \
   --set auth.existingSecret=aegis-auth-json \
@@ -34,7 +34,7 @@ Two Secrets must exist in the namespace before installing:
 Verify the chart's signature (keyless, bound to the release workflow):
 
 ```bash
-cosign verify oci://ghcr.io/gustav0thethird/charts/aegis:0.2.0 \
+cosign verify oci://ghcr.io/gustav0thethird/charts/aegis:0.3.0 \
   --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 ```
@@ -80,10 +80,20 @@ Kubernetes: `>=1.25.0-0`
 | config.rateLimitRpm | string | `"60"` | Per-key requests per minute. |
 | config.webhookAllowedHosts | string | `""` | Comma-separated host allowlist for outbound webhook and alert URLs. Empty means any public host; private and loopback targets are always rejected. |
 | config.webhookAllowedSchemes | string | `"https"` | Comma-separated URL schemes accepted for outbound webhook and alert URLs. |
+| externalSecrets.authJson.enabled | bool | `false` | Materialise the auth.json Secret (auth.existingSecret) from an external store via an ExternalSecret. |
+| externalSecrets.authJson.refreshInterval | string | `"1h"` | How often ESO re-reads the store. |
+| externalSecrets.authJson.remoteRef | object | `{"key":"","property":""}` | Remote reference for the auth.json document (`key`, optional `property` and `version`). |
+| externalSecrets.authJson.secretStoreRef.kind | string | `"ClusterSecretStore"` | Kind of the store reference. |
+| externalSecrets.authJson.secretStoreRef.name | string | `""` | Name of the SecretStore / ClusterSecretStore to read from. |
 | externalSecrets.clusterSecretStore.apiKeySecret | object | `{"key":"api-key","name":"aegis-eso-credentials","namespace":"external-secrets"}` | Secret holding the Aegis team API key ESO authenticates with. |
 | externalSecrets.clusterSecretStore.changeNumber | string | `"ESO-SYNC"` | Sent as X-Change-Number on every ESO fetch. A standing identifier for automated sync traffic; set it to whatever your change process expects, or turn change_number_required off for this path. |
 | externalSecrets.clusterSecretStore.enabled | bool | `false` | Emit a ClusterSecretStore pointing at this release so workloads can pull brokered secrets through the External Secrets Operator. |
 | externalSecrets.clusterSecretStore.name | string | `"aegis"` | Name of the ClusterSecretStore. |
+| externalSecrets.credentials.enabled | bool | `false` | Materialise the credentials Secret (secret.existingSecret) from an external store via an ExternalSecret. Set secret.existingSecret to the name it should create. |
+| externalSecrets.credentials.refreshInterval | string | `"1h"` | How often ESO re-reads the store. Pair with secret.adminPasswordSync=always and a Deployment roll (or Reloader) to apply rotations. |
+| externalSecrets.credentials.remoteRefs | object | `{"admin-password":{"key":"","property":""},"database-url":{"key":"","property":""},"redis-url":{"key":"","property":""},"secret-key":{"key":"","property":""}}` | Map of Secret key -> remote reference. Keys are database-url, redis-url, admin-password and optionally secret-key; each entry takes `key`, optional `property` and `version` as in ExternalSecret.spec.data[].remoteRef. Entries with an empty key are skipped. |
+| externalSecrets.credentials.secretStoreRef.kind | string | `"ClusterSecretStore"` | Kind of the store reference. |
+| externalSecrets.credentials.secretStoreRef.name | string | `""` | Name of the SecretStore / ClusterSecretStore to read from. |
 | fullnameOverride | string | `""` | Override the full release name used in resource names. |
 | image.pullPolicy | string | `"IfNotPresent"` | Image pull policy. |
 | image.repository | string | `"ghcr.io/gustav0thethird/aegis"` | Image repository. Release images are multi-arch (amd64, arm64), signed with Sigstore and carry an SBOM. |
@@ -110,8 +120,9 @@ Kubernetes: `>=1.25.0-0`
 | podSecurityContext | object | `{"fsGroup":10001,"runAsGroup":10001,"runAsNonRoot":true,"runAsUser":10001,"seccompProfile":{"type":"RuntimeDefault"}}` | Pod security context. The image ships a non-root user (uid 10001) and needs no write access to its root filesystem. |
 | replicaCount | int | `2` | Number of broker replicas. Ignored when autoscaling.enabled is true. |
 | resources | object | `{"limits":{"memory":"512Mi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Container resources. The broker is I/O bound; memory is bounded, CPU is left unlimited by default. |
-| secret.adminPassword | string | `""` | Bootstrap password for the admin account. Only used when create is true. |
-| secret.create | bool | `false` | Render a Secret from the values below. Development convenience only: the values end up in Git. |
+| secret.adminPassword | string | `""` | Bootstrap password for the admin account. Only used when create is true. Empty generates a random one, kept stable across upgrades; read it back with `kubectl get secret <release> -o jsonpath='{.data.admin-password}' | base64 -d`. |
+| secret.adminPasswordSync | string | `"bootstrap"` | What the Secret's admin-password means after first start: `bootstrap` (first start only; changes made in the admin panel stick) or `always` (the Secret is authoritative on every start, so rotating it and rolling the pods rotates the password - use with ESO or any secrets manager). |
+| secret.create | bool | `false` | Render a Secret from the values below. Development convenience only: the values end up in Git. Not usable with migrations.hookProvider=helm (the Secret would not exist when the pre-install hook runs). |
 | secret.databaseUrl | string | `""` | PostgreSQL DSN (postgresql://user:pass@host/db). Only used when create is true. |
 | secret.existingSecret | string | `""` | Name of an existing Secret with keys database-url, redis-url, admin-password and optionally secret-key. Required unless create is true. |
 | secret.redisUrl | string | `""` | Redis DSN (redis://host:6379). Only used when create is true. |

@@ -1,5 +1,4 @@
 # Readme
-
 > **Vendor-agnostic secrets broker and PAM gateway.**
 > Scoped API keys per team. Any vault. Every action logged, attributed, and queryable.
 > Teams self-manage their own webhooks, key rotation, and notifications — without filing tickets.
@@ -83,6 +82,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Rate Limiting](#rate-limiting)
 - [Database Schema](#database-schema)
 - [Themes](#themes)
+- [Admin account bootstrap](#admin-account-bootstrap)
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
 - [Health Check](#health-check)
@@ -668,7 +668,10 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `DATABASE_URL` | Yes | — | PostgreSQL DSN (`postgresql://user:pass@host/db`) |
 | `REDIS_URL` | Yes | — | Redis DSN (`redis://host:6379`) |
 | `AUTH_PATH` | Yes | — | Filesystem path to `auth.json` inside the container |
-| `ADMIN_PASSWORD` | Yes | — | Bootstrap password for the `admin` account (used on first start only) |
+| `ADMIN_PASSWORD` | No | generated | Bootstrap password for the `admin` account. Unset → a random one is generated on first start and written to `ADMIN_BOOTSTRAP_OUTPUT`. See [Admin account bootstrap](#admin-account-bootstrap). |
+| `ADMIN_PASSWORD_FILE` | No | — | Read the admin password from a file instead. Takes precedence over `ADMIN_PASSWORD`; how Docker secrets, Kubernetes Secret mounts and ESO deliveries arrive. |
+| `ADMIN_PASSWORD_SYNC` | No | `bootstrap` | `bootstrap`: the configured value seeds the account on first start only. `always`: it is authoritative on every start — inject a new value and restart to rotate. Rotations are written to the change log. |
+| `ADMIN_BOOTSTRAP_OUTPUT` | No | `/tmp/aegis-admin.password` | Where a generated password is written (mode 0600). Never logged. |
 | `SECRET_KEY` | No | — | Keys the scan-finding dedupe hash so findings match across replicas and restarts (`openssl rand -hex 32`). Rotating it makes previously seen findings look new. |
 | `RATE_LIMIT_RPM` | No | `60` | Per-key requests per minute. Used as fallback if DB setting is absent. |
 | `RATE_LIMIT_FAIL_MODE` | No | `open` | Behaviour when Redis is unreachable. `open` keeps serving without enforcing limits; `closed` rejects requests. |
@@ -1805,6 +1808,63 @@ Each operator account stores a personal theme preference. Applied via a `data-th
 Preview and save from **Settings → General → Theme**. Does not affect the team dashboard (which uses a fixed dark theme).
 
 ---
+
+## Admin account bootstrap
+
+There is no default password. On first start Aegis looks for the admin
+password in this order and seeds the `admin` account with it:
+
+1. `ADMIN_PASSWORD_FILE` — a file. Kubernetes Secret mounts, Docker secrets
+   (`/run/secrets/...`) and External Secrets Operator deliveries all arrive
+   this way, and the value never appears in `docker inspect` or `kubectl describe`.
+2. `ADMIN_PASSWORD` — the value itself. Fine for local development.
+3. Neither — a random 32-character password is generated and written **once**
+   to `ADMIN_BOOTSTRAP_OUTPUT` (default `/tmp/aegis-admin.password`, mode 0600).
+   It is never logged, because audit logs are shipped to SIEMs.
+
+   ```bash
+   docker compose exec broker cat /tmp/aegis-admin.password
+   ```
+
+The Helm chart never relies on option 3: with `secret.create=true` and an
+empty `secret.adminPassword` it generates the password into the Secret itself
+(stable across upgrades), and with `secret.existingSecret` the value comes
+from whatever manages that Secret.
+
+### Rotating by injection
+
+By default the environment is consulted on first start only, so a password
+changed in the admin panel sticks. Set `ADMIN_PASSWORD_SYNC=always` to make the
+injected value authoritative instead: rotate the secret in your secrets
+manager, let ESO refresh the Kubernetes Secret (or update the Docker secret),
+roll the pods, and the admin password follows. Each rotation is recorded in the
+change log as `updated user admin` by `system`.
+
+```yaml
+# values.yaml — credentials owned by an external store, rotated by injection
+secret:
+  existingSecret: aegis-credentials
+  adminPasswordSync: always
+externalSecrets:
+  credentials:
+    enabled: true
+    secretStoreRef: { name: vault, kind: ClusterSecretStore }
+    remoteRefs:
+      database-url:   { key: aegis/prod, property: database_url }
+      redis-url:      { key: aegis/prod, property: redis_url }
+      admin-password: { key: aegis/prod, property: admin_password }
+      secret-key:     { key: aegis/prod, property: secret_key }
+  authJson:
+    enabled: true
+    secretStoreRef: { name: vault, kind: ClusterSecretStore }
+    remoteRef: { key: aegis/prod, property: auth_json }
+auth:
+  existingSecret: aegis-auth-json
+```
+
+Environment variables are read at pod start, so a refreshed Secret applies on
+the next roll; add a [Reloader](https://github.com/stakater/Reloader)
+annotation under `podAnnotations` to roll automatically.
 
 ## Security Model
 
