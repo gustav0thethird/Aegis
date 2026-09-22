@@ -54,8 +54,11 @@ jobs:
           format: sarif
           output: trivy-results.sarif
           severity: CRITICAL,HIGH
+          # Same policy as the PR scan in security.yml: block on CVEs that have
+          # a fix, not on base-image CVEs Debian has no patch for.
+          ignore-unfixed: true
           limit-severities-for-sarif: true
-          exit-code: "1"   # fail the release if CRITICAL or HIGH CVEs are found
+          exit-code: "1"   # fail the release if fixable CRITICAL or HIGH CVEs are found
 
       - name: Upload Trivy results to GitHub Security tab
         if: always()  # upload even if the scan step failed
