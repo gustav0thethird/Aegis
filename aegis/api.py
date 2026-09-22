@@ -82,7 +82,7 @@ from aegis.siem import start_s3_flush_thread
 logger = logging.getLogger("aegis")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
-app = FastAPI(title="Aegis", version="2.0.0", docs_url=None, redoc_url=None)
+app = FastAPI(title="Aegis", version="0.2.0", docs_url=None, redoc_url=None)
 
 # Start the S3 flush thread if S3 is a configured log destination.
 _destinations = os.environ.get("LOG_DESTINATIONS", "stdout").lower()

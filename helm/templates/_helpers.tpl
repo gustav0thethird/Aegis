@@ -52,9 +52,13 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 {{- end }}
 
-{{/* Container image reference. */}}
+{{/*
+Container image reference. Release images are tagged from the git tag, which
+carries a "v" prefix (v0.2.0), so the default tag is "v" + appVersion. An
+explicit image.tag is used verbatim.
+*/}}
 {{- define "aegis.image" -}}
-{{- printf "%s:%s" .Values.image.repository (default .Chart.AppVersion .Values.image.tag) }}
+{{- printf "%s:%s" .Values.image.repository (default (printf "v%s" .Chart.AppVersion) .Values.image.tag) }}
 {{- end }}
 
 {{/*
