@@ -25,7 +25,6 @@ resource "aws_vpc" "main" {
 # ── Subnets ───────────────────────────────────────────────────────────────────
 # Only the ALB lives here; ECS tasks, RDS and Redis are in the private
 # subnets below. Public IPs on launch are required for the ALB ENIs.
-# nosemgrep: terraform.aws.security.aws-subnet-has-public-ip-address.aws-subnet-has-public-ip-address
 resource "aws_subnet" "public" {
   count                   = 2
   vpc_id                  = aws_vpc.main.id

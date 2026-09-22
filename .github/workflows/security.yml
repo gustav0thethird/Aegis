@@ -42,6 +42,9 @@ jobs:
           trivyignores: .trivyignore
           format: sarif
           output: trivy-fs.sarif
+          # Without this the action writes every severity to the SARIF and
+          # exit-code fires on LOW/MEDIUM findings too.
+          limit-severities-for-sarif: true
           exit-code: "1"
         env:
           # Trivy renders the Helm chart to scan the resulting manifests; the
@@ -76,6 +79,7 @@ jobs:
           ignore-unfixed: true
           format: sarif
           output: trivy-image.sarif
+          limit-severities-for-sarif: true
           exit-code: "1"
 
       - name: Upload results
@@ -95,6 +99,10 @@ jobs:
 
       # helm/ is excluded: Go-templated YAML is not parseable as Kubernetes
       # manifests. The rendered chart is validated by kubeconform in ci.yml.
+      #
+      # The public-subnet rule is excluded rather than nosemgrep'd because
+      # GitHub surfaces suppressed SARIF findings as open alerts anyway; the
+      # public subnets only hold the ALB (see terraform/main.tf).
       - name: Scan
         run: |
           semgrep scan \
@@ -105,6 +113,7 @@ jobs:
             --config p/terraform \
             --exclude brag-output \
             --exclude helm \
+            --exclude-rule terraform.aws.security.aws-subnet-has-public-ip-address.aws-subnet-has-public-ip-address \
             --metrics=off \
             --error \
             --sarif --output semgrep.sarif
