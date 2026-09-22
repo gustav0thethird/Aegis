@@ -21,13 +21,14 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text as sa_text
 
+from aegis import policy as policy_mod
 from aegis import secret_cache
 from aegis import webhook as wh
 from aegis.database import SessionLocal, engine
 from aegis.keys import generate_key as _generate_key
 from aegis.keys import hash_key as _hash_key
 from aegis.keys import preview as _key_preview
-from aegis.models import Policy, Setting, TeamRegistryKey, WebhookLog
+from aegis.models import Setting, TeamRegistryKey, WebhookLog
 
 logger = logging.getLogger("aegis.scheduler")
 
@@ -41,13 +42,6 @@ _scheduler: BackgroundScheduler | None = None
 def _get_setting(db, key: str, default: str) -> str:
     row = db.query(Setting).filter(Setting.key == key).first()
     return row.value if row and row.value is not None else default
-
-
-def _get_policy(db, entity_type: str, entity_id) -> Policy | None:
-    return db.query(Policy).filter(
-        Policy.entity_type == entity_type,
-        Policy.entity_id == entity_id,
-    ).first()
 
 
 # One stable 64-bit id per job. Postgres releases advisory locks automatically
@@ -90,9 +84,8 @@ def _rotate_key(db, key_row: TeamRegistryKey, reason: str) -> str:
     key_row.revoked_at = now
     secret_cache.invalidate(key_row.key_hash)
 
-    # Determine expiry for new key from registry policy
-    policy       = _get_policy(db, "registry", registry.id)
-    max_key_days = policy.max_key_days if policy else None
+    # Shortest lifetime any applicable policy sets, team as well as registry.
+    max_key_days = policy_mod.max_key_days(db, team, registry)
     expires_at   = now + timedelta(days=max_key_days) if max_key_days else None
 
     plaintext   = _generate_key()

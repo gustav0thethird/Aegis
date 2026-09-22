@@ -24,6 +24,7 @@ from fastapi.security import HTTPBasic, HTTPBearer
 from sqlalchemy.orm import Session
 
 from aegis import errors, keys, rate_limit, secret_cache, url_guard
+from aegis import policy as policy_mod
 from aegis import webhook as wh
 from aegis.broker import fetch_secrets, load_auth
 from aegis.database import get_db
@@ -422,44 +423,40 @@ def _enforce_policies(db: Session, team, registry, source_ip: str | None,
     Evaluate team and registry policies. Raises HTTPException on violation.
     Fires policy.violated webhook on block.
     """
-    team_policy = _get_policy(db, "team", team.id)
-    reg_policy  = _get_policy(db, "registry", registry.id)
+    # One resolution for every field, most-restrictive-wins. See aegis/policy.py
+    # for why that is used rather than "registry overrides team": an override
+    # model lets a registry policy widen what a team policy allows.
+    effective = policy_mod.resolve(
+        db, team, registry,
+        global_cn_required=_get_setting_bool(db, "change_number_required", True),
+        global_rate_limit_rpm=_get_setting_int(db, "rate_limit_rpm", 60))
 
-    # --- IP allowlist (team policy first, then registry) ---
-    for policy, label in [(team_policy, "team"), (reg_policy, "registry")]:
-        if policy and policy.ip_allowlist and not _check_ip(source_ip, policy.ip_allowlist):
-                detail = f"Source IP {source_ip} not in {label} allowlist"
-                _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)
-                wh.fire(db, team, "policy.violated",
-                        registry={"id": str(registry.id), "name": registry.name},
-                        detail=detail)
-                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    def _deny(detail: str):
+        _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)
+        wh.fire(db, team, "policy.violated",
+                registry={"id": str(registry.id), "name": registry.name},
+                detail=detail)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
-    # --- Allowed hours (registry policy) ---
-    if (reg_policy and (reg_policy.allowed_from or reg_policy.allowed_to)
-            and not _check_hours(reg_policy.allowed_from, reg_policy.allowed_to)):
-            detail = f"Access to registry '{registry.name}' not permitted at this time"
-            _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)
-            wh.fire(db, team, "policy.violated",
-                    registry={"id": str(registry.id), "name": registry.name},
-                    detail=detail)
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
+    # --- IP allowlist: every allowlist that is set has to admit the caller ---
+    for label, allowlist in effective.ip_allowlists:
+        if not _check_ip(source_ip, allowlist):
+            _deny(f"Source IP {source_ip} not in {label} allowlist")
 
-    # --- Change number (registry policy overrides global) ---
-    if reg_policy and reg_policy.cn_required is not None:
-        cn_required = reg_policy.cn_required
-    else:
-        cn_required = _get_setting_bool(db, "change_number_required", True)
-    if cn_required and not x_change_number:
+    # --- Allowed hours: the request has to fall inside every window set ---
+    for label, allowed_from, allowed_to in effective.hour_windows:
+        if not _check_hours(allowed_from, allowed_to):
+            _deny(f"Access to registry '{registry.name}' not permitted at this time "
+                  f"({label} policy)")
+
+    # --- Change number ---
+    if effective.cn_required and not x_change_number:
         detail = "X-Change-Number header is required"
         _write_audit(db, "secrets.blocked", "denied", error_detail=detail, **audit_kwargs)
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
-    # --- Rate limit (registry policy overrides global) ---
-    if reg_policy and reg_policy.rate_limit_rpm is not None:
-        rpm = reg_policy.rate_limit_rpm
-    else:
-        rpm = _get_setting_int(db, "rate_limit_rpm", 60)
+    # --- Rate limit ---
+    rpm = effective.rate_limit_rpm
     # Per key, as documented: a rotated key starts with a fresh window
     # rather than inheriting the bucket of the key it replaced.
     # key_row is optional so existing callers keep working; without it the
