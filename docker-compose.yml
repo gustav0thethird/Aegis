@@ -50,7 +50,9 @@ services:
       DATABASE_URL:      postgresql://${POSTGRES_USER:-broker}:${POSTGRES_PASSWORD:-changeme}@postgres:5432/${POSTGRES_DB:-aegis}
       REDIS_URL:         redis://redis:6379
       AUTH_PATH:         /config/auth.json
-      ADMIN_PASSWORD:    ${ADMIN_PASSWORD:-changeme}
+      # Leave ADMIN_PASSWORD unset to have a random one generated on first
+      # start; read it with `docker compose exec broker cat /tmp/aegis-admin.password`.
+      ADMIN_PASSWORD:    ${ADMIN_PASSWORD:-}
       SECRET_KEY:        ${SECRET_KEY:-dev-secret-replace-in-prod}
       RATE_LIMIT_RPM:    ${RATE_LIMIT_RPM:-60}
       LOG_DESTINATIONS:  ${LOG_DESTINATIONS:-stdout}
@@ -61,12 +63,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 15s
+    # Health is checked by the image's HEALTHCHECK (python against /healthz);
+    # the image ships neither wget nor curl.
 
 volumes:
   pg_data:

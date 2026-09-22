@@ -82,7 +82,9 @@ spec:
             # gets an explicit writable mount.
             - name: tmp
               mountPath: /tmp
+            {{- include "aegis.secretVolumeMount" . | nindent 12 }}
       volumes:
+        {{- include "aegis.secretVolume" . | nindent 8 }}
         - name: auth
           secret:
             secretName: {{ required "auth.existingSecret is required — it holds auth.json" .Values.auth.existingSecret }}
