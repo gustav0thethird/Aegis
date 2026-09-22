@@ -669,6 +669,7 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `REDIS_URL` | Yes | — | Redis DSN (`redis://host:6379`) |
 | `AUTH_PATH` | Yes | — | Filesystem path to `auth.json` inside the container |
 | `ADMIN_PASSWORD` | Yes | — | Bootstrap password for the `admin` account (used on first start only) |
+| `SECRET_KEY` | Yes | — | Session signing secret, minimum 32 random chars (`openssl rand -hex 32`). Also keys the scan-finding dedupe hash — rotating it makes previously seen findings look new. |
 | `RATE_LIMIT_RPM` | No | `60` | Per-key requests per minute. Used as fallback if DB setting is absent. |
 | `RATE_LIMIT_FAIL_MODE` | No | `open` | Behaviour when Redis is unreachable. `open` keeps serving without enforcing limits; `closed` rejects requests. |
 | `WEBHOOK_ALLOWED_SCHEMES` | No | `https` | Comma-separated URL schemes accepted for outbound webhook and notification URLs. |
@@ -702,6 +703,8 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `SMTP_STARTTLS` | No | `true` | Set `false` only for a local relay |
 | `ALERT_EMAIL_TO` | No | — | Comma-separated alert recipients |
 | `ALERT_WEBHOOK_URL` | No | — | Generic webhook alert destination |
+
+Docker Compose only (not read by Aegis itself): `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD` configure the bundled PostgreSQL container, and `AEGIS_DOMAIN` + `TLS_EMAIL` drive Caddy's automatic TLS in `docker-compose.prod.yml`.
 
 ---
 
@@ -1937,12 +1940,25 @@ Tests require a running Postgres. The `DATABASE_URL` is automatically overridden
 
 ### Test suites
 
+245 tests across 15 modules. Unit suites need nothing running; integration suites need the `aegis_test` PostgreSQL database and mock every upstream vault call.
+
 | File | Type | What it covers |
 |---|---|---|
-| `tests/test_policy.py` | Unit | IP allowlist and time-window policy helpers (16 tests, no DB) |
-| `tests/test_broker.py` | Unit | Vendor routing and `auth_cfg` resolution (12 tests, no DB) |
-| `tests/test_rate_limit.py` | Unit | Rate limiter with FakeRedis (6 tests, no Redis) |
-| `tests/test_secrets.py` | Integration | `GET /secrets` end-to-end: auth, policy, audit log (9 tests, Postgres) |
+| `tests/test_policy.py` | Unit | IP allowlist and time-window policy helpers (16) |
+| `tests/test_broker.py` | Unit | Vendor routing and `auth_cfg` resolution (19) |
+| `tests/test_rate_limit.py` | Unit | Sliding-window rate limiter with FakeRedis (12) |
+| `tests/test_scanning.py` | Unit | Semgrep/Gitleaks output normalisation; matched credentials never survive (29) |
+| `tests/test_alerting.py` | Unit | Jira / ServiceNow / email / webhook alert sinks, one failing sink never blocks the rest (34) |
+| `tests/test_url_guard.py` | Unit | Outbound URL guard: SSRF validation with stubbed DNS (20) |
+| `tests/test_url_pinning.py` | Unit | DNS-pinned outbound requests; closes the validate-then-resolve window (11) |
+| `tests/test_secret_cache.py` | Unit | Short-lived ESO fetch cache and the registry-extraction gate (19) |
+| `tests/test_imports.py` | Unit | Guards against unqualified intra-package imports (4) |
+| `tests/test_secrets.py` | Integration | `GET /secrets` end-to-end: auth, policy, audit log (9) |
+| `tests/test_admin_auth.py` | Integration | Admin session and HTTP Basic authentication (11) |
+| `tests/test_key_expiry.py` | Integration | `max_key_days` enforcement and `KEY_EXPIRY_MODE` (14) |
+| `tests/test_eso.py` | Integration | External Secrets Operator provider endpoints (13) |
+| `tests/test_inbound_webhook.py` | Integration | Inbound webhook receiver, `rotate_key` action (6) |
+| `tests/test_scan_ingest.py` | Integration | Scan ingest, dedupe, triage and alert dispatch (28) |
 
 ### CI
 
@@ -2263,10 +2279,7 @@ Aegis/
 │   └── ci/                     — Secret-scanning workflow, pre-commit and allowlist templates
 ├── tests/
 │   ├── conftest.py             — pytest fixtures (TestClient, DB, FakeRedis)
-│   ├── test_policy.py          — Unit tests: IP allowlist and time-window policy helpers
-│   ├── test_broker.py          — Unit tests: vendor routing and auth_cfg resolution
-│   ├── test_rate_limit.py      — Unit tests: rate limiter with FakeRedis
-│   └── test_secrets.py         — Integration tests: GET /secrets end-to-end
+│   ├── test_*.py               — 15 suites; see Development and Testing
 ├── .github/
 │   ├── dependabot.yml          — Automated dependency updates (pip, docker, terraform, actions)
 │   └── workflows/
