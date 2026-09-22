@@ -122,7 +122,7 @@ Kubernetes: `>=1.25.0-0`
 | resources | object | `{"limits":{"memory":"512Mi"},"requests":{"cpu":"100m","memory":"256Mi"}}` | Container resources. The broker is I/O bound; memory is bounded, CPU is left unlimited by default. |
 | secret.adminPassword | string | `""` | Bootstrap password for the admin account. Only used when create is true. Empty generates a random one, kept stable across upgrades; read it back with `kubectl get secret <release> -o jsonpath='{.data.admin-password}' | base64 -d`. |
 | secret.adminPasswordSync | string | `"bootstrap"` | What the Secret's admin-password means after first start: `bootstrap` (first start only; changes made in the admin panel stick) or `always` (the Secret is authoritative on every start, so rotating it and rolling the pods rotates the password - use with ESO or any secrets manager). |
-| secret.create | bool | `false` | Render a Secret from the values below. Development convenience only: the values end up in Git. |
+| secret.create | bool | `false` | Render a Secret from the values below. Development convenience only: the values end up in Git. Not usable with migrations.hookProvider=helm (the Secret would not exist when the pre-install hook runs). |
 | secret.databaseUrl | string | `""` | PostgreSQL DSN (postgresql://user:pass@host/db). Only used when create is true. |
 | secret.existingSecret | string | `""` | Name of an existing Secret with keys database-url, redis-url, admin-password and optionally secret-key. Required unless create is true. |
 | secret.redisUrl | string | `""` | Redis DSN (redis://host:6379). Only used when create is true. |
