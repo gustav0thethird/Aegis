@@ -18,6 +18,8 @@ resource "aws_rds_cluster" "main" {
   db_subnet_group_name      = aws_db_subnet_group.main.name
   vpc_security_group_ids    = [aws_security_group.rds.id]
   storage_encrypted         = true
+  backup_retention_period   = 14
+  preferred_backup_window   = "03:00-04:00"
   skip_final_snapshot       = false
   final_snapshot_identifier = "${local.name}-final-snapshot"
   deletion_protection       = true

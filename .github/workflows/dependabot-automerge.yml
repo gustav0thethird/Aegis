@@ -9,13 +9,15 @@ on:
     branches: [main]
 
 permissions:
-  contents: write
-  pull-requests: write
+  contents: read
 
 jobs:
   automerge:
     name: Auto-merge patch and minor updates
     runs-on: ubuntu-latest
+    permissions:
+      contents: write       # enable auto-merge
+      pull-requests: write
 
     # Only run on Dependabot PRs
     if: github.actor == 'dependabot[bot]'
