@@ -1,5 +1,9 @@
 name: Dependabot auto-merge
 
+# pull_request_target runs with a write token in the context of the base
+# branch, which is what lets this job merge. That is only safe because the
+# job never checks out or executes anything from the PR head. Do not add an
+# actions/checkout step or run PR-supplied code here.
 on:
   pull_request_target:
     branches: [main]
@@ -19,7 +23,7 @@ jobs:
     steps:
       - name: Fetch Dependabot metadata
         id: metadata
-        uses: dependabot/fetch-metadata@v2
+        uses: dependabot/fetch-metadata@21025c705c08248db411dc16f3619e6b5f9ea21a # v2.5.0
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
 

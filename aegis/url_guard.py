@@ -234,6 +234,7 @@ def request(method: str, url: str, *, allow_private: bool = False, **kwargs):
 
     with requests.Session() as session:
         session.mount("https://", _PinnedAdapter(hostname))
-        session.mount("http://", HTTPAdapter())
+        # Mounting an adapter is not a request; the scheme is checked above.
+        session.mount("http://", HTTPAdapter())  # nosemgrep: python.lang.security.audit.insecure-transport.requests.request-session-http-in-with-context.request-session-http-in-with-context
         return session.request(method, pin_url(url, addresses[0]),
                                headers=headers, **kwargs)

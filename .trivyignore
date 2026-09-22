@@ -1,0 +1,16 @@
+# Trivy misconfiguration findings that are deliberate for this deployment.
+# Each entry is a design decision, not an oversight — revisit if the
+# architecture changes.
+
+# Public ALB in public subnets is the ingress point by design.
+AVD-AWS-0053
+AVD-AWS-0164
+
+# Unrestricted egress: the broker must reach arbitrary vault backends and
+# webhook targets; outbound is filtered by the application (url_guard), not
+# the security group.
+AVD-AWS-0104
+
+# Aurora storage_encrypted=true with the AWS-managed key. A CMK is a
+# per-deployment choice, not a chart default.
+AVD-AWS-0079

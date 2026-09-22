@@ -1,0 +1,43 @@
+# OpenSSF Scorecard: automated audit of this repository's supply-chain
+# hygiene (pinned dependencies, branch protection, token permissions,
+# SAST, signed releases, ...). Results go to the Security tab and, because
+# publish_results is on, to the public badge at
+# https://scorecard.dev/viewer/?uri=github.com/gustav0thethird/Aegis
+
+name: Scorecard
+
+on:
+  push:
+    branches: [main]
+  branch_protection_rule:
+  schedule:
+    - cron: "30 3 * * 1"  # Mondays 03:30 UTC
+  workflow_dispatch:
+
+permissions: read-all
+
+jobs:
+  analysis:
+    name: Scorecard analysis
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write # upload SARIF
+      id-token: write        # publish results to the OpenSSF API
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run analysis
+        uses: ossf/scorecard-action@2d1146689b8cda280b9bc96326124645441f03bc # v2.4.4
+        with:
+          results_file: results.sarif
+          results_format: sarif
+          publish_results: true
+
+      - name: Upload results
+        uses: github/codeql-action/upload-sarif@1c5b675653bb5c22dbe9b12b556ec555138e09fd # v4.38.1
+        with:
+          sarif_file: results.sarif
+          category: scorecard

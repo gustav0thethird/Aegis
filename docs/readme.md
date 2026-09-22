@@ -12,8 +12,11 @@
   <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/ci.yml">
     <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/ci.yml/badge.svg" alt="CI">
   </a>
-  <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/codeql.yml">
-    <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/codeql.yml/badge.svg" alt="Bandit">
+  <a href="https://github.com/gustav0thethird/Aegis/actions/workflows/bandit.yml">
+    <img src="https://github.com/gustav0thethird/Aegis/actions/workflows/bandit.yml/badge.svg" alt="Bandit">
+  </a>
+  <a href="https://scorecard.dev/viewer/?uri=github.com/gustav0thethird/Aegis">
+    <img src="https://api.scorecard.dev/projects/github.com/gustav0thethird/Aegis/badge" alt="OpenSSF Scorecard">
   </a>
   <a href="https://github.com/gustav0thethird/Aegis/releases">
     <img src="https://img.shields.io/github/v/release/gustav0thethird/Aegis" alt="Latest release">
