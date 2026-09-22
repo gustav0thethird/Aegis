@@ -82,6 +82,14 @@ Emits list items only — the caller supplies the `env:` key.
     secretKeyRef:
       name: {{ include "aegis.secretName" . }}
       key: admin-password
+# Optional: keys the scan-finding dedupe hash. Existing Secrets that predate
+# this key keep working; the app falls back to an unkeyed hash.
+- name: SECRET_KEY
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "aegis.secretName" . }}
+      key: secret-key
+      optional: true
 - name: AUTH_PATH
   value: {{ .Values.auth.authPath | quote }}
 {{- end }}

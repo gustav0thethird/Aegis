@@ -127,24 +127,30 @@ lint: ## Run ruff linter on tests/
 	ruff check tests/
 
 # ── Helm ──────────────────────────────────────────────────────────────────────
+CHART := charts/aegis
+
 .PHONY: helm-deps
 helm-deps: ## Update Helm chart dependencies
-	helm dependency update helm/
+	helm dependency update $(CHART)
 
 .PHONY: helm-lint
-helm-lint: ## Lint Helm chart
-	helm lint helm/
+helm-lint: ## Lint Helm chart (values.schema.json included)
+	helm lint $(CHART)
+
+.PHONY: helm-docs
+helm-docs: ## Regenerate charts/aegis/README.md from values.yaml comments
+	docker run --rm -v "$(CURDIR):/helm-docs" -u "$$(id -u)" jnorwood/helm-docs:v1.14.2 --chart-search-root=charts
 
 .PHONY: helm-template
 helm-template: ## Render Helm templates (dry run)
-	helm template aegis helm/ --values helm/values.yaml
+	helm template aegis $(CHART) --values $(CHART)/values.yaml
 
 .PHONY: helm-install
-helm-install: ## Install Helm chart (set NAMESPACE and --set overrides as needed)
-	helm upgrade --install aegis helm/ \
+helm-install: ## Install Helm chart from the working tree (set NAMESPACE and --set overrides as needed)
+	helm upgrade --install aegis $(CHART) \
 	  --namespace $${NAMESPACE:-aegis} \
 	  --create-namespace \
-	  --values helm/values.yaml
+	  --values $(CHART)/values.yaml
 
 .PHONY: helm-uninstall
 helm-uninstall: ## Uninstall Helm release

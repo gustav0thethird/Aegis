@@ -49,9 +49,16 @@ Out of scope:
 - Gitleaks in CI (`.gitleaks.toml`)
 - Trivy, Semgrep, Hadolint and tflint on every push and pull request
 - Every action in CI pinned to a commit SHA
-- Release images carry an SPDX SBOM and SLSA provenance, and are signed
-  with Sigstore (keyless). Verify a tag with:
+- Release images are multi-arch, carry an SPDX SBOM and SLSA provenance,
+  and are signed with Sigstore (keyless). The Helm chart is published as an
+  OCI artifact and signed the same way. Verify either with:
 
   ```
-  cosign verify ghcr.io/gustav0thethird/aegis:<tag>     --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/'     --certificate-oidc-issuer https://token.actions.githubusercontent.com
+  cosign verify ghcr.io/gustav0thethird/aegis:<tag> \
+    --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
+
+  cosign verify ghcr.io/gustav0thethird/charts/aegis:<chart version> \
+    --certificate-identity-regexp 'https://github.com/gustav0thethird/Aegis/' \
+    --certificate-oidc-issuer https://token.actions.githubusercontent.com
   ```

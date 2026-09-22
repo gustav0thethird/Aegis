@@ -68,17 +68,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0   # ct compares against main to enforce the version bump
 
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.16.3
 
-      - name: helm lint
-        run: helm lint helm/
+      - uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+
+      # helm lint (with values.schema.json), YAML lint, maintainers, and a
+      # Chart.yaml version bump on any chart change.
+      - name: ct lint
+        run: ct lint --config ct.yaml --all
+
+      - name: Chart README is current (helm-docs)
+        run: |
+          docker run --rm -v "$PWD:/helm-docs" -u "$(id -u)" \
+            jnorwood/helm-docs:v1.14.2 --chart-search-root=charts
+          git diff --exit-code -- charts/ \
+            || { echo "::error::charts/aegis/README.md is stale - run 'make helm-docs' and commit"; exit 1; }
 
       - name: Render with defaults
         run: |
-          helm template aegis helm/ \
+          helm template aegis charts/aegis \
             --set auth.existingSecret=aegis-auth-json \
             --set secret.existingSecret=aegis-credentials \
             > /tmp/render-default.yaml
@@ -86,7 +99,7 @@ jobs:
 
       - name: Render with every optional feature enabled
         run: |
-          helm template aegis helm/ \
+          helm template aegis charts/aegis \
             --set auth.existingSecret=aegis-auth-json \
             --set secret.existingSecret=aegis-credentials \
             --set ingress.enabled=true \
@@ -100,7 +113,7 @@ jobs:
       - name: Render each migration hook provider
         run: |
           for provider in argocd helm none; do
-            helm template aegis helm/ \
+            helm template aegis charts/aegis \
               --set auth.existingSecret=aegis-auth-json \
               --set secret.existingSecret=aegis-credentials \
               --set migrations.hookProvider=$provider > /dev/null
@@ -126,6 +139,72 @@ jobs:
                   assert 'kind' in d, f'{p} missing kind'
               print(p, '->', [d['kind'] for d in docs])
           "
+
+  chart-install:
+    name: Chart install
+    runs-on: ubuntu-latest
+    # Rendering is cheap and proves syntax; this proves the chart actually
+    # brings the broker up: image built from this commit, real Postgres and
+    # Redis, migration hook Job, then the startup/readiness probes going green.
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.3
+
+      - uses: helm/chart-testing-action@6ec842c01de15ebb84c8627d2744a0c2f2755c9f # v2.8.0
+
+      - name: Only when the chart, image or app changed
+        id: changed
+        run: |
+          if ct list-changed --config ct.yaml | grep -q . \
+             || git diff --name-only origin/main...HEAD | grep -qE '^(aegis/|Dockerfile|requirements.txt|alembic/|docker-entrypoint.sh|ct.yaml|.github/workflows/ci.yml)' \
+             || [ "${{ github.event_name }}" = "push" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build image
+        if: steps.changed.outputs.run == 'true'
+        run: docker build -t ghcr.io/gustav0thethird/aegis:ci .
+
+      - uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+        if: steps.changed.outputs.run == 'true'
+
+      - name: Load image and stand up dependencies
+        if: steps.changed.outputs.run == 'true'
+        run: |
+          kind load docker-image ghcr.io/gustav0thethird/aegis:ci --name chart-testing
+          kubectl create namespace aegis
+          kubectl -n aegis create deployment postgres --image=postgres:16-alpine --port=5432
+          kubectl -n aegis set env deployment/postgres POSTGRES_DB=aegis POSTGRES_USER=broker POSTGRES_PASSWORD=changeme
+          kubectl -n aegis expose deployment postgres --port=5432
+          kubectl -n aegis create deployment redis --image=redis:7-alpine --port=6379
+          kubectl -n aegis expose deployment redis --port=6379
+          kubectl -n aegis create secret generic aegis-credentials \
+            --from-literal=database-url=postgresql://broker:changeme@postgres:5432/aegis \
+            --from-literal=redis-url=redis://redis:6379 \
+            --from-literal=admin-password=ci-admin-pass \
+            --from-literal=secret-key=ci-secret-key-32-chars-xxxxxxxxxx
+          kubectl -n aegis create secret generic aegis-auth-json --from-file=auth.json=config/auth.json.example
+          kubectl -n aegis rollout status deployment/postgres --timeout=120s
+          kubectl -n aegis rollout status deployment/redis --timeout=120s
+
+      # ct install runs helm install (pre-install migration hook included),
+      # waits for the release, runs the chart's tests, then uninstalls.
+      - name: ct install
+        if: steps.changed.outputs.run == 'true'
+        run: ct install --config ct.yaml --all --namespace aegis --helm-extra-args "--timeout 300s"
+
+      - name: Diagnostics on failure
+        if: failure() && steps.changed.outputs.run == 'true'
+        run: |
+          kubectl -n aegis get all
+          kubectl -n aegis describe pods | tail -80
+          kubectl -n aegis logs -l app.kubernetes.io/name=aegis --all-containers --tail=100 || true
+          kubectl -n aegis logs -l app.kubernetes.io/component=migrate --tail=100 || true
 
   terraform:
     name: Terraform

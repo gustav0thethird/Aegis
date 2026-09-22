@@ -1,7 +1,8 @@
 # Argo CD Application for a single Aegis environment.
 #
-# Point spec.source.repoURL at the repository holding your environment values,
-# or at this repository to deploy the chart as-is.
+# Deploys the published chart from GHCR. To deploy from a checkout instead
+# (e.g. while developing the chart), replace `chart:` with
+# `path: charts/aegis` and point repoURL at the git repository.
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
@@ -14,9 +15,9 @@ spec:
   project: default
 
   source:
-    repoURL: https://github.com/gustav0thethird/Aegis.git
-    targetRevision: main
-    path: helm
+    repoURL: ghcr.io/gustav0thethird/charts
+    chart: aegis
+    targetRevision: 0.2.0
     helm:
       releaseName: aegis
       # Values that differ per environment. Keep secrets out of Git — reference
@@ -24,9 +25,6 @@ spec:
       # Operator instead.
       values: |
         replicaCount: 3
-        image:
-          repository: ghcr.io/gustav0thethird/aegis
-          tag: "v0.2.0"
         secret:
           existingSecret: aegis-credentials
         auth:

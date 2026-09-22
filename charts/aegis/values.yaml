@@ -1,0 +1,210 @@
+# Default values for the Aegis chart.
+#
+# Every key is documented inline in the "# --" form that helm-docs reads;
+# charts/aegis/README.md is generated from these comments (make helm-docs).
+
+# -- Number of broker replicas. Ignored when autoscaling.enabled is true.
+replicaCount: 2
+
+image:
+  # -- Image repository. Release images are multi-arch (amd64, arm64), signed with Sigstore and carry an SBOM.
+  repository: ghcr.io/gustav0thethird/aegis
+  # -- Image tag. Defaults to "v" + .Chart.AppVersion, matching release tags.
+  tag: ""
+  # -- Image pull policy.
+  pullPolicy: IfNotPresent
+# -- Pull secrets for a private mirror of the image.
+imagePullSecrets: []
+
+# -- Override the chart name used in resource names.
+nameOverride: ""
+# -- Override the full release name used in resource names.
+fullnameOverride: ""
+
+serviceAccount:
+  # -- Create a ServiceAccount for the broker pods.
+  create: true
+  # -- Annotations for the ServiceAccount, e.g. eks.amazonaws.com/role-arn for IRSA.
+  annotations: {}
+  # -- Name of an existing ServiceAccount to use when create is false.
+  name: ""
+
+service:
+  # -- Service type.
+  type: ClusterIP
+  # -- Service port; the container always listens on 8080.
+  port: 8080
+  # -- Annotations for the Service.
+  annotations: {}
+
+ingress:
+  # -- Expose the broker through an Ingress.
+  enabled: false
+  # -- IngressClass name.
+  className: ""
+  # -- Annotations for the Ingress (cert-manager issuer, rate limits, ...).
+  annotations: {}
+  # -- Hosts and paths routed to the broker.
+  hosts:
+    - host: aegis.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+  # -- TLS configuration for the Ingress.
+  tls: []
+
+# -- Container resources. The broker is I/O bound; memory is bounded, CPU is left unlimited by default.
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    memory: 512Mi
+
+autoscaling:
+  # -- Manage replica count with a HorizontalPodAutoscaler.
+  enabled: false
+  # -- Minimum replicas.
+  minReplicas: 2
+  # -- Maximum replicas.
+  maxReplicas: 6
+  # -- Target average CPU utilisation.
+  targetCPUUtilizationPercentage: 75
+
+podDisruptionBudget:
+  # -- Create a PodDisruptionBudget so node drains keep at least minAvailable brokers up.
+  enabled: true
+  # -- Minimum available replicas during voluntary disruption.
+  minAvailable: 1
+
+# -- Pod security context. The image ships a non-root user (uid 10001) and needs no write access to its root filesystem.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  runAsGroup: 10001
+  fsGroup: 10001
+  seccompProfile:
+    type: RuntimeDefault
+
+# -- Container security context.
+securityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities:
+    drop: ["ALL"]
+
+# -- Node selector for broker pods.
+nodeSelector: {}
+# -- Tolerations for broker pods.
+tolerations: []
+# -- Affinity rules for broker pods.
+affinity: {}
+# -- Topology spread constraints for broker pods.
+topologySpreadConstraints: []
+# -- Extra annotations for broker pods.
+podAnnotations: {}
+# -- Extra labels for broker pods.
+podLabels: {}
+
+# ── Application configuration ────────────────────────────────────────────────
+# Non-sensitive settings; rendered into a ConfigMap.
+config:
+  # -- Comma-separated audit log destinations: stdout, splunk, s3, datadog.
+  logDestinations: stdout
+  # -- Per-key requests per minute.
+  rateLimitRpm: "60"
+  # -- Behaviour when Redis is unreachable: open serves without enforcing limits (availability first), closed rejects requests (security first).
+  rateLimitFailMode: open
+  # -- Comma-separated URL schemes accepted for outbound webhook and alert URLs.
+  webhookAllowedSchemes: https
+  # -- Comma-separated host allowlist for outbound webhook and alert URLs. Empty means any public host; private and loopback targets are always rejected.
+  webhookAllowedHosts: ""
+  # -- Additional non-sensitive environment variables, rendered into the ConfigMap.
+  extraEnv: {}
+
+# ── Secrets ──────────────────────────────────────────────────────────────────
+# Point existingSecret at a Secret you manage yourself — sealed-secrets, SOPS,
+# or one materialised by the External Secrets Operator. Nothing sensitive should
+# be committed to values.yaml in a GitOps repository.
+secret:
+  # -- Name of an existing Secret with keys database-url, redis-url, admin-password and optionally secret-key. Required unless create is true.
+  existingSecret: ""
+  # -- Render a Secret from the values below. Development convenience only: the values end up in Git.
+  create: false
+  # -- PostgreSQL DSN (postgresql://user:pass@host/db). Only used when create is true.
+  databaseUrl: ""
+  # -- Redis DSN (redis://host:6379). Only used when create is true.
+  redisUrl: ""
+  # -- Bootstrap password for the admin account. Only used when create is true.
+  adminPassword: ""
+  # -- Keys the scan-finding dedupe hash. Optional; set it so findings dedupe consistently across replicas and restarts. Only used when create is true.
+  secretKey: ""
+
+# auth.json — the vault backend credentials the broker brokers with.
+# Mounted read-only at authPath.
+auth:
+  # -- Name of an existing Secret holding auth.json. Required.
+  existingSecret: ""
+  # -- Key within that Secret that holds the file.
+  secretKey: auth.json
+  # -- Path the file is mounted at inside the container.
+  authPath: /etc/aegis/auth.json
+
+# ── Database migrations ──────────────────────────────────────────────────────
+# Migrations run once, in a Job, before new pods roll out — never in every
+# replica's start-up. hookProvider selects how that ordering is expressed:
+#   argocd — Argo CD PreSync hook (default; correct for GitOps)
+#   helm   — Helm pre-install/pre-upgrade hook (for plain `helm install`)
+#   none   — plain Job, no ordering guarantee
+migrations:
+  # -- Run alembic upgrade head in a Job ahead of each rollout.
+  enabled: true
+  # -- How the Job is ordered before the Deployment: argocd (PreSync hook), helm (pre-install/pre-upgrade hook) or none (plain Job).
+  hookProvider: argocd
+  # -- Job retries before the rollout is failed.
+  backoffLimit: 3
+  # -- Resources for the migration Job.
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+# ── Observability ────────────────────────────────────────────────────────────
+serviceMonitor:
+  # -- Create a Prometheus Operator ServiceMonitor for /metrics.
+  enabled: false
+  # -- Scrape interval.
+  interval: 30s
+  # -- Extra labels, e.g. to match a Prometheus serviceMonitorSelector.
+  labels: {}
+
+# ── Network policy ───────────────────────────────────────────────────────────
+networkPolicy:
+  # -- Create a NetworkPolicy restricting ingress to the broker.
+  enabled: false
+  # -- Namespaces allowed to reach the broker. Empty allows any pod in the cluster.
+  allowedNamespaces: []
+  # -- Egress rules. Left to the cluster default unless set; the broker must reach its database, Redis, the vault backends and any alert destinations.
+  egress: []
+
+# ── External Secrets Operator ────────────────────────────────────────────────
+# Optionally emit a ClusterSecretStore pointing at this release, so workloads
+# can pull brokered secrets through ESO without any further wiring.
+externalSecrets:
+  clusterSecretStore:
+    # -- Emit a ClusterSecretStore pointing at this release so workloads can pull brokered secrets through the External Secrets Operator.
+    enabled: false
+    # -- Name of the ClusterSecretStore.
+    name: aegis
+    # -- Secret holding the Aegis team API key ESO authenticates with.
+    apiKeySecret:
+      name: aegis-eso-credentials
+      key: api-key
+      namespace: external-secrets
+    # Sent as X-Change-Number on every ESO fetch. Aegis rejects requests without
+    # one while the change_number_required setting is on. ESO refreshes on a
+    # timer rather than against a change record, so this is a standing
+    # identifier for automated sync traffic — set it to whatever your change
+    # process expects, or turn change_number_required off for this path.
+    # -- Sent as X-Change-Number on every ESO fetch. A standing identifier for automated sync traffic; set it to whatever your change process expects, or turn change_number_required off for this path.
+    changeNumber: "ESO-SYNC"
