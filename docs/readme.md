@@ -20,6 +20,9 @@
   <a href="https://github.com/gustav0thethird/Aegis/releases">
     <img src="https://img.shields.io/github/v/release/gustav0thethird/Aegis" alt="Latest release">
   </a>
+  <a href="https://artifacthub.io/packages/search?repo=aegis-secrets-broker">
+    <img src="https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/aegis-secrets-broker" alt="Artifact Hub">
+  </a>
   <a href="https://github.com/gustav0thethird/Aegis/pkgs/container/aegis">
     <img src="https://img.shields.io/badge/container-ghcr.io-blue" alt="GHCR">
   </a>
@@ -449,7 +452,7 @@ sequenceDiagram
 | **Team ID** | A stable UUID identifying the team. Shown in both the admin panel and the team dashboard. Appears in all webhook payloads so external systems can route events. Use it to configure your inbound webhook URL. |
 | **Team-Registry Key** | A unique API key issued when a team is assigned a registry. A team with access to three registries has three separate keys. Every audit log entry traces back to an exact `(team, registry)` pair. |
 | **Auth Ref** | A string that maps to a credential block in `auth.json`. For example, `"prod"` might map to the production CyberArk installation. Changing the underlying credentials only requires updating `auth.json`. |
-| **Policy** | Per-registry or per-team access control rules: IP allowlist, time-of-day window, change-number enforcement, custom rate limit, and maximum key age. Registry policy takes precedence over team policy, which takes precedence over global settings. |
+| **Policy** | Per-registry or per-team access control rules: IP allowlist, time-of-day window, change-number enforcement, custom rate limit, and maximum key age. Team and registry policies both apply, over the global settings; the most restrictive wins. |
 | **Inbound Webhook** | An auto-generated URL per team (`POST /api/inbound/{team_id}`) that external CI/CD systems POST to in order to trigger Aegis actions (key rotation, ping). Authenticated with the team's HMAC signing secret. |
 | **Change Log** | An immutable, append-only record of every admin mutation. Each entry includes the entity type, the action, a JSONB diff showing exactly which fields changed and their before/after values, and the operator account that performed the action. |
 | **Audit Log** | An immutable, append-only record of every `/secrets` request. Captures outcome, team, registry, objects fetched, source IP, user agent, and ITSM change number. Fields are snapshotted at request time so they remain accurate even if the entity is later renamed or deleted. |
@@ -1045,7 +1048,7 @@ Users may belong to zero, one, or many teams. A user with `role=user` can view a
 
 ### Policies
 
-Access control rules per registry or team. Registry policy takes precedence over team policy, which takes precedence over global settings.
+Access control rules per registry or team. Team and registry policies both apply, over the global settings; the most restrictive wins — a policy can narrow access, never widen it.
 
 | Method | Path | Description |
 |---|---|---|
@@ -1380,15 +1383,21 @@ stateDiagram-v2
 
 ## Policies
 
-Policies add fine-grained access control on top of the key authentication layer. They are per-entity (registry or team) and stack: registry policy takes precedence, then team policy, then global settings.
+Policies add fine-grained access control on top of the key authentication layer. They are per-entity (registry or team) and stack over the global settings.
 
-| Policy field | Effect |
-|---|---|
-| `ip_allowlist` | CIDR list. Requests from IPs outside the list are rejected with `403` and a `policy.violated` webhook event. |
-| `allowed_from` / `allowed_to` | Time-of-day window (UTC). Requests outside the window are rejected with `403`. |
-| `cn_required` | Override global change-number enforcement for this registry or team. |
-| `rate_limit_rpm` | Override the global rate limit for this registry or team. |
-| `max_key_days` | Maximum age for keys issued under this registry or team. Enforced at key issuance and rotation. |
+**The most restrictive applicable policy wins.** Both the team and the registry policy are always evaluated, and a policy can only ever narrow access, never widen it. A field left unset means "no opinion" — it never loosens anything.
+
+This is deliberately not an override model. If a registry policy replaced a team policy, a team restricted to an office CIDR would regain access from anywhere the moment a registry set its own allowlist. Adding a policy to a secrets broker should not be able to grant access that was previously denied.
+
+| Policy field | Effect | How levels combine |
+|---|---|---|
+| `ip_allowlist` | CIDR list. Requests from IPs outside the list are rejected with `403` and a `policy.violated` webhook event. | Must satisfy **every** allowlist that is set |
+| `allowed_from` / `allowed_to` | Time-of-day window (UTC). Requests outside the window are rejected with `403`. | Must fall inside **every** window that is set |
+| `cn_required` | Change-number enforcement. | Required if the global setting **or any** policy requires it |
+| `rate_limit_rpm` | Requests per minute for keys under this entity. | **Lowest** value any level sets |
+| `max_key_days` | Maximum age for keys issued under this entity. Enforced at issuance, rotation and by the expiry scheduler. | **Shortest** lifetime any level sets |
+
+Resolution lives in one place (`aegis/policy.py`) and is used by request authorisation, rate limiting, change-number enforcement, key issuance, rotation and the expiry scheduler, so the rule that grants a key its lifetime is the same one that later expires it.
 
 Policy enforcement fires a `policy.violated` webhook event so teams are immediately notified of access violations — even if they originate from misconfigurations.
 
