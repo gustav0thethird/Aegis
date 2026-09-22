@@ -1,51 +1,54 @@
 # Architecture
 
-Aegis is designed as a vendor-agnostic secrets broker and PAM gateway, facilitating the management of secrets across various vaults. The architecture consists of several key components that interact to provide a secure and efficient means of accessing secrets.
+The architecture of Aegis is designed to facilitate the management of secrets across various vaults while ensuring security, scalability, and ease of use. Below are the key components and their interactions.
+
+## Overview
+
+Aegis acts as a vendor-agnostic secrets broker and PAM (Privileged Access Management) gateway. It provides a unified API for applications to access secrets stored in different vaults, such as CyberArk, HashiCorp Vault, AWS Secrets Manager, and Conjur. The architecture is built to support multiple teams, allowing them to self-manage their secrets while maintaining strict access controls and logging.
 
 ## Components
 
-### 1. **Applications**
-Applications interact with Aegis through a unified API. They send requests to fetch secrets using scoped API keys, which are tied to specific teams and registries.
+### 1. **Broker**
 
-### 2. **Aegis Core**
-The core of Aegis is built around a FastAPI service that handles incoming requests, manages authentication, and routes operations to the appropriate components.
+The broker is responsible for fetching secrets from various vaults. It groups objects by vendor and acquires authentication sessions as needed. The main entry point is the `fetch_secrets` function, which takes in object rows and an authentication dictionary, returning the requested secrets.
 
-#### Key Files:
-- **`aegis/api.py`**: Implements the FastAPI service, providing endpoints for user authentication, team management, and administrative functions.
-- **`aegis/broker.py`**: Responsible for fetching secrets from various vaults. It groups requests by vendor and manages authentication sessions.
-- **`aegis/database.py`**: Sets up the SQLAlchemy engine and session factory for database interactions, ensuring efficient data handling.
-- **`aegis/models.py`**: Defines the SQLAlchemy ORM models that represent the data structure for secrets, registries, teams, and access control.
+- **File**: `aegis/broker.py`
+- **Key Function**: `fetch_secrets(object_rows, auth)`
 
-### 3. **Secrets Management**
-Aegis acts as a proxy between applications and multiple secrets vaults, including CyberArk, HashiCorp Vault, AWS Secrets Manager, and Conjur. It abstracts the complexity of interacting with different vaults, allowing teams to focus on their specific needs.
+### 2. **Database**
 
-### 4. **Authentication and Authorization**
-Aegis employs a scoped API key system, where each team is assigned a unique key for accessing specific registries. This ensures that secrets are only accessible to authorized teams, and every action is logged for accountability.
+Aegis uses SQLAlchemy for database interactions. The database schema includes tables for managing secrets, registries, teams, and access control. The `SessionLocal` object is used to manage database sessions.
 
-### 5. **Logging and Auditing**
-Every interaction with Aegis is logged, capturing details such as team identity, registry accessed, objects fetched, source IP, and change numbers. This immutable logging provides a comprehensive audit trail for compliance and security purposes.
+- **File**: `aegis/database.py`
+- **Key Classes**: `Base`, `get_db()`
 
-### 6. **Self-Service Model**
-Teams can manage their own webhook subscriptions, notification channels, and CI/CD key rotations through a dedicated dashboard. This reduces the operational burden on security teams and allows for quicker response times to changes.
+### 3. **Models**
 
-### 7. **Database Schema**
-The database schema is designed to support the various entities involved in secrets management:
-- **Objects**: Atomic secret definitions, including vendor, authentication reference, and location.
-- **Registries**: Named collections of objects.
-- **Teams**: Metadata for team management, including access control policies.
-- **Webhooks**: Configuration for outgoing notifications and event subscriptions.
-- **Logs**: Immutable records of requests and administrative changes.
+The models define the structure of the database tables, including objects, registries, teams, policies, and logs. Each model corresponds to a specific table in the database, facilitating the organization and retrieval of secrets and related metadata.
 
-### 8. **Request Lifecycle**
-The request lifecycle in Aegis follows a structured flow:
-1. Applications send a request to Aegis with the API key and change number.
-2. Aegis verifies the key, looks up the associated team and registry, and enforces policies.
-3. Secrets are fetched from the appropriate vault based on the vendor.
-4. An audit log entry is created for the request.
-5. A SIEM event may be emitted for monitoring purposes.
+- **File**: `aegis/models.py`
+- **Key Models**: `Object`, `Registry`, `Team`, `Policy`, `AuditLog`
 
-### 9. **CI/CD Integration**
-Aegis supports CI/CD pipelines through inbound webhooks, allowing automated key rotations without manual intervention.
+### 4. **API**
+
+The FastAPI service provides endpoints for user authentication, secret management, and administrative functions. It handles incoming requests and routes them to the appropriate functions, ensuring that all actions are logged and attributed.
+
+- **File**: `aegis/api.py`
+- **Key Endpoints**: 
+  - `GET /secrets` - Fetch secrets using an API key.
+  - `POST /api/login` - User authentication.
+  - `GET /admin/api/objects` - Admin management of objects.
+
+## Interaction Flow
+
+1. **Secret Fetching**: When an application requests a secret, it sends a GET request to the `/secrets` endpoint with an API key and change number. Aegis verifies the key, enforces policies, and fetches the secrets from the appropriate vault.
+
+2. **Logging**: Every action taken through Aegis is logged in an immutable audit log, capturing details such as the team identity, registry accessed, and objects fetched.
+
+3. **Self-Service Management**: Teams can manage their own webhook subscriptions, notification channels, and CI/CD key rotations through a dedicated dashboard, reducing the need for security team intervention.
+
+4. **Key Rotation**: CI/CD pipelines can trigger key rotations via auto-generated inbound webhook URLs, allowing for automated management of secrets without manual oversight.
 
 ## Conclusion
-The architecture of Aegis is designed to provide a scalable, secure, and efficient means of managing secrets across various vaults. By abstracting the complexities of different secrets management solutions, Aegis enables teams to focus on their core responsibilities while maintaining strict security and compliance standards.
+
+Aegis's architecture is designed to provide a secure, scalable, and user-friendly solution for managing secrets across multiple vaults. By centralizing access and logging, it simplifies the complexities associated with secret management while empowering teams to operate independently.

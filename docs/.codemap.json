@@ -8,16 +8,16 @@
     "summary": "This file defines a GitHub Actions workflow that runs a security scan using Bandit on specified branches and schedules."
   },
   ".github/workflows/ci.yml": {
-    "sha": "2817d7043083",
-    "summary": "This file sets up a continuous integration workflow that includes linting, testing, and Helm chart validation for the project."
+    "sha": "31927b819ad1",
+    "summary": "Defines the continuous integration workflow for linting, testing, and Helm chart validation."
   },
   ".github/workflows/dependabot-automerge.yml": {
     "sha": "8775991fa1db",
     "summary": "This file automates the merging of Dependabot pull requests for patch and minor version updates on the main branch."
   },
   ".github/workflows/release.yml": {
-    "sha": "c17fc03d093d",
-    "summary": "This file outlines a release workflow that triggers on version tag pushes, creating a GitHub release and building a Docker image."
+    "sha": "0fc4b3134f1b",
+    "summary": "Manages the release process by building and pushing Docker images and creating GitHub releases."
   },
   ".github/workflows/scorecard.yml": {
     "sha": "f520657c590e",
@@ -28,8 +28,8 @@
     "summary": "This file defines a reusable workflow for scanning secrets using Gitleaks and Semgrep, reporting findings to Aegis."
   },
   ".github/workflows/security.yml": {
-    "sha": "3852c5dbb53f",
-    "summary": "This file defines a GitHub Actions workflow for static security scanning on every push and pull request, uploading findings as SARIF to the repository's security tab."
+    "sha": "1447df90af37",
+    "summary": "Performs static security scanning on code changes and uploads findings to the repository's security tab."
   },
   ".gitlab-ci.yml": {
     "sha": "a40e37e20408",
@@ -40,12 +40,12 @@
     "summary": "Defines Gitleaks configuration to scan for sensitive information in the repository."
   },
   "Dockerfile": {
-    "sha": "7f5bc1d8264e",
-    "summary": "This file contains instructions to build a Docker image for the Aegis application, including setting up the environment, dependencies, and entry point."
+    "sha": "6b846372e129",
+    "summary": "Specifies the instructions to build a Docker image for the Aegis application, including dependencies and entry points."
   },
   "Makefile": {
-    "sha": "7b5611372129",
-    "summary": "Provides a set of commands to manage the development and production environments for the project."
+    "sha": "7d5178c4585f",
+    "summary": "Facilitates various development and production tasks such as building Docker images, managing databases, and running the application."
   },
   "aegis/__init__.py": {
     "sha": "da39a3ee5e6b",
@@ -56,8 +56,12 @@
     "summary": "Handles alerting mechanisms when secrets are detected in source code."
   },
   "aegis/api.py": {
-    "sha": "2142ce3fa6fd",
-    "summary": "This file implements a FastAPI service for the Aegis application, providing various endpoints for user authentication, team management, and administrative functions."
+    "sha": "cec451c4a938",
+    "summary": "Implements the FastAPI service for Aegis, providing endpoints for user authentication, secret management, and administrative functions."
+  },
+  "aegis/bootstrap.py": {
+    "sha": "42e15e8bd71b",
+    "summary": "Handles the initialization and management of the admin account password for the Aegis application."
   },
   "aegis/broker.py": {
     "sha": "150f3192a241",
@@ -228,20 +232,92 @@
     "summary": "Defines the root Argo CD application that manages multiple Aegis applications across different environments."
   },
   "argocd/application.yaml": {
-    "sha": "b7fc8f499f41",
-    "summary": "This file defines an Argo CD application configuration for deploying the Aegis application in a Kubernetes environment."
+    "sha": "c87662114106",
+    "summary": "Defines the Argo CD application configuration for deploying the Aegis application in a Kubernetes environment."
   },
   "catalog-info.yaml": {
-    "sha": "016d69cb2f8e",
-    "summary": "Defines the Aegis component, detailing its purpose as a vendor-agnostic secrets broker and API gateway, along with its capabilities and ownership."
+    "sha": "963ea533ad7b",
+    "summary": "Describes the Aegis component and its API, providing metadata and links for documentation and ownership."
+  },
+  "charts/aegis/Chart.yaml": {
+    "sha": "9c6bca3a892b",
+    "summary": "Specifies the Helm chart metadata for the Aegis application, including versioning and dependencies."
+  },
+  "charts/aegis/templates/configmap.yaml": {
+    "sha": "ab139f0f0d43",
+    "summary": "Creates a ConfigMap for storing configuration data used by the Aegis application."
+  },
+  "charts/aegis/templates/deployment.yaml": {
+    "sha": "3b3c67b51e5e",
+    "summary": "Defines the Kubernetes deployment configuration for the Aegis application, including container specifications and health checks."
+  },
+  "charts/aegis/templates/eso-clustersecretstore.yaml": {
+    "sha": "2958ee16f25f",
+    "summary": "Defines a ClusterSecretStore for the External Secrets Operator to access brokered secrets from Aegis."
+  },
+  "charts/aegis/templates/externalsecrets.yaml": {
+    "sha": "68926ef6c901",
+    "summary": "Creates ExternalSecrets for Aegis credentials and auth.json from an external secret store."
+  },
+  "charts/aegis/templates/hpa.yaml": {
+    "sha": "32634dffaff1",
+    "summary": "Configures a Horizontal Pod Autoscaler to manage the scaling of Aegis deployments based on CPU utilization."
+  },
+  "charts/aegis/templates/ingress.yaml": {
+    "sha": "8d40d54926d1",
+    "summary": "Sets up an Ingress resource to manage external access to Aegis services based on defined rules."
+  },
+  "charts/aegis/templates/migration-job.yaml": {
+    "sha": "352a68c55cca",
+    "summary": "Defines a Job to run database migrations before new pods are rolled out in the Aegis deployment."
+  },
+  "charts/aegis/templates/networkpolicy.yaml": {
+    "sha": "a13fb71574ff",
+    "summary": "Establishes a NetworkPolicy to control ingress and egress traffic for Aegis pods."
+  },
+  "charts/aegis/templates/poddisruptionbudget.yaml": {
+    "sha": "209c6f4cf19b",
+    "summary": "Defines a PodDisruptionBudget to ensure a minimum number of pods are available during voluntary disruptions."
+  },
+  "charts/aegis/templates/secret.yaml": {
+    "sha": "dcaa6459fbe9",
+    "summary": "Creates a Kubernetes Secret to store sensitive information like database and Redis URLs, along with an admin password."
+  },
+  "charts/aegis/templates/service.yaml": {
+    "sha": "89b92418667a",
+    "summary": "Defines a Kubernetes Service to expose the application, specifying the service type and port configuration."
+  },
+  "charts/aegis/templates/serviceaccount.yaml": {
+    "sha": "84f0a3a9cd06",
+    "summary": "Creates a ServiceAccount for the application, allowing it to interact with the Kubernetes API securely."
+  },
+  "charts/aegis/templates/servicemonitor.yaml": {
+    "sha": "d5a3329411fb",
+    "summary": "Defines a ServiceMonitor to scrape metrics from the application for monitoring purposes."
+  },
+  "charts/aegis/templates/tests/test-connection.yaml": {
+    "sha": "862a6bc77da4",
+    "summary": "Defines a test Pod to verify that the application is reachable and ready by checking the /readyz endpoint."
+  },
+  "charts/aegis/values.schema.json": {
+    "sha": "3d1a25b4db6a",
+    "summary": "Defines the schema for the Aegis chart values, specifying the structure and validation rules for configuration options."
+  },
+  "charts/aegis/values.yaml": {
+    "sha": "350dd5051e3c",
+    "summary": "Contains default configuration values for the Aegis chart, which can be overridden during deployment."
+  },
+  "ct.yaml": {
+    "sha": "280bf04c4a73",
+    "summary": "Configures chart-testing settings for CI jobs, ensuring version increments and validating chart directories."
   },
   "docker-compose.prod.yml": {
-    "sha": "1c72b50249c5",
-    "summary": "Defines the production environment services for Aegis, including PostgreSQL, Redis, and the broker, with health checks and resource limits."
+    "sha": "24bac2f04c6c",
+    "summary": "Defines the production environment services and their configurations, including PostgreSQL, Redis, and the Aegis broker."
   },
   "docker-compose.yml": {
-    "sha": "acb6a74eabd1",
-    "summary": "Sets up the development environment services for Aegis, including PostgreSQL and Redis, with default configurations and health checks."
+    "sha": "812aa3f5f7cc",
+    "summary": "Specifies the development environment services and their configurations, including PostgreSQL, Redis, and the Aegis broker."
   },
   "docker-entrypoint.sh": {
     "sha": "315f8a9e0662",
@@ -270,62 +346,6 @@
   "examples/eso/externalsecret.yaml": {
     "sha": "fa137eb5b048",
     "summary": "This file defines an ExternalSecret that retrieves individual secrets by name from Aegis, ensuring secure access to sensitive data."
-  },
-  "helm/Chart.yaml": {
-    "sha": "e29012f350d7",
-    "summary": "This file contains metadata for the Helm chart of the Aegis application, including its version, description, and maintainers."
-  },
-  "helm/templates/configmap.yaml": {
-    "sha": "ab139f0f0d43",
-    "summary": "Creates a ConfigMap for storing configuration data used by the Aegis application."
-  },
-  "helm/templates/deployment.yaml": {
-    "sha": "c3abdbe025f6",
-    "summary": "Specifies the Deployment resource for the Aegis application, managing its pods and container specifications."
-  },
-  "helm/templates/eso-clustersecretstore.yaml": {
-    "sha": "2958ee16f25f",
-    "summary": "Generates a ClusterSecretStore resource for integrating with the External Secrets Operator to manage secrets."
-  },
-  "helm/templates/hpa.yaml": {
-    "sha": "32634dffaff1",
-    "summary": "Defines a Horizontal Pod Autoscaler to automatically scale the Aegis deployment based on CPU utilization."
-  },
-  "helm/templates/ingress.yaml": {
-    "sha": "8d40d54926d1",
-    "summary": "Creates an Ingress resource to manage external access to the Aegis application via HTTP."
-  },
-  "helm/templates/migration-job.yaml": {
-    "sha": "9f83fcf4acf7",
-    "summary": "Defines a Kubernetes Job for running database migrations before new pods are rolled out."
-  },
-  "helm/templates/networkpolicy.yaml": {
-    "sha": "a13fb71574ff",
-    "summary": "Creates a NetworkPolicy to control ingress and egress traffic for the application pods."
-  },
-  "helm/templates/poddisruptionbudget.yaml": {
-    "sha": "209c6f4cf19b",
-    "summary": "Specifies a PodDisruptionBudget to ensure a minimum number of pods remain available during voluntary disruptions."
-  },
-  "helm/templates/secret.yaml": {
-    "sha": "401d04014895",
-    "summary": "Generates a Kubernetes Secret containing sensitive information required by the application, if not using an existing secret."
-  },
-  "helm/templates/service.yaml": {
-    "sha": "89b92418667a",
-    "summary": "Defines a Kubernetes Service to expose the application, specifying its type and port configuration."
-  },
-  "helm/templates/serviceaccount.yaml": {
-    "sha": "84f0a3a9cd06",
-    "summary": "Creates a ServiceAccount for the application, allowing it to interact with the Kubernetes API."
-  },
-  "helm/templates/servicemonitor.yaml": {
-    "sha": "d5a3329411fb",
-    "summary": "Defines a ServiceMonitor resource for monitoring the application's metrics if enabled in the values."
-  },
-  "helm/values.yaml": {
-    "sha": "14617e64af84",
-    "summary": "Contains default configuration values for the Aegis Helm chart, including settings for replicas, image, service, ingress, resources, and security contexts."
   },
   "mkdocs.yml": {
     "sha": "aaf610a1db42",
@@ -394,6 +414,10 @@
   "tests/test_alerting.py": {
     "sha": "06268e3caa33",
     "summary": "Contains unit tests for alerting functionality, ensuring alerts are correctly processed and do not duplicate notifications."
+  },
+  "tests/test_bootstrap.py": {
+    "sha": "90dd4755a2ad",
+    "summary": "Contains tests for the admin account bootstrap functionality, ensuring correct password generation and handling."
   },
   "tests/test_broker.py": {
     "sha": "f1fb4a7ca7ce",
