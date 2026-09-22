@@ -701,6 +701,8 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `ALERT_MAX_PER_RUN` | No | `25` | Cap on alerts raised by a single scan ingest |
 | `ALERT_DISPATCH_MODE` | No | `background` | `background` delivers alerts off the ingest request; `sync` makes ingest wait until sinks have responded. |
 | `ALERT_WORKERS` | No | `2` | Worker threads delivering alerts in background mode. |
+| `WEBHOOK_DISPATCH_MODE` | No | `background` | `background` delivers webhooks and notifications off the request path; `sync` makes the request wait for delivery. Delivery retries with backoff, so synchronous firing can add a minute or more to a response. |
+| `WEBHOOK_WORKERS` | No | `4` | Worker threads delivering webhooks in background mode. |
 | `JIRA_URL` / `JIRA_USER` / `JIRA_API_TOKEN` / `JIRA_PROJECT_KEY` | No | — | Jira ticket creation |
 | `JIRA_ISSUE_TYPE` | No | `Task` | Issue type for created tickets |
 | `SERVICENOW_URL` / `SERVICENOW_USER` / `SERVICENOW_PASSWORD` | No | — | ServiceNow incident creation |

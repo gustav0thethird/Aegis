@@ -12,7 +12,9 @@ import hashlib
 import hmac
 import json
 import logging
+import os
 import time
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 
 from aegis import errors, url_guard
@@ -284,17 +286,97 @@ def notify_channels(team, event: str, registry: dict | None = None,
 # Unified fire() — HTTP webhook + all notification channels
 # ---------------------------------------------------------------------------
 
+# Delivery runs off the request path by default.
+#
+# deliver() sleeps between retries (0s, 5s, 30s) around attempts that each
+# allow 10s, and notify_channels() adds further outbound calls. Firing an
+# event inline therefore added up to a minute and a half to the response -
+# and policy violations fire an event, so anyone able to trigger a 403 could
+# make the service spend a worker on their behalf.
+#
+# Delivery is best-effort either way: this is a notification path, and its
+# outcome is recorded in webhook_log. A worker pool is deliberately modest -
+# a durable outbox is the right answer if delivery ever has to survive a
+# restart, and is tracked separately.
+_pool: ThreadPoolExecutor | None = None
+
+
+def _executor() -> ThreadPoolExecutor:
+    global _pool
+    if _pool is None:
+        _pool = ThreadPoolExecutor(
+            max_workers=int(os.environ.get("WEBHOOK_WORKERS", "4")),
+            thread_name_prefix="aegis-webhook",
+        )
+    return _pool
+
+
+def _dispatch_is_sync() -> bool:
+    """
+    Whether the caller waits for delivery.
+
+    Background is the default. Sync exists for deterministic tests and for
+    deployments that would rather a request fail than an event be missed.
+    """
+    return os.environ.get("WEBHOOK_DISPATCH_MODE", "background").strip().lower() == "sync"
+
+
+def _fire_now(team_id, webhook_id, event: str, payload: dict, registry, detail) -> None:
+    """
+    Deliver in a worker thread.
+
+    Only identifiers cross the thread boundary. ORM objects belong to the
+    request's session, which is closed by the time this runs, so the rows are
+    loaded again here; the alternative is a DetachedInstanceError on the first
+    attribute access.
+    """
+    from aegis.database import SessionLocal
+    from aegis.models import Team, Webhook
+
+    db = SessionLocal()
+    try:
+        team = db.query(Team).filter(Team.id == team_id).first()
+        if team is None:
+            return
+        if webhook_id is not None:
+            webhook = db.query(Webhook).filter(Webhook.id == webhook_id).first()
+            if webhook is not None:
+                deliver(db, webhook, event, payload)
+        notify_channels(team, event, registry=registry, detail=detail)
+    except Exception as exc:
+        logger.error("Webhook dispatch failed event=%s team=%s: %s",
+                     event, team_id, type(exc).__name__)
+    finally:
+        db.close()
+
+
 def fire(db, team, event: str, **kwargs) -> None:
-    """Build payload and deliver to HTTP webhook + all configured notification channels."""
+    """
+    Build the payload and deliver it to the team's webhook and notification
+    channels. Returns as soon as the work is queued unless
+    WEBHOOK_DISPATCH_MODE=sync.
+    """
     team_dict = {"id": str(team.id), "name": team.name}
     payload   = build_payload(event, team_dict, **kwargs)
 
-    # HTTP webhook (with retry + logging)
     webhook = getattr(team, "webhook", None)
-    if webhook and webhook.enabled and event in (webhook.events or []):
-        deliver(db, webhook, event, payload)
+    if not (webhook and webhook.enabled and event in (webhook.events or [])):
+        webhook = None
 
-    # Notification channels (best-effort, no retry)
     registry_dict = kwargs.get("registry")
     detail_str    = kwargs.get("detail")
-    notify_channels(team, event, registry=registry_dict, detail=detail_str)
+
+    if _dispatch_is_sync():
+        if webhook is not None:
+            deliver(db, webhook, event, payload)
+        notify_channels(team, event, registry=registry_dict, detail=detail_str)
+        return
+
+    channels = any(getattr(team, attr, None) for attr in
+                   ("slack_webhook_url", "ms_teams_webhook_url", "discord_webhook_url"))
+    if webhook is None and not channels:
+        # Nothing to deliver; skip the thread entirely.
+        return
+
+    _executor().submit(_fire_now, team.id, (webhook.id if webhook is not None else None),
+                       event, payload, registry_dict, detail_str)

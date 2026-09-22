@@ -28,7 +28,7 @@ def _unique(prefix):
 
 
 @pytest.fixture
-def pair(db):
+def pair(db, _schema):
     team = Team(name=_unique("team"), created_by="test")
     reg = Registry(name=_unique("reg"), created_by="test")
     db.add(team)
