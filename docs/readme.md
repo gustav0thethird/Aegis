@@ -86,6 +86,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Database Schema](#database-schema)
 - [Themes](#themes)
 - [Admin account bootstrap](#admin-account-bootstrap)
+- [Key delivery on rotation](#key-delivery-on-rotation)
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
 - [Health Check](#health-check)
@@ -684,7 +685,7 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `WEBHOOK_PIN_DNS` | No | `true` | Connect outbound webhooks to the address that validation resolved, closing the DNS-rebinding window between check and connect. TLS still verifies against the hostname. |
 | `SECRET_CACHE_TTL_SECONDS` | No | `0` | Seconds to cache a brokered fetch for the ESO endpoints. `0` disables caching. |
 | `SECRET_CACHE_MAX_ENTRIES` | No | `512` | Bound on cached entries before eviction. |
-| `ESO_ALLOW_REGISTRY_EXTRACT` | No | `true` | Allow `/eso/v1/secrets` to return a whole registry. `false` forces per-object fetches. |
+| `ESO_ALLOW_REGISTRY_EXTRACT` | No | `false` | Allow `/eso/v1/secrets` to return a whole registry in one request. Off by default: it hands every object in the registry to a single consumer. `true` opts in. |
 | `LOG_DESTINATIONS` | No | `stdout` | Comma-separated SIEM targets. Used as fallback if DB setting is absent. |
 | `SPLUNK_HEC_URL` | No | — | Splunk HEC endpoint URL |
 | `SPLUNK_HEC_TOKEN` | No | — | Splunk HEC authentication token |
@@ -703,6 +704,7 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `ALERT_WORKERS` | No | `2` | Worker threads delivering alerts in background mode. |
 | `WEBHOOK_DISPATCH_MODE` | No | `background` | `background` delivers webhooks and notifications off the request path; `sync` makes the request wait for delivery. Delivery retries with backoff, so synchronous firing can add a minute or more to a response. |
 | `WEBHOOK_WORKERS` | No | `4` | Worker threads delivering webhooks in background mode. |
+| `WEBHOOK_INCLUDE_ROTATED_KEY` | No | `false` | Include the plaintext key in the `key.rotated` webhook payload. Off by default — see [Key delivery on rotation](#key-delivery-on-rotation). |
 | `JIRA_URL` / `JIRA_USER` / `JIRA_API_TOKEN` / `JIRA_PROJECT_KEY` | No | — | Jira ticket creation |
 | `JIRA_ISSUE_TYPE` | No | `Task` | Issue type for created tickets |
 | `SERVICENOW_URL` / `SERVICENOW_USER` / `SERVICENOW_PASSWORD` | No | — | ServiceNow incident creation |
@@ -1876,6 +1878,33 @@ auth:
 Environment variables are read at pod start, so a refreshed Secret applies on
 the next roll; add a [Reloader](https://github.com/stakater/Reloader)
 annotation under `podAnnotations` to roll automatically.
+
+## Key delivery on rotation
+
+A `key.rotated` event does **not** carry the new key. Subscribers receive the
+event, the team and registry, and `key_preview`, which identifies which key
+was replaced.
+
+The reason is trust boundaries. HMAC signing proves an event came from Aegis;
+it says nothing about what the receiver does with it. Putting a live
+credential in an ordinary HTTP event extends that credential's blast radius to
+the receiving endpoint, whatever proxy sits in front of it, its access logs
+and its monitoring — for a component whose job is to keep credentials in one
+place, that is the wrong direction.
+
+The plaintext key is returned to whoever asked for the rotation, in the
+response to their authenticated request:
+
+| Rotation triggered by | Where the key is returned |
+|---|---|
+| Admin API (`POST /admin/api/teams/{id}/registries/{id}/rotate-key`) | Response body |
+| Team dashboard | Response body |
+| CI/CD inbound webhook (`POST /api/inbound/{team_id}`, `rotate_key`) | Response body to the caller that triggered it |
+| Scheduled expiry rotation | Nowhere — rotate through one of the above to collect it |
+
+Set `WEBHOOK_INCLUDE_ROTATED_KEY=true` to restore the old behaviour if an
+existing integration depends on it. If you do, treat the webhook endpoint as
+you would the key itself: TLS, an allowlisted destination, no request logging.
 
 ## Security Model
 

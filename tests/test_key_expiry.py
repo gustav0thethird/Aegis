@@ -65,6 +65,9 @@ class TestExpiryEnforcement:
 
     def test_eso_endpoints_reject_expired_keys_too(self, client, db, monkeypatch):
         """The ESO path shares the auth helper, so it must inherit this."""
+        # Opt in to whole-registry extraction: the point here is that an
+        # expired key is rejected before the endpoint does anything.
+        monkeypatch.setenv("ESO_ALLOW_REGISTRY_EXTRACT", "true")
         _obj, _reg, _team, key = _create_scenario(db, client)
         monkeypatch.setattr("aegis.deps.fetch_secrets", lambda rows, auth: {"x": "v"})
         _expire(db, key)
