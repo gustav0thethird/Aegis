@@ -27,6 +27,9 @@ os.environ.setdefault("SCHEDULER_ENABLED", "false")
 # Alerts deliver synchronously under test so assertions do not race a worker
 # thread. Background dispatch is exercised explicitly in test_scan_ingest.
 os.environ.setdefault("ALERT_DISPATCH_MODE", "sync")
+# Webhooks deliver synchronously under test for the same reason: assertions
+# must not race a worker thread. Background dispatch is exercised explicitly.
+os.environ.setdefault("WEBHOOK_DISPATCH_MODE", "sync")
 
 import fakeredis
 import pytest
