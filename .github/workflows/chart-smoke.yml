@@ -1,0 +1,96 @@
+# Installs the PUBLISHED chart from the registry into a clean cluster - the
+# exact command someone copies off Artifact Hub, including the image it pulls
+# from GHCR. ci.yml tests the chart in the working tree; this tests what was
+# actually published, so a bad package, a missing image tag or a broken
+# registry permission is caught even though every PR was green.
+
+name: Chart smoke test
+
+on:
+  workflow_call:
+    inputs:
+      chart_version:
+        description: Published chart version to install
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      chart_version:
+        description: Published chart version to install (blank = latest)
+        required: false
+        type: string
+  schedule:
+    - cron: "0 5 * * 1"  # Mondays 05:00 UTC
+
+permissions:
+  contents: read
+
+jobs:
+  install:
+    name: Install from registry
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+        with:
+          version: v3.16.3
+
+      - uses: helm/kind-action@ef37e7f390d99f746eb8b610417061a60e82a6cc # v1.14.0
+
+      # Dependencies the chart expects to already exist, plus the two Secrets
+      # the README tells you to create. Nothing here comes from the repository
+      # except the example auth.json.
+      - name: Stand up dependencies
+        run: |
+          kubectl create namespace aegis
+          kubectl -n aegis create deployment postgres --image=postgres:16-alpine --port=5432
+          kubectl -n aegis set env deployment/postgres POSTGRES_DB=aegis POSTGRES_USER=broker POSTGRES_PASSWORD=changeme
+          kubectl -n aegis expose deployment postgres --port=5432
+          kubectl -n aegis create deployment redis --image=redis:7-alpine --port=6379
+          kubectl -n aegis expose deployment redis --port=6379
+          kubectl -n aegis create secret generic aegis-credentials \
+            --from-literal=database-url=postgresql://broker:changeme@postgres:5432/aegis \
+            --from-literal=redis-url=redis://redis:6379 \
+            --from-literal=admin-password=smoke-test-admin-pass
+          kubectl -n aegis create secret generic aegis-auth-json --from-file=auth.json=config/auth.json.example
+          kubectl -n aegis rollout status deployment/postgres --timeout=180s
+          kubectl -n aegis rollout status deployment/redis --timeout=180s
+
+      # Verbatim from the chart README, bar the replica count (single node).
+      - name: helm install from oci://
+        run: |
+          version_arg=""
+          if [ -n "${{ inputs.chart_version }}" ]; then
+            version_arg="--version ${{ inputs.chart_version }}"
+          fi
+          # shellcheck disable=SC2086
+          helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis $version_arg \
+            --namespace aegis \
+            --set secret.existingSecret=aegis-credentials \
+            --set auth.existingSecret=aegis-auth-json \
+            --set migrations.hookProvider=helm \
+            --set replicaCount=1 \
+            --set podDisruptionBudget.enabled=false \
+            --wait --timeout 6m
+
+      - name: helm test
+        run: helm test aegis --namespace aegis --timeout 3m
+
+      - name: Confirm the deployed image is the published one
+        run: |
+          image=$(kubectl -n aegis get deploy aegis -o jsonpath='{.spec.template.spec.containers[0].image}')
+          echo "deployed image: $image"
+          case "$image" in
+            ghcr.io/gustav0thethird/aegis:v*) ;;
+            *) echo "::error::unexpected image $image"; exit 1 ;;
+          esac
+
+      - name: Diagnostics on failure
+        if: failure()
+        run: |
+          kubectl -n aegis get all
+          kubectl -n aegis describe pods | tail -60
+          kubectl -n aegis logs -l app.kubernetes.io/name=aegis --all-containers --tail=100 || true
+          kubectl -n aegis logs -l app.kubernetes.io/component=migrate --tail=100 || true

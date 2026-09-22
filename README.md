@@ -2033,6 +2033,8 @@ Every push and pull request runs the full pipeline; `main` requires all of it gr
 | CodeQL | GitHub default setup for Python and Actions |
 | `scorecard.yml` | OpenSSF Scorecard on `main`, weekly |
 | `release.yml` | On `v*` tags: build, Trivy-scan, push a multi-arch image to GHCR with SBOM + SLSA provenance, publish the chart as an OCI artifact, sign both with Sigstore, create the GitHub release |
+| `chart-smoke.yml` | Installs the published chart from `oci://` into a clean kind cluster after every release and weekly — the exact command from the Artifact Hub listing |
+| `artifacthub-metadata.yml` | Publishes `artifacthub-repo.yml` to the registry so the Artifact Hub listing stays verified |
 
 Every action is pinned to a commit SHA and the base image to a digest; Dependabot keeps both current. See [SECURITY.md](SECURITY.md) for the disclosure policy.
 

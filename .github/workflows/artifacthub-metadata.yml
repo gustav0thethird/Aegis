@@ -1,0 +1,49 @@
+# Publishes artifacthub-repo.yml to the chart's OCI repository under the
+# special "artifacthub.io" tag. Artifact Hub reads it from there to confirm the
+# repository belongs to the account that registered it, which is what grants
+# the "Verified publisher" badge on
+# https://artifacthub.io/packages/helm/aegis-secrets-broker/aegis
+#
+# This is repository metadata, not release metadata: it is published from main
+# rather than from a release tag, so it does not depend on which tag was cut
+# and cannot be stranded by a tag that predates the file.
+
+name: Artifact Hub metadata
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - artifacthub-repo.yml
+      - .github/workflows/artifacthub-metadata.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Publish repository metadata
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: oras-project/setup-oras@22ce207df3b08e061f537244349aac6ae1d214f6 # v1.2.4
+
+      - name: Log in to GHCR
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The tag holds metadata only, never a chart.
+      - name: Push
+        run: |
+          oras push "ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/charts/aegis:artifacthub.io" \
+            --config /dev/null:application/vnd.cncf.artifacthub.config.v1+yaml \
+            artifacthub-repo.yml:application/vnd.cncf.artifacthub.repository-metadata.layer.v1.yaml
