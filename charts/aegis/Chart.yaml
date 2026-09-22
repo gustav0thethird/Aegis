@@ -5,7 +5,7 @@ type: application
 # Chart version and appVersion are independent. Bump `version` whenever
 # templates or values change (ct enforces this on PRs); `appVersion` tracks the
 # image and is overridden at release time from the git tag.
-version: 0.2.0
+version: 0.3.0
 appVersion: "0.2.0"
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/gustav0thethird/Aegis
@@ -42,6 +42,14 @@ annotations:
     - name: aegis
       image: ghcr.io/gustav0thethird/aegis:v0.2.0
   artifacthub.io/changes: |
+    - kind: added
+      description: Generated admin password when secret.adminPassword is empty, stable across upgrades
+    - kind: added
+      description: externalSecrets.credentials and externalSecrets.authJson materialise the chart's own Secrets from an external store
+    - kind: added
+      description: secret.adminPasswordSync=always makes a rotated Secret rotate the admin password
+    - kind: changed
+      description: Admin password reaches the pod as a mounted file (ADMIN_PASSWORD_FILE), not an environment variable
     - kind: added
       description: Chart published as a signed OCI artifact to ghcr.io/gustav0thethird/charts/aegis
     - kind: added

@@ -69,19 +69,27 @@ services:
       DATABASE_URL:     postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@pgbouncer:5432/${POSTGRES_DB}
       REDIS_URL:        redis://redis:6379
       AUTH_PATH:        /config/auth.json
+      # Admin password from a Docker secret (see `secrets:` at the bottom)
+      # rather than the environment. Leave the secret file empty-handed and
+      # unset ADMIN_PASSWORD in .env to get a generated password instead:
+      #   docker compose -f docker-compose.prod.yml exec broker cat /tmp/aegis-admin.password
+      ADMIN_PASSWORD_FILE: ${ADMIN_PASSWORD_FILE:-}
+      # bootstrap (default) or always - see README "Admin account bootstrap"
+      ADMIN_PASSWORD_SYNC: ${ADMIN_PASSWORD_SYNC:-bootstrap}
     volumes:
       - ./config:/config:ro
+    # Uncomment to deliver the admin password as a Docker secret:
+    #   printf '%s' "$(openssl rand -base64 24)" > secrets/admin_password
+    #   ADMIN_PASSWORD_FILE=/run/secrets/admin_password in .env
+    # secrets:
+    #   - admin_password
     depends_on:
       pgbouncer:
         condition: service_started
       redis:
         condition: service_healthy
-    healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health || exit 1"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 20s
+    # Health is checked by the image's HEALTHCHECK (python against /healthz);
+    # the image ships neither wget nor curl.
     deploy:
       resources:
         limits:
@@ -144,3 +152,8 @@ volumes:
   caddy_data:
   caddy_config:
   backup_data:
+
+# Top-level Docker secrets. Uncomment together with the broker's `secrets:`.
+# secrets:
+#   admin_password:
+#     file: ./secrets/admin_password

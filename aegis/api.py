@@ -57,10 +57,9 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as _StarletteHTTPException
 
-from aegis import scheduler
+from aegis import bootstrap, scheduler
 from aegis.database import SessionLocal
-from aegis.deps import _hash_pw
-from aegis.models import User
+from aegis.deps import _hash_pw, _verify_pw
 from aegis.routers import (
     admin_config,
     admin_core,
@@ -89,24 +88,15 @@ _destinations = os.environ.get("LOG_DESTINATIONS", "stdout").lower()
 if "s3" in _destinations:
     start_s3_flush_thread()
 
-# Startup — seed default admin user if none exists
+# Startup — bootstrap the admin account (see aegis/bootstrap.py for the
+# ADMIN_PASSWORD / ADMIN_PASSWORD_FILE / generated-password rules)
 # ---------------------------------------------------------------------------
 
 @app.on_event("startup")
 def _seed_admin():
     db = SessionLocal()
     try:
-        if not db.query(User).filter(User.role == "admin").first():
-            admin_pw = os.environ.get("ADMIN_PASSWORD", "changeme")
-            db.add(User(
-                username="admin",
-                password_hash=_hash_pw(admin_pw),
-                role="admin",
-                theme="default",
-                created_by="system",
-            ))
-            db.commit()
-            logger.info("Seeded default admin user")
+        bootstrap.ensure_admin(db, hash_pw=_hash_pw, verify_pw=_verify_pw)
     finally:
         db.close()
 

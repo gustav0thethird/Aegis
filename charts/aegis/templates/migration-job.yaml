@@ -61,7 +61,9 @@ spec:
           volumeMounts:
             - name: tmp
               mountPath: /tmp
+            {{- include "aegis.secretVolumeMount" . | nindent 12 }}
       volumes:
         - name: tmp
           emptyDir: {}
+        {{- include "aegis.secretVolume" . | nindent 8 }}
 {{- end }}

@@ -77,11 +77,13 @@ Emits list items only — the caller supplies the `env:` key.
     secretKeyRef:
       name: {{ include "aegis.secretName" . }}
       key: redis-url
-- name: ADMIN_PASSWORD
-  valueFrom:
-    secretKeyRef:
-      name: {{ include "aegis.secretName" . }}
-      key: admin-password
+# The admin password is mounted as a file (see "aegis.secretVolume") rather
+# than injected as an env var: it stays out of `kubectl describe pod`, and a
+# rotated Secret reaches the pod without an env change.
+- name: ADMIN_PASSWORD_FILE
+  value: /etc/aegis/secrets/admin-password
+- name: ADMIN_PASSWORD_SYNC
+  value: {{ .Values.secret.adminPasswordSync | quote }}
 # Optional: keys the scan-finding dedupe hash. Existing Secrets that predate
 # this key keep working; the app falls back to an unkeyed hash.
 - name: SECRET_KEY
@@ -92,4 +94,22 @@ Emits list items only — the caller supplies the `env:` key.
       optional: true
 - name: AUTH_PATH
   value: {{ .Values.auth.authPath | quote }}
+{{- end }}
+
+{{/* volumeMounts entry for the credentials Secret (admin password file). */}}
+{{- define "aegis.secretVolumeMount" -}}
+- name: credentials
+  mountPath: /etc/aegis/secrets
+  readOnly: true
+{{- end }}
+
+{{/* volumes entry for the credentials Secret. Only the password is projected. */}}
+{{- define "aegis.secretVolume" -}}
+- name: credentials
+  secret:
+    secretName: {{ include "aegis.secretName" . }}
+    defaultMode: 0400
+    items:
+      - key: admin-password
+        path: admin-password
 {{- end }}
