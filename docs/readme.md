@@ -672,7 +672,7 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `ADMIN_PASSWORD_FILE` | No | — | Read the admin password from a file instead. Takes precedence over `ADMIN_PASSWORD`; how Docker secrets, Kubernetes Secret mounts and ESO deliveries arrive. |
 | `ADMIN_PASSWORD_SYNC` | No | `bootstrap` | `bootstrap`: the configured value seeds the account on first start only. `always`: it is authoritative on every start — inject a new value and restart to rotate. Rotations are written to the change log. |
 | `ADMIN_BOOTSTRAP_OUTPUT` | No | `/tmp/aegis-admin.password` | Where a generated password is written (mode 0600). Never logged. |
-| `SECRET_KEY` | No | — | Keys the scan-finding dedupe hash so findings match across replicas and restarts (`openssl rand -hex 32`). Rotating it makes previously seen findings look new. |
+| `SECRET_KEY` | No | generated | Keys the scan-finding dedupe hash (`openssl rand -hex 32`). When unset, a random per-installation key is generated on first start and stored in `settings`; set this only to share one key across installations. Rotating it makes previously seen findings look new. |
 | `RATE_LIMIT_RPM` | No | `60` | Per-key requests per minute. Used as fallback if DB setting is absent. |
 | `RATE_LIMIT_FAIL_MODE` | No | `open` | Behaviour when Redis is unreachable. `open` keeps serving without enforcing limits; `closed` rejects requests. |
 | `WEBHOOK_ALLOWED_SCHEMES` | No | `https` | Comma-separated URL schemes accepted for outbound webhook and notification URLs. |
@@ -1365,7 +1365,7 @@ stateDiagram-v2
     Expired --> [*]
 ```
 
-- Keys are generated as `sk_` + 40 bytes of `secrets.token_urlsafe()` — 320 bits of cryptographic randomness.
+- Keys are generated as `sk_` + `secrets.token_urlsafe(32)` — 256 bits of cryptographic randomness.
 - Only the SHA-256 hex digest is stored in the database. The plaintext is never persisted.
 - The plaintext key is returned exactly once: on assignment or rotation. It cannot be retrieved again. If lost, rotate it.
 - The admin panel and team dashboard display only the first 10 characters (`key_preview`) for identification.
@@ -1870,7 +1870,7 @@ annotation under `podAnnotations` to roll automatically.
 
 ### API Key Security
 
-- Keys are generated using `secrets.token_urlsafe(40)` — 320 bits of cryptographic randomness.
+- Keys are generated using `secrets.token_urlsafe(32)` — 256 bits of cryptographic randomness.
 - Only the SHA-256 hex digest is stored. The plaintext is discarded after issuance.
 - There is no "reveal key" endpoint. If a key is lost, rotate it.
 - Key lookup is an indexed exact-match on the hash — constant time from the database's perspective.

@@ -3,6 +3,7 @@ session.py — Session authentication.
 """
 
 import json
+import logging
 import uuid
 
 from fastapi import (
@@ -15,6 +16,7 @@ from fastapi import (
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from aegis import login_guard
 from aegis.database import get_db
 from aegis.deps import (
     _create_session,
@@ -22,6 +24,7 @@ from aegis.deps import (
     _extract_bearer_token,
     _get_redis,
     _get_setting_int,
+    _hash_pw,
     _require_admin,
     _require_any_user,
     _session_key,
@@ -30,6 +33,7 @@ from aegis.deps import (
 from aegis.models import User
 
 router = APIRouter()
+logger = logging.getLogger("aegis.session")
 
 # ---------------------------------------------------------------------------
 # Session auth endpoints
@@ -40,11 +44,51 @@ class LoginRequest(BaseModel):
     password: str
 
 
+# Verified against when the username does not exist, so that path costs the
+# same bcrypt work as a real one. The value is irrelevant; only the cost is.
+_DUMMY_HASH = _hash_pw("aegis-nonexistent-user-placeholder")
+
+
+def _request_ip(request: Request) -> str:
+    """
+    Client address for rate-limiting purposes.
+
+    X-Forwarded-For is honoured because the documented deployment puts Aegis
+    behind a proxy; it is spoofable if the service is exposed directly, which
+    only lets an attacker spread their own failures across buckets, never
+    bypass another client's lock.
+    """
+    forwarded = request.headers.get("x-forwarded-for", "")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
 @router.post("/api/login")
-def api_login(req: LoginRequest, db: Session = Depends(get_db)):
+def api_login(req: LoginRequest, request: Request, db: Session = Depends(get_db)):
+    source_ip = _request_ip(request)
+
+    allowed, retry_after = login_guard.check(source_ip, req.username)
+    if not allowed:
+        # 429 rather than 401: the attempt was not evaluated, and a client that
+        # backs off correctly should be able to tell the difference.
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many failed login attempts. Try again later.",
+            headers={"Retry-After": str(retry_after)})
+
     user = db.query(User).filter(User.username == req.username).first()
-    if not user or not _verify_pw(req.password, user.password_hash):
+    # Verify against a dummy hash when the user does not exist, so a missing
+    # account costs the same as a wrong password. Otherwise the response time
+    # tells an attacker which usernames are real.
+    password_ok = (_verify_pw(req.password, user.password_hash) if user
+                   else _verify_pw(req.password, _DUMMY_HASH))
+    if not user or not password_ok:
+        login_guard.record_failure(source_ip, req.username)
+        logger.warning("Failed login username=%s ip=%s", req.username, source_ip)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+
+    login_guard.record_success(source_ip, req.username)
     ttl = _get_setting_int(db, "session_ttl_hours", 8)
     token = _create_session(user, ttl)
     return {
@@ -119,11 +163,11 @@ def admin_list_sessions(session: dict = Depends(_require_admin)):
                 continue
             try:
                 data = json.loads(raw)
-                token_preview = key.decode().replace("aegis:session:", "")[:12] + "..."
+                token_preview = key.replace("aegis:session:", "")[:12] + "..."
                 ttl = r.ttl(key)
                 sessions.append({
                     "token_preview": token_preview,
-                    "token_key":     key.decode(),   # full Redis key for deletion
+                    "token_key":     key,            # full Redis key for deletion
                     "username":      data.get("username"),
                     "role":          data.get("role"),
                     "team_id":       data.get("team_id"),

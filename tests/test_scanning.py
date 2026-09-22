@@ -6,6 +6,9 @@ matched credential never survives normalisation — a broker that stored the
 secrets it found in your code would be worse than the problem it reports.
 """
 
+import hashlib
+import hmac
+
 import pytest
 
 from aegis import scanning
@@ -94,11 +97,26 @@ class TestHashSecret:
     def test_differs_per_secret(self):
         assert scanning.hash_secret(SECRET) != scanning.hash_secret("other")
 
-    def test_is_keyed_by_secret_key(self, monkeypatch):
-        monkeypatch.setenv("SECRET_KEY", "key-one")
+    def test_is_keyed(self, monkeypatch):
+        """Different keys, different fingerprints - the point of using HMAC."""
+        monkeypatch.setattr(scanning, "_DEDUPE_KEY", b"key-one")
         first = scanning.hash_secret(SECRET)
-        monkeypatch.setenv("SECRET_KEY", "key-two")
+        monkeypatch.setattr(scanning, "_DEDUPE_KEY", b"key-two")
         assert scanning.hash_secret(SECRET) != first
+
+    def test_falls_back_to_secret_key_before_startup(self, monkeypatch):
+        monkeypatch.setattr(scanning, "_DEDUPE_KEY", None)
+        monkeypatch.setenv("SECRET_KEY", "key-one")
+        monkeypatch.setattr(scanning, "_DEDUPE_KEY", None)
+        assert scanning.hash_secret(SECRET) == hmac.new(
+            b"key-one", SECRET.encode(), hashlib.sha256).hexdigest()
+
+    def test_refuses_to_hash_with_no_key_at_all(self, monkeypatch):
+        """A shared constant would make fingerprints precomputable."""
+        monkeypatch.setattr(scanning, "_DEDUPE_KEY", None)
+        monkeypatch.delenv("SECRET_KEY", raising=False)
+        with pytest.raises(RuntimeError, match="dedupe key"):
+            scanning.hash_secret(SECRET)
 
 
 class TestFingerprint:

@@ -58,6 +58,9 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as _StarletteHTTPException
 
 from aegis import bootstrap, scheduler
+
+# Aliased: aegis.routers.scanning shadows the name below.
+from aegis import scanning as scan_core
 from aegis.database import SessionLocal
 from aegis.deps import _hash_pw, _verify_pw
 from aegis.routers import (
@@ -102,6 +105,18 @@ def _seed_admin():
 
 
 @app.on_event("startup")
+def _init_scan_dedupe_key():
+    db = SessionLocal()
+    try:
+        source = scan_core.init_dedupe_key(db)
+        if source == "generated":
+            logger.info("Generated a per-installation scan dedupe key (stored in settings). "
+                        "Set SECRET_KEY to share one across installations.")
+    finally:
+        db.close()
+
+
+@app.on_event("startup")
 def _start_scheduler():
     """
     Start the background key-expiry scheduler.
@@ -131,13 +146,16 @@ def _wants_json(path: str) -> bool:
 
 @app.exception_handler(_StarletteHTTPException)
 async def http_exception_handler(request: Request, exc: _StarletteHTTPException):
+    # Headers set on the exception (Retry-After on a 429, WWW-Authenticate on a
+    # 401) are part of the response contract and have to survive the handler.
+    headers = getattr(exc, "headers", None)
     # API paths return JSON
     if _wants_json(request.url.path):
-        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=headers)
     # UI paths return the 404 page for 404s, JSON for everything else
     if exc.status_code == 404:
-        return FileResponse("static/404.html", status_code=404)
-    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        return FileResponse("static/404.html", status_code=404, headers=headers)
+    return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=headers)
 
 
 
