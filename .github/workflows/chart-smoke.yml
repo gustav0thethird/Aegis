@@ -60,10 +60,13 @@ jobs:
 
       # Verbatim from the chart README, bar the replica count (single node).
       - name: helm install from oci://
+        env:
+          # Through the environment, not interpolated into the script.
+          CHART_VERSION: ${{ inputs.chart_version }}
         run: |
           version_arg=""
-          if [ -n "${{ inputs.chart_version }}" ]; then
-            version_arg="--version ${{ inputs.chart_version }}"
+          if [ -n "$CHART_VERSION" ]; then
+            version_arg="--version $CHART_VERSION"
           fi
           # shellcheck disable=SC2086
           helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis $version_arg \
