@@ -129,7 +129,7 @@ config:
 secret:
   # -- Name of an existing Secret with keys database-url, redis-url, admin-password and optionally secret-key. Required unless create is true.
   existingSecret: ""
-  # -- Render a Secret from the values below. Development convenience only: the values end up in Git.
+  # -- Render a Secret from the values below. Development convenience only: the values end up in Git. Not usable with migrations.hookProvider=helm (the Secret would not exist when the pre-install hook runs).
   create: false
   # -- PostgreSQL DSN (postgresql://user:pass@host/db). Only used when create is true.
   databaseUrl: ""
