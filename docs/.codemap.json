@@ -232,8 +232,8 @@
     "summary": "This file defines an Argo CD application configuration for deploying the Aegis application in a Kubernetes environment."
   },
   "catalog-info.yaml": {
-    "sha": "ee188c7c8a3b",
-    "summary": "Defines the Aegis component, detailing its purpose as a vendor-agnostic secrets broker and API management service."
+    "sha": "8d81acbe68e8",
+    "summary": "Defines the Aegis component, detailing its purpose as a vendor-agnostic secrets broker and API gateway, along with its capabilities and ownership."
   },
   "docker-compose.prod.yml": {
     "sha": "1c72b50249c5",
