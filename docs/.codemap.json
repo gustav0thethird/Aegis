@@ -16,8 +16,8 @@
     "summary": "This file automates the merging of Dependabot pull requests for patch and minor version updates on the main branch."
   },
   ".github/workflows/release.yml": {
-    "sha": "0fc4b3134f1b",
-    "summary": "Manages the release process by building and pushing Docker images and creating GitHub releases."
+    "sha": "80732b8127b9",
+    "summary": "This file defines a GitHub Actions workflow for automating the release process, including building and scanning Docker images, creating GitHub releases, and uploading security scan results."
   },
   ".github/workflows/scorecard.yml": {
     "sha": "f520657c590e",
@@ -236,8 +236,8 @@
     "summary": "Defines the Argo CD application configuration for deploying the Aegis application in a Kubernetes environment."
   },
   "catalog-info.yaml": {
-    "sha": "963ea533ad7b",
-    "summary": "Describes the Aegis component and its API, providing metadata and links for documentation and ownership."
+    "sha": "fe9ebbe161ba",
+    "summary": "This file contains metadata about the Aegis component and its API, including descriptions, capabilities, ownership, and links for documentation and source code."
   },
   "charts/aegis/Chart.yaml": {
     "sha": "9c6bca3a892b",
