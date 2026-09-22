@@ -2056,6 +2056,8 @@ helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.2.0 \
 Release images are multi-arch (`linux/amd64`, `linux/arm64`) and tagged
 `vX.Y.Z`, `vX.Y` and `latest`. Both the image and the chart are signed
 keylessly with Sigstore; the verify commands are in [SECURITY.md](SECURITY.md).
+The chart is also listed on
+[Artifact Hub](https://artifacthub.io/packages/helm/aegis-secrets-broker/aegis).
 
 Or point Argo CD at it:
 

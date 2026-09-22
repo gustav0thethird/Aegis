@@ -1,0 +1,16 @@
+# Artifact Hub repository metadata.
+#
+# Pushed to the registry under the special "artifacthub.io" tag by the chart
+# job in .github/workflows/release.yml. Artifact Hub reads it to confirm this
+# OCI repository is published by the account that registered it, which is what
+# grants the "Verified publisher" badge.
+#
+#   https://artifacthub.io/packages/helm/aegis-secrets-broker/aegis
+#
+# repositoryID is the ID of that Artifact Hub repository (Control Panel ->
+# Repositories -> ... -> Get ID). It is an identifier, not a credential.
+#
+# The `owners` block is deliberately absent: it exists so a third party can
+# claim ownership of a repository they do not control, and adding it would
+# publish an email address in the registry for no benefit here.
+repositoryID: 029961e7-f91f-4bd8-8adb-488a19ea704c
