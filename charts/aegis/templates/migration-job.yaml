@@ -37,7 +37,11 @@ spec:
       imagePullSecrets:
         {{- toYaml . | nindent 8 }}
       {{- end }}
-      serviceAccountName: {{ include "aegis.serviceAccountName" . }}
+      # Deliberately not the broker's ServiceAccount: the migration only needs
+      # the database, so it should not carry the app's cloud identity (IRSA
+      # etc.), and as a pre-install hook it runs before that ServiceAccount
+      # exists anyway.
+      automountServiceAccountToken: false
       securityContext:
         {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
@@ -47,11 +51,11 @@ spec:
           securityContext:
             {{- toYaml .Values.securityContext | nindent 12 }}
           command: ["alembic", "upgrade", "head"]
+          # Only the Secret-backed settings: the migration needs DATABASE_URL
+          # and nothing from the ConfigMap, which - like the ServiceAccount -
+          # does not exist yet when this runs as a pre-install hook.
           env:
             {{- include "aegis.secretEnv" . | nindent 12 }}
-          envFrom:
-            - configMapRef:
-                name: {{ include "aegis.fullname" . }}-config
           resources:
             {{- toYaml .Values.migrations.resources | nindent 12 }}
           volumeMounts:

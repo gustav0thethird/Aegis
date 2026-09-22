@@ -1,0 +1,38 @@
+{{/*
+Run with `helm test <release>` (chart-testing runs it after every install).
+Proves the Service routes to a broker that has finished starting: /readyz only
+returns 200 once the database and Redis are reachable.
+*/}}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "aegis.fullname" . }}-test-connection
+  labels:
+    {{- include "aegis.labels" . | nindent 4 }}
+    app.kubernetes.io/component: test
+  annotations:
+    helm.sh/hook: test
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65532
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: readyz
+      image: curlimages/curl:8.11.1
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        capabilities:
+          drop: ["ALL"]
+      command:
+        - curl
+        - --fail
+        - --silent
+        - --show-error
+        - --max-time
+        - "10"
+        - http://{{ include "aegis.fullname" . }}:{{ .Values.service.port }}/readyz

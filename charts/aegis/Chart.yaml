@@ -1,0 +1,52 @@
+apiVersion: v2
+name: aegis
+description: Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any vault, every action logged.
+type: application
+# Chart version and appVersion are independent. Bump `version` whenever
+# templates or values change (ct enforces this on PRs); `appVersion` tracks the
+# image and is overridden at release time from the git tag.
+version: 0.2.0
+appVersion: "0.2.0"
+kubeVersion: ">=1.25.0-0"
+home: https://github.com/gustav0thethird/Aegis
+icon: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/Aegis-logo.png
+sources:
+  - https://github.com/gustav0thethird/Aegis
+keywords:
+  - secrets
+  - secrets-management
+  - pam
+  - vault
+  - cyberark
+  - conjur
+  - aws-secrets-manager
+  - external-secrets
+  - audit
+maintainers:
+  - name: gustav0thethird
+    url: https://github.com/gustav0thethird
+annotations:
+  artifacthub.io/license: AGPL-3.0
+  artifacthub.io/category: security
+  artifacthub.io/signKey: |
+    fingerprint: keyless
+    url: https://github.com/gustav0thethird/Aegis/blob/main/SECURITY.md
+  artifacthub.io/links: |
+    - name: Documentation
+      url: https://github.com/gustav0thethird/Aegis#kubernetes-and-argo-cd
+    - name: Security policy
+      url: https://github.com/gustav0thethird/Aegis/blob/main/SECURITY.md
+    - name: Container image
+      url: https://github.com/gustav0thethird/Aegis/pkgs/container/aegis
+  artifacthub.io/images: |
+    - name: aegis
+      image: ghcr.io/gustav0thethird/aegis:v0.2.0
+  artifacthub.io/changes: |
+    - kind: added
+      description: Chart published as a signed OCI artifact to ghcr.io/gustav0thethird/charts/aegis
+    - kind: added
+      description: values.schema.json validates user values at install time
+    - kind: added
+      description: Optional secret-key entry for the scan-finding dedupe hash
+    - kind: changed
+      description: Chart moved from helm/ to charts/aegis/

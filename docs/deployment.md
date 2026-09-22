@@ -30,7 +30,7 @@ Aegis can be deployed using Docker by utilizing the provided `docker-compose.yml
 
 ## Helm Deployment
 
-Aegis can be deployed on Kubernetes using Helm. The Helm chart is defined in the `helm/Chart.yaml` file.
+Aegis can be deployed on Kubernetes using Helm. The chart lives in `charts/aegis/` and is published as an OCI artifact at `oci://ghcr.io/gustav0thethird/charts/aegis`.
 
 ### Steps to Deploy with Helm
 

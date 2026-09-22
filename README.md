@@ -669,7 +669,7 @@ On the object, `path` is the Conjur variable path (e.g. `prod/database/password`
 | `REDIS_URL` | Yes | — | Redis DSN (`redis://host:6379`) |
 | `AUTH_PATH` | Yes | — | Filesystem path to `auth.json` inside the container |
 | `ADMIN_PASSWORD` | Yes | — | Bootstrap password for the `admin` account (used on first start only) |
-| `SECRET_KEY` | Yes | — | Session signing secret, minimum 32 random chars (`openssl rand -hex 32`). Also keys the scan-finding dedupe hash — rotating it makes previously seen findings look new. |
+| `SECRET_KEY` | No | — | Keys the scan-finding dedupe hash so findings match across replicas and restarts (`openssl rand -hex 32`). Rotating it makes previously seen findings look new. |
 | `RATE_LIMIT_RPM` | No | `60` | Per-key requests per minute. Used as fallback if DB setting is absent. |
 | `RATE_LIMIT_FAIL_MODE` | No | `open` | Behaviour when Redis is unreachable. `open` keeps serving without enforcing limits; `closed` rejects requests. |
 | `WEBHOOK_ALLOWED_SCHEMES` | No | `https` | Comma-separated URL schemes accepted for outbound webhook and notification URLs. |
@@ -1966,12 +1966,12 @@ Every push and pull request runs the full pipeline; `main` requires all of it gr
 
 | Workflow | What runs |
 |---|---|
-| `ci.yml` | ruff, pytest against a PostgreSQL 16 service container, Helm lint + render + kubeconform, `terraform fmt`/`validate`/tflint, image build and non-root check, pip-audit, Gitleaks |
+| `ci.yml` | ruff, pytest against a PostgreSQL 16 service container, chart-testing lint + render + kubeconform + a real install into kind, `terraform fmt`/`validate`/tflint, image build and non-root check, pip-audit, Gitleaks |
 | `security.yml` | Trivy (repository: dependencies, IaC misconfiguration, secrets; and the built image), Semgrep, Hadolint — results land in the Security tab as SARIF |
 | `bandit.yml` | Bandit static analysis (medium severity and above) |
 | CodeQL | GitHub default setup for Python and Actions |
 | `scorecard.yml` | OpenSSF Scorecard on `main`, weekly |
-| `release.yml` | On `v*` tags: build, Trivy-scan, push to GHCR with SBOM + SLSA provenance, sign with Sigstore, create the GitHub release |
+| `release.yml` | On `v*` tags: build, Trivy-scan, push a multi-arch image to GHCR with SBOM + SLSA provenance, publish the chart as an OCI artifact, sign both with Sigstore, create the GitHub release |
 
 Every action is pinned to a commit SHA and the base image to a digest; Dependabot keeps both current. See [SECURITY.md](SECURITY.md) for the disclosure policy.
 
@@ -1979,15 +1979,22 @@ Every action is pinned to a commit SHA and the base image to a digest; Dependabo
 
 ## Kubernetes and Argo CD
 
-The chart in [`helm/`](helm/) deploys Aegis, and [`argocd/`](argocd/) contains
-Application manifests for driving it through GitOps.
+The chart is published as a signed OCI artifact with every release, and
+[`argocd/`](argocd/) contains Application manifests for driving it through GitOps.
+The chart source lives in [`charts/aegis/`](charts/aegis/) with a generated
+[values reference](charts/aegis/README.md).
 
 ```bash
-helm install aegis helm/ \
+helm install aegis oci://ghcr.io/gustav0thethird/charts/aegis --version 0.2.0 \
   --namespace aegis --create-namespace \
   --set secret.existingSecret=aegis-credentials \
-  --set auth.existingSecret=aegis-auth-json
+  --set auth.existingSecret=aegis-auth-json \
+  --set migrations.hookProvider=helm
 ```
+
+Release images are multi-arch (`linux/amd64`, `linux/arm64`) and tagged
+`vX.Y.Z`, `vX.Y` and `latest`. Both the image and the chart are signed
+keylessly with Sigstore; the verify commands are in [SECURITY.md](SECURITY.md).
 
 Or point Argo CD at it:
 
@@ -2269,10 +2276,14 @@ Aegis/
 │   └── 404.html                — Branded 404 page
 ├── terraform/                  — AWS infrastructure (ECS, RDS, ElastiCache, ALB, IAM, S3)
 │   └── .tflint.hcl             — tflint rulesets (terraform recommended + AWS)
-├── helm/                       — Kubernetes Helm chart
-│   ├── values.yaml             — Default chart values
-│   └── templates/              — Deployment, Service, Ingress, migration Job, HPA,
-│                                 PDB, NetworkPolicy, ServiceMonitor, ClusterSecretStore
+├── charts/aegis/               — Helm chart, published to oci://ghcr.io/gustav0thethird/charts
+│   ├── Chart.yaml              — Chart metadata; version is independent of appVersion
+│   ├── values.yaml             — Default values, documented inline for helm-docs
+│   ├── values.schema.json      — Validates user values at install time
+│   ├── README.md               — Generated values reference (make helm-docs)
+│   └── templates/              — Deployment, Service, Ingress, migration Job, HPA, PDB,
+│                                 NetworkPolicy, ServiceMonitor, ClusterSecretStore, test
+├── ct.yaml                     — chart-testing config (lint + kind install in CI)
 ├── argocd/                     — Argo CD Application and app-of-apps manifests
 ├── examples/
 │   ├── eso/                    — External Secrets Operator store and ExternalSecret examples

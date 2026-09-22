@@ -105,7 +105,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # helm/ is excluded: Go-templated YAML is not parseable as Kubernetes
+      # charts/ is excluded: Go-templated YAML is not parseable as Kubernetes
       # manifests. The rendered chart is validated by kubeconform in ci.yml.
       #
       # The public-subnet rule is excluded rather than nosemgrep'd because
@@ -120,7 +120,7 @@ jobs:
             --config p/github-actions \
             --config p/terraform \
             --exclude brag-output \
-            --exclude helm \
+            --exclude charts \
             --exclude-rule terraform.aws.security.aws-subnet-has-public-ip-address.aws-subnet-has-public-ip-address \
             --metrics=off \
             --error \

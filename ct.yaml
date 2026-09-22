@@ -1,0 +1,19 @@
+# chart-testing (ct) configuration. Used by the "Helm chart" and
+# "Chart install" jobs in ci.yml.
+chart-dirs:
+  - charts
+target-branch: main
+# A PR that changes anything under charts/aegis must bump Chart.yaml version,
+# because each version is published exactly once to the OCI registry.
+check-version-increment: true
+validate-maintainers: false
+# Rendering needs the two existingSecret names; ct install expects them to
+# exist in the namespace (ci.yml creates them).
+helm-extra-set-args: >-
+  --set auth.existingSecret=aegis-auth-json
+  --set secret.existingSecret=aegis-credentials
+  --set migrations.hookProvider=helm
+  --set image.pullPolicy=Never
+  --set image.tag=ci
+  --set replicaCount=1
+  --set podDisruptionBudget.enabled=false

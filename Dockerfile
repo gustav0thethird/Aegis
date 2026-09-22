@@ -50,5 +50,9 @@ USER 10001
 
 EXPOSE 8080
 
+# For docker run / compose. Kubernetes uses the chart's probes instead.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 \
+  CMD ["python", "-c", "import sys, urllib.request; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8080/healthz', timeout=4).status == 200 else 1)"]
+
 ENTRYPOINT ["docker-entrypoint.sh"]
 CMD ["uvicorn", "aegis.api:app", "--host", "0.0.0.0", "--port", "8080"]
