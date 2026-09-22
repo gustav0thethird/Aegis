@@ -5,7 +5,15 @@ import boto3
 import requests
 from botocore.exceptions import ClientError
 
+from aegis.errors import UpstreamError
+
 TIMEOUT = 10  # seconds for all HTTP calls
+
+# Response bodies never travel in an exception. For CyberArk and Conjur the
+# body of a successful GET *is* the secret, so a failure path that echoed the
+# body would be one upstream misbehaviour away from returning a credential to
+# the caller and writing it to the audit log. Status code and operation are
+# enough to diagnose; the body is not ours to repeat.
 
 ## HashiCorp Vault
 
@@ -16,7 +24,7 @@ def vault_get(secret_name, auth):
     url = f"{addr}/v1/{mount}/data/{secret_name}"
     response = requests.get(url, headers={"X-Vault-Token": token}, timeout=TIMEOUT)
     if not response.ok:
-        raise ValueError(f"Vault GET failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("vault", "GET", response.status_code)
     return response.json()["data"]["data"]["value"]
 
 
@@ -27,7 +35,7 @@ def vault_put(secret_name, value, auth):
     url = f"{addr}/v1/{mount}/data/{secret_name}"
     response = requests.post(url, json={"data": {"value": value}}, headers={"X-Vault-Token": token}, timeout=TIMEOUT)
     if not response.ok:
-        raise ValueError(f"Vault PUT failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("vault", "PUT", response.status_code)
 
 
 # CyberArk — CCP retrieves svc account creds → PVWA Logon → PVWA operations
@@ -61,12 +69,13 @@ def cyberark_logon(auth):
         timeout=TIMEOUT,
     )
     if not ccp.ok:
-        raise ValueError(f"CyberArk CCP failed [{ccp.status_code}]: {ccp.text}")
+        raise UpstreamError("cyberark", "CCP fetch", ccp.status_code)
     ccp_data = ccp.json()
     username = ccp_data.get("UserName")
     password = ccp_data.get("Content")
     if not username or not password:
-        raise ValueError("CyberArk CCP: missing UserName or Content in response")
+        raise UpstreamError("cyberark", "CCP fetch", ccp.status_code,
+                            reason="response missing UserName or Content")
 
     # Step 2: PVWA — exchange credentials for a session token
     logon = requests.post(
@@ -75,10 +84,11 @@ def cyberark_logon(auth):
         timeout=TIMEOUT,
     )
     if not logon.ok:
-        raise ValueError(f"CyberArk PVWA logon failed [{logon.status_code}]: {logon.text}")
+        raise UpstreamError("cyberark", "PVWA logon", logon.status_code)
     token = logon.json()  # PVWA returns a bare JSON string
     if not token:
-        raise ValueError("CyberArk PVWA logon: empty token returned")
+        raise UpstreamError("cyberark", "PVWA logon", logon.status_code,
+                            reason="empty token returned")
     return {"token": token}
 
 
@@ -91,10 +101,17 @@ def cyberark_find_account(platform, safe, name, token, host):
         timeout=TIMEOUT,
     )
     if not response.ok:
-        raise ValueError(f"CyberArk find account failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("cyberark", "account lookup", response.status_code)
     accounts = response.json().get("value", [])
     if not accounts:
-        raise ValueError(f"CyberArk: no account '{name}' on platform '{platform}' in safe '{safe}'")
+        raise UpstreamError("cyberark", "account lookup",
+                            reason=f"no account '{name}' on platform '{platform}' in safe '{safe}'")
+    if len(accounts) > 1:
+        # Ambiguity here is cross-secret retrieval, not a nuisance: the object
+        # definition has to resolve to exactly one account.
+        raise UpstreamError("cyberark", "account lookup",
+                            reason=f"{len(accounts)} accounts match '{name}' on platform "
+                                   f"'{platform}' in safe '{safe}'; the object definition must be unique")
     return accounts[0]["id"]
 
 
@@ -107,7 +124,7 @@ def cyberark_get(account_id, token, host):
         timeout=TIMEOUT,
     )
     if not response.ok:
-        raise ValueError(f"CyberArk GET failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("cyberark", "GET", response.status_code)
     return response.text  # PVWA returns the password as a plain string
 
 
@@ -120,7 +137,7 @@ def cyberark_put(account_id, value, token, host):
         timeout=TIMEOUT,
     )
     if not response.ok:
-        raise ValueError(f"CyberArk PUT failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("cyberark", "PUT", response.status_code)
 
 
 # Conjur
@@ -135,7 +152,7 @@ def _conjur_token(auth):
         timeout=TIMEOUT,
     )
     if not response.ok:
-        raise ValueError(f"Conjur auth failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("conjur", "auth", response.status_code)
     return base64.b64encode(response.content).decode("utf-8")
 
 
@@ -150,7 +167,7 @@ def conjur_get(secret_name, auth):
         timeout=TIMEOUT,
     )
     if not response.ok:
-        raise ValueError(f"Conjur GET failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("conjur", "GET", response.status_code)
     return response.text
 
 
@@ -166,7 +183,7 @@ def conjur_put(secret_name, value, auth):
         timeout=TIMEOUT,
     )
     if not response.ok:
-        raise ValueError(f"Conjur PUT failed [{response.status_code}]: {response.text}")
+        raise UpstreamError("conjur", "PUT", response.status_code)
 
 
 # AWS Secrets Manager
@@ -191,7 +208,10 @@ def aws_get(secret_name, auth):
     try:
         return _aws_client(auth).get_secret_value(SecretId=secret_name)["SecretString"]
     except ClientError as e:
-        raise ValueError(f"AWS GET failed: {e}") from e
+        # botocore puts the operation and error code in the exception; the
+        # response payload is not included in that string.
+        raise UpstreamError("aws", "GET",
+                            reason=e.response.get("Error", {}).get("Code")) from e
 
 
 def aws_put(secret_name, value, auth):
@@ -203,6 +223,8 @@ def aws_put(secret_name, value, auth):
             try:
                 client.create_secret(Name=secret_name, SecretString=value)
             except ClientError as ce:
-                raise ValueError(f"AWS create secret failed: {ce}") from ce
+                raise UpstreamError("aws", "create",
+                                    reason=ce.response.get("Error", {}).get("Code")) from ce
         else:
-            raise ValueError(f"AWS PUT failed: {e}") from e
+            raise UpstreamError("aws", "PUT",
+                                reason=e.response.get("Error", {}).get("Code")) from e

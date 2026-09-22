@@ -23,7 +23,7 @@ from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPBasic, HTTPBearer
 from sqlalchemy.orm import Session
 
-from aegis import keys, rate_limit, secret_cache, url_guard
+from aegis import errors, keys, rate_limit, secret_cache, url_guard
 from aegis import webhook as wh
 from aegis.broker import fetch_secrets, load_auth
 from aegis.database import get_db
@@ -314,14 +314,20 @@ def _fetch_for_key(db: Session, key_row, x_change_number, source_ip, user_agent,
         auth    = load_auth()
         fetched = fetch_secrets(object_rows, auth)
     except Exception as exc:
-        logger.error("Fetch failed team=%s registry=%s: %s", team.name, registry.name, exc)
+        # Nothing derived from the upstream response is repeated to the caller
+        # or written down: for CyberArk and Conjur the body of a successful GET
+        # is the secret itself. safe_detail() yields the vendor, operation and
+        # status code for an UpstreamError and only the type name otherwise.
+        detail = errors.safe_detail(exc)
+        logger.error("Fetch failed team=%s registry=%s: %s", team.name, registry.name, detail)
         _write_audit(db, "secrets.fetched", "error",
                      change_number=x_change_number,
                      registry_id=str(registry.id), registry_name=registry.name,
                      team_id=str(team.id), team_name=team.name,
                      objects=object_names, key_preview=key_preview,
-                     source_ip=source_ip, user_agent=user_agent, error_detail=str(exc))
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+                     source_ip=source_ip, user_agent=user_agent, error_detail=detail)
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY,
+                            detail=errors.PUBLIC_UPSTREAM_MESSAGE) from exc
 
     if use_cache:
         secret_cache.put(cache_key, fetched)

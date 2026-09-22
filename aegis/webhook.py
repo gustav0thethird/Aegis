@@ -15,7 +15,7 @@ import logging
 import time
 from datetime import datetime, timezone
 
-from aegis import url_guard
+from aegis import errors, url_guard
 
 logger = logging.getLogger("aegis.webhook")
 
@@ -76,7 +76,11 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
     if event not in (webhook.events or []):
         return False
 
+    # Sent over the wire and signed; contains the plaintext key on a rotation.
     payload_str = json.dumps(payload, default=str)
+    # Written to webhook_log; never contains a credential. The delivery record
+    # keeps key_preview, which is enough to correlate a rotation with a key.
+    log_payload_str = json.dumps(errors.redact(payload), default=str)
     headers     = {
         "Content-Type":  "application/json",
         "X-Aegis-Event": event,
@@ -95,7 +99,7 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
             webhook_id=webhook.id,
             team_id=webhook.team_id,
             event=event,
-            payload=payload_str,
+            payload=log_payload_str,
             status_code=None,
             success=False,
             attempt=1,
@@ -127,7 +131,7 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
             webhook_id=webhook.id,
             team_id=webhook.team_id,
             event=event,
-            payload=payload_str,
+            payload=log_payload_str,
             status_code=status_code,
             success=success,
             attempt=attempt,
