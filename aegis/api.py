@@ -86,7 +86,7 @@ logger = logging.getLogger("aegis")
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 # The version is maintained by release-please; do not edit it by hand.
-app = FastAPI(title="Aegis", version="0.4.0",  # x-release-please-version
+app = FastAPI(title="Aegis", version="0.4.1",  # x-release-please-version
               docs_url=None, redoc_url=None)
 
 # Start the S3 flush thread if S3 is a configured log destination.
