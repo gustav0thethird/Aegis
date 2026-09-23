@@ -1891,7 +1891,7 @@ while the chart said `0.4.0` and the published image said `0.3.0`.
 merge to main ──► release-please keeps one open PR
                     "chore(main): release 0.4.1"
                     CHANGELOG.md
-                    version.txt
+                    .release-please-manifest.json   (the version of record)
                     aegis/api.py          version="…"
                     charts/aegis/Chart.yaml  version, appVersion, images annotation
                           │
