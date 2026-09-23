@@ -45,6 +45,9 @@ a nonce store would be the next step if that is not enough.
 """
 from __future__ import annotations
 
+import base64
+import binascii
+import json
 import logging
 import os
 import threading
@@ -173,12 +176,32 @@ def looks_like_jwt(token: str) -> bool:
 
 def unverified_issuer(token: str) -> str | None:
     """
-    Issuer claimed by an unverified token, used only to select which bindings
-    to verify against. Nothing is trusted until the signature checks out.
+    Issuer claimed by an unverified token.
+
+    A verifier has to read `iss` before it can know which key to check the
+    signature with, so this step is unavoidable. What matters is that the
+    result is used for one thing only: choosing which configured bindings to
+    attempt verification against. It never authorises anything, and an issuer
+    with no binding is rejected without a single outbound request.
+
+    The payload is parsed directly rather than through a signature-skipping
+    jwt.decode(). The operation is identical, but naming it for
+    what it is - reading untrusted bytes - keeps a signature-skipping decode
+    out of the codebase, where a later reader could mistake it for
+    verification or copy it somewhere it would be one.
     """
+    if len(token.encode()) > MAX_TOKEN_BYTES:
+        return None
+    parts = token.split(".")
+    if len(parts) != 3:
+        return None
     try:
-        claims = jwt.decode(token, options={"verify_signature": False})
-    except Exception:
+        # base64url without padding; add the maximum and let the decoder trim.
+        raw = base64.urlsafe_b64decode(parts[1] + "==")
+        claims = json.loads(raw)
+    except (ValueError, binascii.Error):
+        return None
+    if not isinstance(claims, dict):
         return None
     iss = claims.get("iss")
     return iss if isinstance(iss, str) and iss else None
