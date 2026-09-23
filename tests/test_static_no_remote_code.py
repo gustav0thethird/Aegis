@@ -96,10 +96,12 @@ def test_tailwind_is_not_reintroduced():
 def test_the_reset_the_cdn_supplied_is_served_locally():
     """
     Removing the CDN removed a reset the pages had come to depend on. It is
-    replaced in-page rather than simply dropped.
+    served from the page's own stylesheet rather than simply dropped.
     """
-    for name in ("index.html", "dashboard.html"):
-        text = (STATIC / name).read_text(encoding="utf-8")
-        assert "Tailwind v3 Preflight" in text, f"{name} lost the reset the CDN used to supply"
+    for stem in ("admin", "dashboard"):
+        sheet = STATIC / "css" / f"{stem}.css"
+        assert sheet.exists(), f"{sheet.name} is missing"
+        text = sheet.read_text(encoding="utf-8")
+        assert "Tailwind v3 Preflight" in text, f"{sheet.name} lost the reset the CDN used to supply"
         for rule in ("box-sizing: border-box", "border-collapse: collapse", "line-height: inherit"):
-            assert rule in text, f"{name} is missing reset rule: {rule}"
+            assert rule in text, f"{sheet.name} is missing reset rule: {rule}"

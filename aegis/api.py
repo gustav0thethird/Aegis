@@ -80,6 +80,7 @@ from aegis.routers import (
     session,
     ui,
 )
+from aegis.security_headers import SecurityHeadersMiddleware
 from aegis.siem import start_s3_flush_thread
 
 logger = logging.getLogger("aegis")
@@ -187,3 +188,7 @@ app.include_router(admin_logs.router)
 app.include_router(admin_webhooks.router)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+# Security headers on every response, including static assets and errors.
+# Outermost so it also covers responses produced by exception handlers.
+app.add_middleware(SecurityHeadersMiddleware)

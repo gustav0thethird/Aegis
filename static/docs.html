@@ -6,546 +6,7 @@
 <title>Aegis — Documentation</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
-<style>
-*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-:root {
-  --bg:        #0d0f14;
-  --surface:   #13161d;
-  --surface-2: #1a1e28;
-  --border:    #1e2330;
-  --border-2:  #252a38;
-  --text-1:    #e2e8f0;
-  --text-2:    #94a3b8;
-  --text-3:    #64748b;
-  --indigo:    #6366f1;
-  --indigo-hi: #818cf8;
-  --indigo-lo: rgba(99,102,241,0.12);
-  --green:     #22c55e;
-  --green-lo:  rgba(34,197,94,0.1);
-  --amber:     #f59e0b;
-  --amber-lo:  rgba(245,158,11,0.1);
-  --red:       #ef4444;
-  --red-lo:    rgba(239,68,68,0.1);
-  --cyan:      #06b6d4;
-  --cyan-lo:   rgba(6,182,212,0.1);
-  --sidebar-w: 240px;
-}
-
-html { scroll-behavior: smooth; }
-
-body {
-  font-family: 'Fira Code', monospace;
-  background: var(--bg);
-  color: var(--text-1);
-  font-size: 13px;
-  line-height: 1.6;
-  display: flex;
-  min-height: 100vh;
-}
-
-/* ── Sidebar ── */
-.sidebar {
-  width: var(--sidebar-w);
-  min-width: var(--sidebar-w);
-  background: var(--surface);
-  border-right: 1px solid var(--border);
-  position: fixed;
-  top: 0; left: 0; bottom: 0;
-  overflow-y: auto;
-  z-index: 10;
-  padding: 0 0 32px;
-}
-
-.sidebar-logo {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 20px 18px 16px;
-  border-bottom: 1px solid var(--border);
-}
-
-.sidebar-logo-icon {
-  width: 30px; height: 30px;
-  background: var(--indigo-lo);
-  border: 1px solid var(--indigo);
-  border-radius: 7px;
-  display: flex; align-items: center; justify-content: center;
-  flex-shrink: 0;
-}
-
-.sidebar-logo-icon svg { color: var(--indigo); }
-
-.sidebar-logo-text { font-size: 14px; font-weight: 600; }
-.sidebar-logo-sub  { font-size: 10px; color: var(--text-3); letter-spacing: 0.04em; text-transform: uppercase; }
-
-.sidebar-section-label {
-  font-size: 10px;
-  color: var(--text-3);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  padding: 16px 18px 6px;
-}
-
-.sidebar-link {
-  display: block;
-  padding: 6px 18px;
-  font-size: 12px;
-  color: var(--text-2);
-  text-decoration: none;
-  border-left: 2px solid transparent;
-  transition: color 0.12s, border-color 0.12s;
-  cursor: pointer;
-}
-
-.sidebar-link:hover { color: var(--text-1); }
-.sidebar-link.active { color: var(--indigo-hi); border-left-color: var(--indigo); }
-
-.sidebar-link.sub {
-  padding-left: 30px;
-  font-size: 11px;
-}
-
-.sidebar-footer {
-  position: absolute;
-  bottom: 0; left: 0; right: 0;
-  padding: 14px 18px;
-  border-top: 1px solid var(--border);
-  display: flex; gap: 10px;
-}
-
-.sidebar-footer a {
-  font-size: 11px;
-  color: var(--text-3);
-  text-decoration: none;
-  transition: color 0.12s;
-}
-
-.sidebar-footer a:hover { color: var(--indigo-hi); }
-
-/* ── Content ── */
-.content {
-  margin-left: var(--sidebar-w);
-  flex: 1;
-  max-width: 900px;
-  padding: 48px 48px 96px;
-}
-
-h1 { font-size: 28px; font-weight: 600; color: var(--text-1); margin-bottom: 8px; letter-spacing: -0.02em; }
-h2 { font-size: 20px; font-weight: 600; color: var(--text-1); margin: 48px 0 16px; padding-top: 8px; }
-h3 { font-size: 15px; font-weight: 600; color: var(--text-1); margin: 32px 0 10px; }
-h4 { font-size: 13px; font-weight: 600; color: var(--text-2); margin: 20px 0 8px; }
-
-p { color: var(--text-2); margin-bottom: 14px; }
-p:last-child { margin-bottom: 0; }
-
-a { color: var(--indigo-hi); text-decoration: none; }
-a:hover { text-decoration: underline; }
-
-.lead {
-  font-size: 15px;
-  color: var(--text-2);
-  margin-bottom: 32px;
-  line-height: 1.7;
-}
-
-.divider {
-  border: none;
-  border-top: 1px solid var(--border);
-  margin: 48px 0;
-}
-
-/* ── Code ── */
-code {
-  font-family: 'Fira Code', monospace;
-  font-size: 12px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: 1px 6px;
-  color: var(--indigo-hi);
-}
-
-pre {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 16px 18px;
-  overflow-x: auto;
-  margin: 12px 0 20px;
-  position: relative;
-}
-
-pre code {
-  background: none;
-  border: none;
-  padding: 0;
-  color: var(--text-1);
-  font-size: 12px;
-  line-height: 1.65;
-}
-
-.copy-btn {
-  position: absolute;
-  top: 10px; right: 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-3);
-  font-family: 'Fira Code', monospace;
-  font-size: 10px;
-  padding: 3px 8px;
-  cursor: pointer;
-  transition: color 0.12s;
-}
-
-.copy-btn:hover { color: var(--text-1); }
-
-/* ── Method badges ── */
-.badge {
-  display: inline-flex;
-  align-items: center;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 6px;
-  border-radius: 4px;
-  letter-spacing: 0.04em;
-  margin-right: 6px;
-  vertical-align: middle;
-  font-family: 'Fira Code', monospace;
-}
-
-.badge-get    { background: var(--green-lo);  color: var(--green);  border: 1px solid rgba(34,197,94,.25); }
-.badge-post   { background: var(--cyan-lo);   color: var(--cyan);   border: 1px solid rgba(6,182,212,.25); }
-.badge-put    { background: var(--amber-lo);  color: var(--amber);  border: 1px solid rgba(245,158,11,.25); }
-.badge-patch  { background: var(--indigo-lo); color: var(--indigo-hi); border: 1px solid rgba(99,102,241,.25); }
-.badge-delete { background: var(--red-lo);    color: var(--red);    border: 1px solid rgba(239,68,68,.25); }
-.badge-event  { background: var(--indigo-lo); color: var(--indigo-hi); border: 1px solid rgba(99,102,241,.25); }
-
-/* ── Endpoint card ── */
-.endpoint {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 16px;
-  overflow: hidden;
-}
-
-.endpoint-header {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 16px;
-  cursor: pointer;
-  user-select: none;
-  border-bottom: 1px solid transparent;
-  transition: background 0.12s;
-}
-
-.endpoint-header:hover { background: var(--surface-2); }
-.endpoint-header.open  { border-bottom-color: var(--border); }
-
-.endpoint-path {
-  font-size: 13px;
-  color: var(--text-1);
-  font-family: 'Fira Code', monospace;
-  flex: 1;
-}
-
-.endpoint-desc {
-  font-size: 11px;
-  color: var(--text-3);
-}
-
-.endpoint-chevron {
-  color: var(--text-3);
-  font-size: 10px;
-  transition: transform 0.15s;
-}
-
-.endpoint-header.open .endpoint-chevron { transform: rotate(90deg); }
-
-.endpoint-body {
-  display: none;
-  padding: 16px;
-}
-
-.endpoint-body.open { display: block; }
-
-/* ── Tables ── */
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin: 12px 0 20px;
-  font-size: 12px;
-}
-
-th {
-  text-align: left;
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-3);
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
-}
-
-td {
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-2);
-  vertical-align: top;
-}
-
-td:first-child { color: var(--text-1); font-family: 'Fira Code', monospace; }
-tr:last-child td { border-bottom: none; }
-
-/* ── Callout ── */
-.callout {
-  border-radius: 7px;
-  padding: 12px 16px;
-  margin: 16px 0;
-  font-size: 12px;
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.callout-info  { background: var(--indigo-lo); border: 1px solid rgba(99,102,241,.25); }
-.callout-warn  { background: var(--amber-lo);  border: 1px solid rgba(245,158,11,.25); }
-.callout-tip   { background: var(--green-lo);  border: 1px solid rgba(34,197,94,.25); }
-
-.callout-icon { font-size: 14px; flex-shrink: 0; }
-.callout p { margin: 0; color: var(--text-2); line-height: 1.5; }
-
-/* ── API Companion ── */
-.companion {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  margin-top: 16px;
-}
-
-.companion-toolbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--surface-2);
-}
-
-.method-select {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-1);
-  font-family: 'Fira Code', monospace;
-  font-size: 12px;
-  padding: 4px 8px;
-  height: 32px;
-  width: 90px;
-  cursor: pointer;
-}
-
-.url-input {
-  flex: 1;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-1);
-  font-family: 'Fira Code', monospace;
-  font-size: 12px;
-  padding: 4px 10px;
-  height: 32px;
-  outline: none;
-  transition: border-color 0.12s;
-}
-
-.url-input:focus { border-color: var(--indigo); }
-
-.send-btn {
-  background: var(--indigo);
-  border: none;
-  border-radius: 5px;
-  color: #fff;
-  font-family: 'Fira Code', monospace;
-  font-size: 12px;
-  font-weight: 500;
-  padding: 0 16px;
-  height: 32px;
-  cursor: pointer;
-  transition: opacity 0.12s;
-  white-space: nowrap;
-}
-
-.send-btn:hover { opacity: 0.88; }
-.send-btn:disabled { opacity: 0.4; cursor: not-allowed; }
-
-.companion-tabs {
-  display: flex;
-  border-bottom: 1px solid var(--border);
-}
-
-.ctab {
-  padding: 8px 16px;
-  font-size: 11px;
-  color: var(--text-3);
-  cursor: pointer;
-  border-bottom: 2px solid transparent;
-  transition: color 0.12s;
-  user-select: none;
-}
-
-.ctab:hover { color: var(--text-1); }
-.ctab.active { color: var(--indigo-hi); border-bottom-color: var(--indigo); }
-
-.companion-panel {
-  display: none;
-  padding: 14px 16px;
-}
-
-.companion-panel.active { display: block; }
-
-.companion-textarea {
-  width: 100%;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 5px;
-  color: var(--text-1);
-  font-family: 'Fira Code', monospace;
-  font-size: 12px;
-  padding: 10px;
-  min-height: 100px;
-  resize: vertical;
-  outline: none;
-  line-height: 1.5;
-}
-
-.companion-textarea:focus { border-color: var(--indigo); }
-
-.header-row { display: flex; gap: 6px; margin-bottom: 6px; }
-.header-row input {
-  flex: 1; height: 30px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--text-1);
-  font-family: 'Fira Code', monospace;
-  font-size: 11px;
-  padding: 0 8px;
-  outline: none;
-}
-
-.header-row input:focus { border-color: var(--indigo); }
-
-.header-row button {
-  width: 28px; height: 30px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  color: var(--red);
-  cursor: pointer;
-  font-size: 14px;
-  display: flex; align-items: center; justify-content: center;
-}
-
-.add-header-btn {
-  background: none;
-  border: 1px dashed var(--border);
-  border-radius: 4px;
-  color: var(--text-3);
-  font-family: 'Fira Code', monospace;
-  font-size: 11px;
-  padding: 4px 10px;
-  cursor: pointer;
-  width: 100%;
-  margin-top: 4px;
-}
-
-.add-header-btn:hover { color: var(--text-1); border-color: var(--border-2); }
-
-.response-pane {
-  border-top: 1px solid var(--border);
-}
-
-.response-meta {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 10px 16px;
-  border-bottom: 1px solid var(--border);
-  font-size: 11px;
-}
-
-.status-pill {
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.status-2xx { background: var(--green-lo); color: var(--green); }
-.status-4xx { background: var(--amber-lo); color: var(--amber); }
-.status-5xx { background: var(--red-lo); color: var(--red); }
-.status-xxx { background: var(--surface-2); color: var(--text-3); }
-
-.response-time { color: var(--text-3); }
-
-pre.response-body {
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  max-height: 360px;
-  overflow-y: auto;
-}
-
-/* ── Lifecycle diagram ── */
-.lifecycle {
-  display: flex;
-  align-items: center;
-  gap: 0;
-  margin: 20px 0;
-  flex-wrap: wrap;
-}
-
-.lc-step {
-  display: flex;
-  align-items: center;
-  gap: 0;
-}
-
-.lc-box {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 8px 14px;
-  font-size: 11px;
-  color: var(--text-2);
-  text-align: center;
-  white-space: nowrap;
-}
-
-.lc-box.active { border-color: var(--indigo); color: var(--indigo-hi); background: var(--indigo-lo); }
-.lc-arrow { color: var(--text-3); padding: 0 6px; font-size: 16px; }
-
-/* ── Misc ── */
-.tag {
-  display: inline-block;
-  font-size: 10px;
-  padding: 2px 7px;
-  border-radius: 10px;
-  margin: 2px;
-  font-weight: 500;
-}
-
-.tag-required { background: var(--red-lo); color: var(--red); border: 1px solid rgba(239,68,68,.2); }
-.tag-optional { background: var(--surface-2); color: var(--text-3); border: 1px solid var(--border); }
-.tag-admin    { background: var(--amber-lo); color: var(--amber); border: 1px solid rgba(245,158,11,.2); }
-.tag-user     { background: var(--green-lo); color: var(--green); border: 1px solid rgba(34,197,94,.2); }
-
-.section { scroll-margin-top: 24px; }
-</style>
+<link rel="stylesheet" href="/static/css/docs.css">
 </head>
 <body>
 
@@ -702,110 +163,6 @@ pre.response-body {
 
   </div>
 
-  <style>
-  .arch-diagram {
-    margin: 20px 0 8px;
-    display: flex;
-    flex-direction: column;
-    gap: 0;
-  }
-  .arch-row {
-    display: grid;
-    grid-template-columns: 160px 110px 1fr 80px 140px;
-    align-items: center;
-    gap: 0;
-  }
-  .arch-row-outputs {
-    grid-template-columns: 160px 110px 1fr 80px 140px;
-    margin-top: 0;
-    padding-top: 0;
-  }
-  .arch-col { display: flex; flex-direction: column; gap: 8px; }
-  .arch-callers { align-items: flex-start; }
-  .arch-targets { align-items: flex-end; }
-
-  .arch-pill {
-    display: flex;
-    flex-direction: column;
-    gap: 2px;
-    padding: 8px 12px;
-    border-radius: 20px;
-    border: 1px solid var(--border);
-    background: var(--surface);
-    font-size: 11px;
-    white-space: nowrap;
-  }
-  .arch-pill-label { color: var(--text-1); font-weight: 600; font-size: 11px; }
-  .arch-pill-sub   { color: var(--text-3); font-size: 10px; }
-
-  .arch-pill-caller  { border-color: var(--indigo); background: var(--indigo-lo); }
-  .arch-pill-caller .arch-pill-label { color: var(--indigo-hi); }
-
-  .arch-pill-backend { border-color: var(--border-2); background: var(--surface-2); padding: 6px 12px; }
-  .arch-pill-backend .arch-pill-label { color: var(--text-2); font-weight: 500; }
-
-  .arch-pill-output  { border-color: rgba(34,197,94,.3); background: var(--green-lo); }
-  .arch-pill-output .arch-pill-label { color: var(--green); }
-  .arch-pill-output .arch-pill-sub { color: var(--text-3); }
-
-  .arch-broker {
-    background: var(--surface-2);
-    border: 1px solid var(--border-2);
-    border-radius: 10px;
-    padding: 14px 16px;
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-    align-items: center;
-    text-align: center;
-  }
-  .arch-broker-title {
-    font-size: 13px;
-    font-weight: 600;
-    color: var(--text-1);
-    letter-spacing: -0.01em;
-  }
-  .arch-broker-tags {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    justify-content: center;
-  }
-  .arch-btag {
-    font-size: 10px;
-    padding: 2px 8px;
-    border-radius: 10px;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    color: var(--text-3);
-    white-space: nowrap;
-  }
-
-  .arch-arrows-in, .arch-arrows-out {
-    display: flex;
-    flex-direction: column;
-    gap: 14px;
-    align-items: center;
-    padding: 0 4px;
-  }
-  .arch-arrow-line {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-  }
-  .arch-arrow-label { font-size: 9px; color: var(--text-3); letter-spacing: 0.02em; white-space: nowrap; }
-  .arch-arr { color: var(--text-3); font-size: 14px; line-height: 1; }
-
-  .arch-output-row {
-    display: flex;
-    gap: 8px;
-    justify-content: center;
-    padding-top: 12px;
-    border-top: 1px dashed var(--border);
-    margin-top: 8px;
-  }
-  </style>
 </section>
 
 <hr class="divider">
@@ -1154,7 +511,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   <h2>API Reference — Developer</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/health</span>
       <span class="endpoint-desc">Health check</span>
@@ -1166,7 +523,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint" id="api-secrets">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/secrets</span>
       <span class="endpoint-desc">Fetch secrets for an authenticated team</span>
@@ -1214,7 +571,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   <p>These endpoints are available to any authenticated operator (both <span class="tag tag-admin">admin</span> and <span class="tag tag-user">user</span> roles). They are scoped to the caller's team membership. Users belonging to multiple teams pass <code>?team_id=&lt;uuid&gt;</code>; omitting it defaults to their first team.</p>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/api/me</span>
       <span class="endpoint-desc">Current user profile</span>
@@ -1231,7 +588,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint" id="api-my-teams">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/api/my-teams</span>
       <span class="endpoint-desc">Teams the current user belongs to</span>
@@ -1257,7 +614,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint" id="api-my-webhook">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/api/my-webhook</span>
       <span class="endpoint-desc">Get webhook config for current team</span>
@@ -1281,7 +638,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/api/my-webhook</span>
       <span class="endpoint-desc">Create or update webhook for current team</span>
@@ -1303,7 +660,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/api/my-webhook</span>
       <span class="endpoint-desc">Remove webhook for current team</span>
@@ -1315,7 +672,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint" id="api-my-metrics">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/api/my-metrics</span>
       <span class="endpoint-desc">Team-scoped metrics (JSON)</span>
@@ -1337,7 +694,7 @@ curl -X POST https://aegis.example.com/api/inbound/&lt;team-id&gt; \
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/api/my-metrics/prometheus</span>
       <span class="endpoint-desc">Team-scoped metrics (Prometheus exposition)</span>
@@ -1354,7 +711,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint" id="api-inbound">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/api/inbound/{team_id}</span>
       <span class="endpoint-desc">Inbound webhook — CI/CD → Aegis</span>
@@ -1399,7 +756,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <p>All admin endpoints require <span class="tag tag-admin">admin</span> session token or HTTP Basic.</p>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/objects</span>
       <span class="endpoint-desc">List all objects</span>
@@ -1421,7 +778,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/objects</span>
       <span class="endpoint-desc">Create an object</span>
@@ -1445,7 +802,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/objects/{name}</span>
       <span class="endpoint-desc">Update an object</span>
@@ -1457,7 +814,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/objects/{name}</span>
       <span class="endpoint-desc">Delete an object</span>
@@ -1476,7 +833,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Registries</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/registries</span>
       <span class="endpoint-desc">List registries</span>
@@ -1493,7 +850,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/registries</span>
       <span class="endpoint-desc">Create a registry</span>
@@ -1505,7 +862,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/registries/{id}</span>
       <span class="endpoint-desc">Delete a registry</span>
@@ -1517,7 +874,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/registries/{id}/objects</span>
       <span class="endpoint-desc">Add object to registry</span>
@@ -1529,7 +886,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/registries/{id}/objects/{name}</span>
       <span class="endpoint-desc">Remove object from registry</span>
@@ -1548,7 +905,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Teams</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/teams</span>
       <span class="endpoint-desc">List teams with their registry assignments</span>
@@ -1573,7 +930,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/teams/{team_id}/registries/{reg_id}</span>
       <span class="endpoint-desc">Assign registry to team — issues API key</span>
@@ -1590,7 +947,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/teams/{team_id}/registries/{reg_id}/rotate-key</span>
       <span class="endpoint-desc">Rotate the API key for a team-registry assignment</span>
@@ -1602,7 +959,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/teams/{team_id}/registries/{reg_id}</span>
       <span class="endpoint-desc">Unassign registry from team — revokes key</span>
@@ -1614,7 +971,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/teams/{id}/members/{user_id}</span>
       <span class="endpoint-desc">Add a user to a team</span>
@@ -1626,7 +983,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/teams/{id}/members/{user_id}</span>
       <span class="endpoint-desc">Remove a user from a team</span>
@@ -1638,7 +995,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/teams/{id}/notifications</span>
       <span class="endpoint-desc">Set notification channel URLs for a team</span>
@@ -1663,7 +1020,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <p>Suspend or re-enable a team's API key without revoking it. A suspended key returns <code>401</code> at <code>/secrets</code>, indistinguishable from a revoked key. It can be re-enabled at any time without rotation.</p>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-patch">PATCH</span>
       <span class="endpoint-path">/admin/api/keys/{key_id}/suspend</span>
       <span class="endpoint-desc">Toggle key suspension (enable ↔ disable)</span>
@@ -1688,7 +1045,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Policies</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/registries/{id}/policy</span>
       <span class="endpoint-desc">Get registry policy</span>
@@ -1698,7 +1055,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/registries/{id}/policy</span>
       <span class="endpoint-desc">Set registry policy (upsert)</span>
@@ -1719,7 +1076,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/registries/{id}/policy</span>
       <span class="endpoint-desc">Clear registry policy</span>
@@ -1729,7 +1086,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/teams/{id}/policy</span>
       <span class="endpoint-desc">Get team policy</span>
@@ -1739,7 +1096,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/teams/{id}/policy</span>
       <span class="endpoint-desc">Set team policy (upsert)</span>
@@ -1749,7 +1106,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/teams/{id}/policy</span>
       <span class="endpoint-desc">Clear team policy</span>
@@ -1766,7 +1123,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Webhooks</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/teams/{id}/webhook</span>
       <span class="endpoint-desc">Get webhook config</span>
@@ -1785,7 +1142,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/teams/{id}/webhook</span>
       <span class="endpoint-desc">Create or update webhook (upsert)</span>
@@ -1804,7 +1161,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/teams/{id}/webhook/regenerate-secret</span>
       <span class="endpoint-desc">Rotate signing secret</span>
@@ -1816,7 +1173,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/teams/{id}/webhook/test</span>
       <span class="endpoint-desc">Send a test event</span>
@@ -1828,7 +1185,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/teams/{id}/webhook/log</span>
       <span class="endpoint-desc">Webhook delivery history</span>
@@ -1853,7 +1210,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/teams/{id}/webhook</span>
       <span class="endpoint-desc">Remove webhook</span>
@@ -1870,7 +1227,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Users</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/users</span>
       <span class="endpoint-desc">List all operator accounts</span>
@@ -1888,7 +1245,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-post">POST</span>
       <span class="endpoint-path">/admin/api/users</span>
       <span class="endpoint-desc">Create a user</span>
@@ -1905,7 +1262,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/users/{id}</span>
       <span class="endpoint-desc">Update user</span>
@@ -1915,7 +1272,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-delete">DELETE</span>
       <span class="endpoint-path">/admin/api/users/{id}</span>
       <span class="endpoint-desc">Delete a user</span>
@@ -1932,7 +1289,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Settings</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/settings</span>
       <span class="endpoint-desc">Get all settings</span>
@@ -1949,7 +1306,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-put">PUT</span>
       <span class="endpoint-path">/admin/api/settings</span>
       <span class="endpoint-desc">Update settings (partial update)</span>
@@ -1969,7 +1326,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   <h2>Admin API — Logs &amp; Metrics</h2>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/changelog</span>
       <span class="endpoint-desc">Change log (admin mutations)</span>
@@ -1996,7 +1353,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/changelog/export</span>
       <span class="endpoint-desc">Export change log as CSV</span>
@@ -2008,7 +1365,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/audit</span>
       <span class="endpoint-desc">Audit log (secret fetches)</span>
@@ -2037,7 +1394,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/audit/export</span>
       <span class="endpoint-desc">Export audit log as CSV</span>
@@ -2049,7 +1406,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
   </div>
 
   <div class="endpoint">
-    <div class="endpoint-header" onclick="toggleEndpoint(this)">
+    <div class="endpoint-header" data-act="toggleEndpoint">
       <span class="badge badge-get">GET</span>
       <span class="endpoint-path">/admin/api/metrics</span>
       <span class="endpoint-desc">Global metrics summary (JSON)</span>
@@ -2089,19 +1446,19 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
         <option>DELETE</option>
       </select>
       <input class="url-input" id="cp-url" type="text" value="/admin/api/ping" placeholder="/admin/api/ping">
-      <button class="send-btn" id="cp-send" onclick="companionSend()">Send</button>
+      <button class="send-btn" id="cp-send" data-act="companionSend">Send</button>
     </div>
 
     <!-- tabs -->
     <div class="companion-tabs">
-      <div class="ctab active" onclick="companionTab('headers')">Headers</div>
-      <div class="ctab" onclick="companionTab('body')">Body</div>
+      <div class="ctab active" data-act="companionTab" data-args='["headers"]'>Headers</div>
+      <div class="ctab" data-act="companionTab" data-args='["body"]'>Body</div>
     </div>
 
     <!-- headers panel -->
     <div class="companion-panel active" id="cp-panel-headers">
       <div id="cp-headers-list"></div>
-      <button class="add-header-btn" onclick="addHeaderRow()">+ Add header</button>
+      <button class="add-header-btn" data-act="addHeaderRow">+ Add header</button>
     </div>
 
     <!-- body panel -->
@@ -2115,7 +1472,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
         <span class="status-pill" id="cp-status-pill">—</span>
         <span class="response-time" id="cp-time"></span>
         <span style="flex:1;"></span>
-        <button onclick="copyResponse()" style="background:none;border:none;color:var(--text-3);font-family:'Fira Code',monospace;font-size:11px;cursor:pointer;">Copy</button>
+        <button data-act="copyResponse" style="background:none;border:none;color:var(--text-3);font-family:'Fira Code',monospace;font-size:11px;cursor:pointer;">Copy</button>
       </div>
       <pre class="response-body"><code id="cp-response-body"></code></pre>
     </div>
@@ -2124,151 +1481,7 @@ aegis_secrets_total{team="backend",outcome="error"} 4</code></pre>
 
 </main>
 
-<script>
-// ── Sidebar active state on scroll ──────────────────────────────────────────
-const sections = document.querySelectorAll('.section[id]');
-const sidebarLinks = document.querySelectorAll('.sidebar-link[href]');
-
-const observer = new IntersectionObserver(entries => {
-  entries.forEach(e => {
-    if (e.isIntersecting) {
-      const id = e.target.id;
-      sidebarLinks.forEach(l => {
-        l.classList.toggle('active', l.getAttribute('href') === '#' + id);
-      });
-    }
-  });
-}, { rootMargin: '-20% 0px -70% 0px' });
-
-sections.forEach(s => observer.observe(s));
-
-// ── Copy buttons ─────────────────────────────────────────────────────────────
-document.querySelectorAll('pre').forEach(pre => {
-  if (pre.classList.contains('response-body')) return;
-  const btn = document.createElement('button');
-  btn.className = 'copy-btn';
-  btn.textContent = 'copy';
-  btn.onclick = () => {
-    navigator.clipboard.writeText(pre.querySelector('code')?.textContent || pre.textContent);
-    btn.textContent = 'copied!';
-    setTimeout(() => btn.textContent = 'copy', 1500);
-  };
-  pre.appendChild(btn);
-});
-
-// ── Endpoint accordion ──────────────────────────────────────────────────────
-function toggleEndpoint(header) {
-  const body = header.nextElementSibling;
-  const open = body.classList.toggle('open');
-  header.classList.toggle('open', open);
-}
-
-// ── API Companion ───────────────────────────────────────────────────────────
-let _token = null;
-
-// Try to pull token from sessionStorage
-try {
-  const s = JSON.parse(sessionStorage.getItem('aegis_session') || '{}');
-  _token = s.token || null;
-} catch (_) {}
-
-function companionTab(tab) {
-  document.querySelectorAll('.ctab').forEach((t, i) => {
-    t.classList.toggle('active', t.textContent.toLowerCase().includes(tab));
-  });
-  document.getElementById('cp-panel-headers').classList.toggle('active', tab === 'headers');
-  document.getElementById('cp-panel-body').classList.toggle('active', tab === 'body');
-}
-
-// Seed default headers
-function buildDefaultHeaders() {
-  const list = document.getElementById('cp-headers-list');
-  list.innerHTML = '';
-  const defaults = [
-    ['Authorization', _token ? `Bearer ${_token}` : ''],
-    ['Content-Type',  'application/json'],
-  ];
-  defaults.forEach(([k, v]) => addHeaderRow(k, v));
-}
-
-function addHeaderRow(key = '', value = '') {
-  const list = document.getElementById('cp-headers-list');
-  const row = document.createElement('div');
-  row.className = 'header-row';
-  row.innerHTML = `
-    <input type="text" placeholder="Header-Name" value="${key}">
-    <input type="text" placeholder="value" value="${value}">
-    <button onclick="this.parentElement.remove()">×</button>
-  `;
-  list.appendChild(row);
-}
-
-function getHeaders() {
-  const rows = document.querySelectorAll('#cp-headers-list .header-row');
-  const h = {};
-  rows.forEach(row => {
-    const [k, v] = row.querySelectorAll('input');
-    if (k.value.trim()) h[k.value.trim()] = v.value.trim();
-  });
-  return h;
-}
-
-async function companionSend() {
-  const btn    = document.getElementById('cp-send');
-  const method = document.getElementById('cp-method').value;
-  const url    = document.getElementById('cp-url').value.trim();
-  const body   = document.getElementById('cp-body').value.trim();
-
-  btn.disabled    = true;
-  btn.textContent = 'Sending…';
-
-  const respPane = document.getElementById('cp-response');
-  respPane.style.display = 'none';
-
-  const start = Date.now();
-  try {
-    const opts = { method, headers: getHeaders() };
-    if (body && method !== 'GET' && method !== 'DELETE') opts.body = body;
-
-    const r   = await fetch(url, opts);
-    const ms  = Date.now() - start;
-    const txt = await r.text();
-
-    let pretty = txt;
-    try { pretty = JSON.stringify(JSON.parse(txt), null, 2); } catch (_) {}
-
-    const pill = document.getElementById('cp-status-pill');
-    pill.textContent = r.status;
-    pill.className = 'status-pill ' + (r.status < 300 ? 'status-2xx' : r.status < 500 ? 'status-4xx' : 'status-5xx');
-
-    document.getElementById('cp-time').textContent = `${ms}ms`;
-    document.getElementById('cp-response-body').textContent = pretty;
-    respPane.style.display = 'block';
-  } catch (err) {
-    const pill = document.getElementById('cp-status-pill');
-    pill.textContent = 'Error';
-    pill.className = 'status-pill status-5xx';
-    document.getElementById('cp-time').textContent = '';
-    document.getElementById('cp-response-body').textContent = err.message;
-    respPane.style.display = 'block';
-  } finally {
-    btn.disabled    = false;
-    btn.textContent = 'Send';
-  }
-}
-
-function copyResponse() {
-  const txt = document.getElementById('cp-response-body').textContent;
-  navigator.clipboard.writeText(txt);
-}
-
-// Enter key on URL field sends
-document.getElementById('cp-url').addEventListener('keydown', e => {
-  if (e.key === 'Enter') companionSend();
-});
-
-// Init companion
-buildDefaultHeaders();
-</script>
+<script src="/static/js/actions.js"></script>
+<script src="/static/js/docs.js"></script>
 </body>
 </html>
