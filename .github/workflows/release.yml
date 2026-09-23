@@ -12,6 +12,24 @@ on:
         description: Existing tag to (re)publish, e.g. v0.3.0
         required: true
         type: string
+  # Called by release-please.yml once it has cut a release. A tag pushed by
+  # GITHUB_TOKEN does not start a workflow - GitHub suppresses that to avoid
+  # recursion - so publishing has to be invoked directly rather than waiting
+  # for the tag push to trigger it.
+  workflow_call:
+    inputs:
+      tag:
+        description: Tag to publish
+        required: true
+        type: string
+      skip_github_release:
+        description: >-
+          Set when the caller has already created the GitHub release. Phrased
+          as "skip" rather than "create" so the default is false: on a tag
+          push inputs is empty, and an unset boolean must mean "create it".
+        required: false
+        type: boolean
+        default: false
 
 env:
   RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
@@ -59,6 +77,9 @@ jobs:
             org.opencontainers.image.licenses=AGPL-3.0
 
       - name: Create GitHub Release
+        # release-please writes its own release notes from the commit history,
+        # so it tells this workflow not to make a second one.
+        if: ${{ !inputs.skip_github_release }}
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
         with:
           tag_name: ${{ env.RELEASE_TAG }}

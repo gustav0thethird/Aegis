@@ -2,11 +2,15 @@ apiVersion: v2
 name: aegis
 description: Vendor-agnostic secrets broker and PAM gateway. Scoped API keys per team, any vault, every action logged.
 type: application
-# Chart version and appVersion are independent. Bump `version` whenever
-# templates or values change (ct enforces this on PRs); `appVersion` tracks the
-# image and is overridden at release time from the git tag.
-version: 0.4.0
-appVersion: "0.3.0"
+# Both are set by release-please at release time, to the same number: one
+# artifact, one release cadence, nothing to drift. Keeping them independent is
+# exactly what let appVersion sit a release behind the image it deploys. Do
+# not edit them by hand.
+#
+# appVersion trails version here only until the first automated release, which
+# will set both to 0.4.0 - it names the image that is actually published.
+version: 0.4.0  # x-release-please-version
+appVersion: "0.3.0"  # x-release-please-version
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/gustav0thethird/Aegis
 icon: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/Aegis-logo.png
@@ -40,7 +44,7 @@ annotations:
       url: https://github.com/gustav0thethird/Aegis/pkgs/container/aegis
   artifacthub.io/images: |
     - name: aegis
-      image: ghcr.io/gustav0thethird/aegis:v0.3.0
+      image: ghcr.io/gustav0thethird/aegis:v0.3.0 # x-release-please-version
   artifacthub.io/screenshots: |
     - title: Admin dashboard - estate overview, objects by vendor, recent changes
       url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/admin-dashboard.png

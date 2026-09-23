@@ -86,6 +86,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Database Schema](#database-schema)
 - [Themes](#themes)
 - [Admin account bootstrap](#admin-account-bootstrap)
+- [Releasing](#releasing)
 - [Workload Identity](#workload-identity)
 - [Key delivery on rotation](#key-delivery-on-rotation)
 - [Security Model](#security-model)
@@ -1880,6 +1881,55 @@ Environment variables are read at pod start, so a refreshed Secret applies on
 the next roll; add a [Reloader](https://github.com/stakater/Reloader)
 annotation under `podAnnotations` to roll automatically.
 
+## Releasing
+
+Releases are automated. Nothing is versioned by hand, because three files
+carried a version number and all three drifted apart — the app said `0.2.0`
+while the chart said `0.4.0` and the published image said `0.3.0`.
+
+```text
+merge to main ──► release-please keeps one open PR
+                    "chore(main): release 0.4.1"
+                    CHANGELOG.md
+                    version.txt
+                    aegis/api.py          version="…"
+                    charts/aegis/Chart.yaml  version, appVersion, images annotation
+                          │
+                     merge the PR
+                          │
+                          ▼
+                 tag v0.4.1 + GitHub release
+                          │
+                          ▼
+        multi-arch image ──► ghcr.io/gustav0thethird/aegis
+        signed chart     ──► oci://ghcr.io/gustav0thethird/charts/aegis
+        installed from the registry into kind (chart-smoke)
+                          │
+                          ▼
+              Artifact Hub re-scans on its own schedule
+```
+
+The version comes from the [Conventional Commit](https://www.conventionalcommits.org)
+messages since the last release: `fix:` bumps the patch, `feat:` the minor,
+and `feat!:` or a `BREAKING CHANGE:` footer the major (the minor, while
+pre-1.0). So the only thing that decides a release is how the commits were
+written.
+
+Artifact Hub needs no push — it re-scans the OCI repository and picks up the
+new chart version. The verified-publisher metadata is published separately by
+`artifacthub-metadata.yml`.
+
+Two things worth knowing:
+
+- The release PR is opened with `GITHUB_TOKEN`, and GitHub deliberately does
+  not start workflows for it, so its required checks never report and an admin
+  has to merge it. Every commit in it was already checked on its own PR, and
+  the release itself rebuilds, rescans and smoke-tests before publishing. Set a
+  `RELEASE_TOKEN` secret (a fine-grained PAT) if you would rather the release
+  PR ran CI itself.
+- `release.yml` can still be run by hand (`workflow_dispatch` with a tag) to
+  re-publish an existing tag after a workflow fix, without moving the tag.
+
 ## Workload Identity
 
 A caller can authenticate with the OIDC token its platform already issued it,
@@ -2163,6 +2213,7 @@ Every push and pull request runs the full pipeline; `main` requires all of it gr
 | CodeQL | GitHub default setup for Python and Actions |
 | `scorecard.yml` | OpenSSF Scorecard on `main`, weekly |
 | `release.yml` | On `v*` tags: build, Trivy-scan, push a multi-arch image to GHCR with SBOM + SLSA provenance, publish the chart as an OCI artifact, sign both with Sigstore, create the GitHub release |
+| `release-please.yml` | On every merge to `main`: maintains the release PR (version bump + changelog from the commit messages) and, when it is merged, tags the release and calls `release.yml` to publish |
 | `chart-smoke.yml` | Installs the published chart from `oci://` into a clean kind cluster after every release and weekly — the exact command from the Artifact Hub listing |
 | `artifacthub-metadata.yml` | Publishes `artifacthub-repo.yml` to the registry so the Artifact Hub listing stays verified |
 
