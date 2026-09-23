@@ -1,0 +1,76 @@
+# Automated releases.
+#
+# Every merge to main is examined by release-please, which maintains a single
+# open pull request holding the next version bump and a CHANGELOG entry
+# derived from the Conventional Commit messages since the last release. Merging
+# that PR tags the release and publishes it.
+#
+#   commits on main            release PR (kept up to date)       on merge
+#   ───────────────            ────────────────────────────       ────────
+#   fix: ...            ──►    chore(main): release 0.3.1    ──►  tag v0.3.1
+#   feat: ...                  CHANGELOG.md                       GitHub release
+#   fix(chart): ...            Chart.yaml version/appVersion       image -> GHCR
+#                              aegis/api.py version                chart -> GHCR
+#                                                                  Artifact Hub
+#
+# Nothing here decides the version by hand. Three files carried a version
+# number and all three had drifted apart - the app said 0.2.0 while the chart
+# said 0.4.0 and the published image said 0.3.0 - which is what happens to any
+# number a human has to remember to change.
+#
+# Artifact Hub needs no push: it re-scans the OCI repository on its own
+# schedule and picks the new chart version up from there. The verified-
+# publisher metadata is published separately by artifacthub-metadata.yml.
+#
+# One wrinkle worth knowing: the release PR is opened with GITHUB_TOKEN, and
+# GitHub deliberately does not start workflows for it, so its required checks
+# never report. Merging it therefore needs an admin (who bypasses the ruleset).
+# The commits in it were each checked on their own PR, and this workflow builds,
+# scans and smoke-tests everything again before publishing. Set RELEASE_TOKEN
+# to a fine-grained PAT if you would rather the release PR ran CI itself.
+
+name: Release Please
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  release-please:
+    name: Maintain release PR
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write        # create tags and releases
+      pull-requests: write   # maintain the release PR
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      version: ${{ steps.release.outputs.version }}
+
+    steps:
+      - uses: googleapis/release-please-action@5c625bfb5d1ff62eadeeb3772007f7f66fdcf071 # v4.4.1
+        id: release
+        with:
+          token: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    name: Publish ${{ needs.release-please.outputs.tag_name }}
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    permissions:
+      contents: write
+      packages: write
+      security-events: write
+      id-token: write
+    uses: ./.github/workflows/release.yml
+    with:
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      # release-please has already written the release notes.
+      skip_github_release: true
+    secrets: inherit
