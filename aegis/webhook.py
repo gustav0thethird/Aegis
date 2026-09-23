@@ -106,8 +106,8 @@ def deliver(db, webhook, event: str, payload: dict) -> bool:
         "Content-Type":  "application/json",
         "X-Aegis-Event": event,
     }
-    if getattr(webhook, "signing_enabled", False) and webhook.secret:
-        sig = _sign(payload_str, webhook.secret)
+    if getattr(webhook, "signing_enabled", False) and webhook.signing_secret:
+        sig = _sign(payload_str, webhook.signing_secret)
         headers["X-Aegis-Signature"] = f"sha256={sig}"
 
     # Re-checked at delivery time: rows stored before URL validation existed

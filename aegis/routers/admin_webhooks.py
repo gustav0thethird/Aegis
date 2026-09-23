@@ -2,6 +2,7 @@
 admin_webhooks.py — Admin team webhooks.
 """
 
+import hashlib
 import secrets as secrets_lib
 from typing import List
 
@@ -47,6 +48,9 @@ def _webhook_response(w: Webhook) -> dict:
         "events":          w.events,
         "enabled":         w.enabled,
         "signing_enabled": w.signing_enabled,
+        # Whether each credential exists, never the credential.
+        "has_signing_secret": bool(w.signing_secret),
+        "has_inbound_token":  bool(w.inbound_secret_hash),
         "created_at":      w.created_at.isoformat(),
     }
 
@@ -72,17 +76,19 @@ def admin_set_webhook(team_id: str, req: WebhookRequest, session: dict = Depends
         w.url             = req.url
         w.events          = req.events
         w.enabled         = req.enabled
-        # Enable signing: generate secret if not already set
+        # Enable signing: generate a signing secret if not already set
         if req.signing_enabled and not w.signing_enabled:
             new_secret        = secrets_lib.token_urlsafe(32)
-            w.secret          = new_secret
+            w.signing_secret  = new_secret
             w.signing_enabled = True
         elif not req.signing_enabled:
+            # Disabling outbound signing no longer disturbs the inbound
+            # token: they are separate credentials with separate lifecycles.
             w.signing_enabled = False
-            w.secret          = None
+            w.signing_secret  = None
     else:
         new_secret = secrets_lib.token_urlsafe(32) if req.signing_enabled else None
-        w = Webhook(team_id=team.id, url=req.url, secret=new_secret,
+        w = Webhook(team_id=team.id, url=req.url, signing_secret=new_secret,
                     signing_enabled=req.signing_enabled,
                     events=req.events, enabled=req.enabled,
                     created_by=session["username"])
@@ -93,7 +99,7 @@ def admin_set_webhook(team_id: str, req: WebhookRequest, session: dict = Depends
                   "webhook configured", session["username"])
     resp = _webhook_response(w)
     if new_secret:
-        resp["new_secret"] = new_secret   # returned once when signing first enabled
+        resp["new_signing_secret"] = new_secret  # returned once when signing first enabled
     return resp
 
 
@@ -104,12 +110,32 @@ def admin_regenerate_webhook_secret(team_id: str, session: dict = Depends(_requi
         raise HTTPException(status_code=404, detail="No webhook configured for this team")
     if not team.webhook.signing_enabled:
         raise HTTPException(status_code=400, detail="Signing is not enabled for this webhook")
-    new_secret          = secrets_lib.token_urlsafe(32)
-    team.webhook.secret = new_secret
+    new_secret                  = secrets_lib.token_urlsafe(32)
+    team.webhook.signing_secret = new_secret
     db.commit()
     _write_change(db, "updated", "team", str(team.id), team.name,
-                  "webhook secret regenerated", session["username"])
-    return {"new_secret": new_secret}
+                  "webhook signing secret regenerated", session["username"])
+    return {"new_signing_secret": new_secret}
+
+
+@router.post("/admin/api/teams/{team_id}/webhook/rotate-inbound-token", status_code=200)
+def admin_rotate_inbound_token(team_id: str, session: dict = Depends(_require_admin),
+                               db: Session = Depends(get_db)):
+    """
+    Mint a new inbound token for a team.
+
+    The token authenticates POST /api/inbound/{team_id}, which can rotate an
+    API key and return it, so it is shown once and stored only as a hash.
+    """
+    team = _get_team(db, team_id)
+    if not team.webhook:
+        raise HTTPException(status_code=404, detail="No webhook configured for this team")
+    token = secrets_lib.token_urlsafe(32)
+    team.webhook.inbound_secret_hash = hashlib.sha256(token.encode()).hexdigest()
+    db.commit()
+    _write_change(db, "updated", "team", str(team.id), team.name,
+                  "inbound token rotated", session["username"])
+    return {"inbound_token": token}
 
 
 @router.delete("/admin/api/teams/{team_id}/webhook", status_code=204)

@@ -7,6 +7,7 @@ Ingest is authenticated with the team's inbound webhook secret, so findings are
 attributed to a team without minting a second class of credential.
 """
 
+import hashlib
 import secrets as slib
 
 from aegis.models import ScanFinding, ScanRun, Team, Webhook
@@ -46,7 +47,10 @@ def _team_with_ingest(db, signing=True):
         events=["key.rotated"],
         enabled=False,
         signing_enabled=signing,
-        secret=secret,
+        # Inbound authentication is by hash now; the signing secret is a
+        # separate credential and deliberately a different value.
+        inbound_secret_hash=hashlib.sha256(secret.encode()).hexdigest(),
+        signing_secret=slib.token_hex(16),
         created_by="test",
     ))
     db.commit()
@@ -92,9 +96,23 @@ class TestIngestAuthentication:
                            json={"scanner": "semgrep", "repository": "a/b", "results": {}})
         assert resp.status_code == 404
 
-    def test_team_without_signing_enabled_returns_403(self, client, db):
+    def test_team_without_an_inbound_token_returns_403(self, client, db):
+        """
+        What gates inbound access is having an inbound token, not whether
+        outbound signing happens to be enabled. Those were the same value and
+        so the same switch; turning off outbound signing should not silently
+        cut off a team's CI integration.
+        """
+        from aegis.models import Webhook
         team, secret = _team_with_ingest(db, signing=False)
+        hook = db.query(Webhook).filter(Webhook.team_id == team.id).one()
+        hook.inbound_secret_hash = None
+        db.commit()
         assert _ingest(client, team, secret).status_code == 403
+
+    def test_signing_disabled_does_not_block_ingest(self, client, db):
+        team, secret = _team_with_ingest(db, signing=False)
+        assert _ingest(client, team, secret).status_code == 200
 
 
 class TestIngest:

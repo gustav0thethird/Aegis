@@ -536,8 +536,18 @@ function renderWebhooks(d) {
           </label>
         </div>
         <div class="form-row">
-          <span class="form-label">Secret</span>
-          <input id="wh-secret" class="form-input" type="password" placeholder="${wh.has_secret ? '••••••••  (leave blank to keep)' : 'Auto-generated if signing enabled'}" value="">
+          <span class="form-label">Signing secret</span>
+          <input id="wh-secret" class="form-input" type="password" placeholder="${wh.has_signing_secret ? '••••••••  (leave blank to keep)' : 'Auto-generated if signing enabled'}" value="">
+        </div>
+        <div class="form-row">
+          <span class="form-label">Inbound token</span>
+          <label style="display:flex;align-items:center;gap:6px">
+            <input type="checkbox" id="wh-rotate-inbound">
+            <span style="font-size:11px;color:var(--text-2)">
+              ${wh.has_inbound_token ? 'Replace the token CI uses to call the inbound endpoint' : 'Generate a token for the inbound endpoint'}
+              — shown once, then only its hash is kept
+            </span>
+          </label>
         </div>
         <div style="display:flex;gap:8px;margin-top:4px">
           <button class="btn btn-primary btn-sm" onclick="saveWebhook()">Save Webhook</button>
@@ -588,6 +598,7 @@ async function saveWebhook() {
   const enabled = document.getElementById('wh-enabled')?.checked ?? true;
   const signing = document.getElementById('wh-signing')?.checked ?? false;
   const secret  = document.getElementById('wh-secret')?.value.trim();
+  const rotateInbound = document.getElementById('wh-rotate-inbound')?.checked ?? false;
   const events  = ALL_EVENTS.filter(e => document.getElementById('ev-'+e)?.checked);
 
   const body = {
@@ -595,7 +606,8 @@ async function saveWebhook() {
     enabled,
     events,
     signing_enabled: signing,
-    secret: secret || null,
+    signing_secret: secret || null,
+    rotate_inbound_token: rotateInbound,
     slack_webhook_url:    document.getElementById('notif-slack')?.value.trim() || null,
     ms_teams_webhook_url: document.getElementById('notif-teams')?.value.trim() || null,
     discord_webhook_url:  document.getElementById('notif-discord')?.value.trim() || null,
@@ -608,12 +620,38 @@ async function saveWebhook() {
       body: JSON.stringify(body),
     });
     if (!r.ok) throw new Error((await r.json()).detail || await r.text());
-    flash('Webhook settings saved');
+    const saved = await r.json();
+    if (saved.inbound_token) {
+      // Shown once: only its hash is stored, so there is no way to display
+      // it again. Same contract as an API key.
+      showInboundToken(saved.inbound_token);
+    } else {
+      flash('Webhook settings saved');
+    }
     S._whLoaded = false;
     loadWebhooks();
   } catch (e) {
     showErr('Save failed: ' + e.message);
   }
+}
+
+function showInboundToken(token) {
+  const box = document.createElement('div');
+  box.className = 'card';
+  box.style.cssText = 'margin-top:10px;padding:12px;border:1px solid var(--accent)';
+  const title = document.createElement('div');
+  title.style.cssText = 'font-weight:600;margin-bottom:6px';
+  title.textContent = 'New inbound token — copy it now';
+  const note = document.createElement('div');
+  note.style.cssText = 'font-size:11px;color:var(--text-2);margin-bottom:8px';
+  note.textContent = 'Only its hash is stored, so this cannot be shown again. '
+                   + 'Use it as the Bearer token when calling the inbound endpoint.';
+  const value = document.createElement('code');
+  value.style.cssText = 'display:block;word-break:break-all;user-select:all';
+  value.textContent = token;
+  box.append(title, note, value);
+  const anchor = document.getElementById('wh-url')?.closest('.card') || document.body;
+  anchor.appendChild(box);
 }
 
 async function deleteWebhook() {

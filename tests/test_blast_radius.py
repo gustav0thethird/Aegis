@@ -64,7 +64,7 @@ class TestRotatedKeyIsNotBroadcast:
         team = Team(name=_unique("team"), created_by="test")
         db.add(team)
         db.commit()
-        hook = Webhook(team_id=team.id, url="https://example.test/hook", secret=None,
+        hook = Webhook(team_id=team.id, url="https://example.test/hook", signing_secret=None,
                        signing_enabled=False, events=["key.rotated"], enabled=True)
         db.add(hook)
         db.commit()

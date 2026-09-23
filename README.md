@@ -89,6 +89,7 @@ Designed for scale: 100+ teams, 40 000+ secrets, and a single security team. Tea
 - [Admin account bootstrap](#admin-account-bootstrap)
 - [Releasing](#releasing)
 - [Workload Identity](#workload-identity)
+- [Webhook credentials](#webhook-credentials)
 - [Key delivery on rotation](#key-delivery-on-rotation)
 - [Security Model](#security-model)
 - [Backup and Recovery](#backup-and-recovery)
@@ -2020,6 +2021,35 @@ issuer actually signed.
 **Not solved:** replay of a still-valid token by someone who has obtained it.
 These tokens are short-lived and audience-bound, which is the usual
 mitigation; a nonce store would be the next step if that is not enough.
+
+## Webhook credentials
+
+A team webhook has two credentials, because they are used for different things
+and carry different risk:
+
+| | Stored as | What it permits |
+|---|---|---|
+| **Inbound token** | SHA-256 hash | Authenticates `POST /api/inbound/{team_id}` and `POST /api/scan/{team_id}/ingest`. The inbound endpoint can rotate an API key and returns the new key, so this is a privileged credential. |
+| **Signing secret** | Plaintext | The HMAC key for `X-Aegis-Signature` on outbound deliveries. Must be recoverable, because signing needs it. |
+
+They were one column holding one value, in the clear. Reading the `webhooks`
+table was therefore enough to authenticate to the inbound endpoint, rotate a
+key and receive it — a database read became access to the secrets that key
+can fetch.
+
+The inbound token is shown once when minted and cannot be read back, the same
+contract as an API key:
+
+```bash
+curl -X POST https://aegis.example.com/admin/api/teams/$TEAM/webhook/rotate-inbound-token   -u admin:$ADMIN_PASSWORD
+```
+
+Team members can mint their own from the dashboard. The signing secret is
+still recoverable by anyone who can read the database; on its own it permits
+forging events to the team's own endpoint, and no longer mints credentials.
+
+Enabling or disabling outbound signing no longer affects inbound access —
+those were the same switch only because they were the same value.
 
 ## Key delivery on rotation
 
