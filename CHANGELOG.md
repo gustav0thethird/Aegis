@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/gustav0thethird/Aegis/compare/v0.4.1...v0.5.0) (2026-09-23)
+
+
+### Features
+
+* serve a Content-Security-Policy and the headers around it ([#107](https://github.com/gustav0thethird/Aegis/issues/107)) ([8f13d10](https://github.com/gustav0thethird/Aegis/commit/8f13d10b3ee88708a4c42c00f634577beb726361))
+
+
+### Fixes
+
+* delete user no longer 500s on a stale team_id reference ([#103](https://github.com/gustav0thethird/Aegis/issues/103)) ([d2763a4](https://github.com/gustav0thethird/Aegis/commit/d2763a498d0a60af8c249586583d28cff3244918))
+* stored XSS in the admin console via interpolated event handlers ([#104](https://github.com/gustav0thethird/Aegis/issues/104)) ([078344d](https://github.com/gustav0thethird/Aegis/commit/078344d231cc01ba08473cf94b2ea309d9bc23fb))
+* **webhook:** separate the inbound token from the outbound signing secret ([#101](https://github.com/gustav0thethird/Aegis/issues/101)) ([d1de7cc](https://github.com/gustav0thethird/Aegis/commit/d1de7cc109a7698af56efcdcfd03bbc2a198ad36))
+
 ## [0.4.1](https://github.com/gustav0thethird/Aegis/compare/v0.4.0...v0.4.1) (2026-09-23)
 
 

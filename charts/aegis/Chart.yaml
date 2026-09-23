@@ -9,8 +9,8 @@ type: application
 #
 # appVersion trails version here only until the first automated release, which
 # will set both to 0.4.0 - it names the image that is actually published.
-version: 0.4.1  # x-release-please-version
-appVersion: "0.4.1"  # x-release-please-version
+version: 0.5.0  # x-release-please-version
+appVersion: "0.5.0"  # x-release-please-version
 kubeVersion: ">=1.25.0-0"
 home: https://github.com/gustav0thethird/Aegis
 icon: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/Aegis-logo.png
@@ -44,7 +44,7 @@ annotations:
       url: https://github.com/gustav0thethird/Aegis/pkgs/container/aegis
   artifacthub.io/images: |
     - name: aegis
-      image: ghcr.io/gustav0thethird/aegis:v0.4.1 # x-release-please-version
+      image: ghcr.io/gustav0thethird/aegis:v0.5.0 # x-release-please-version
   artifacthub.io/screenshots: |
     - title: Admin dashboard - estate overview, objects by vendor, recent changes
       url: https://raw.githubusercontent.com/gustav0thethird/Aegis/main/static/assets/screenshots/admin-dashboard.png
