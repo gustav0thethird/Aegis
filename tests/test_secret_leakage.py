@@ -125,7 +125,7 @@ class TestRotatedKeyIsNotPersisted:
         db.add(team)
         db.commit()
 
-        hook = Webhook(team_id=team.id, url="https://example.test/hook", secret="s3cret",
+        hook = Webhook(team_id=team.id, url="https://example.test/hook", signing_secret="s3cret",
                        signing_enabled=False, events=["key.rotated"], enabled=True)
         db.add(hook)
         db.commit()
@@ -171,7 +171,7 @@ class TestRotatedKeyIsNotPersisted:
         team = Team(name=_unique("team"), created_by="test")
         db.add(team)
         db.commit()
-        hook = Webhook(team_id=team.id, url="http://169.254.169.254/", secret=None,
+        hook = Webhook(team_id=team.id, url="http://169.254.169.254/", signing_secret=None,
                        signing_enabled=False, events=["key.rotated"], enabled=True)
         db.add(hook)
         db.commit()

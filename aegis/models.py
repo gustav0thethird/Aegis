@@ -208,7 +208,14 @@ class Webhook(Base):
     team_id    = Column(UUID(as_uuid=True), ForeignKey("teams.id", ondelete="CASCADE"),
                         nullable=False, unique=True)
     url             = Column(Text, nullable=False)
-    secret          = Column(Text, nullable=True)               # HMAC-SHA256 signing secret; None when signing disabled
+    # Two separate credentials with two different exposures. The inbound
+    # token authenticates POST /api/inbound/{team_id}, which can rotate a
+    # key and return it, so only its hash is stored and the token itself is
+    # shown once. The signing secret has to be recoverable because HMAC
+    # needs it, but on its own it only permits forging events to the team's
+    # own endpoint.
+    inbound_secret_hash = Column(Text, nullable=True)           # SHA-256 hex of the inbound token
+    signing_secret      = Column(Text, nullable=True)           # HMAC-SHA256 key; None when signing disabled
     signing_enabled = Column(Boolean, nullable=False, default=False)
     events          = Column(ARRAY(Text), nullable=False)       # subscribed event types
     enabled         = Column(Boolean, nullable=False, default=True)

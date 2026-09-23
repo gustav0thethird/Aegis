@@ -35,7 +35,10 @@ def _scenario(db):
         events=["key.rotated"],
         enabled=False,           # outbound delivery off — this test is about the key
         signing_enabled=True,
-        secret=secret,
+        # Inbound authentication is by hash now; the signing secret is a
+        # separate credential and deliberately a different value.
+        inbound_secret_hash=hashlib.sha256(secret.encode()).hexdigest(),
+        signing_secret=slib.token_hex(16),
         created_by="test",
     ))
     db.commit()

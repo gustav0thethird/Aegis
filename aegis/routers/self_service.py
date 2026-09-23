@@ -2,6 +2,7 @@
 self_service.py — Team self-service and read-only views.
 """
 
+import hashlib
 import secrets as secrets_lib
 import uuid
 from datetime import (
@@ -119,7 +120,11 @@ class TeamWebhookRequest(BaseModel):
     enabled: bool = True
     events: List[str] = []
     signing_enabled: bool = False
-    secret: Optional[str] = None
+    # The HMAC key for outbound deliveries. Empty string generates one.
+    signing_secret: Optional[str] = None
+    # Mint a new inbound token. It is returned once in the response and only
+    # its hash is kept, so it cannot be read back afterwards.
+    rotate_inbound_token: bool = False
     # Notification channels
     slack_webhook_url: Optional[str] = None
     ms_teams_webhook_url: Optional[str] = None
@@ -143,7 +148,8 @@ def api_get_my_webhook(
             "enabled":         wh.enabled if wh else False,
             "events":          wh.events if wh else [],
             "signing_enabled": wh.signing_enabled if wh else False,
-            "has_secret":      bool(wh and wh.secret),
+            "has_signing_secret": bool(wh and wh.signing_secret),
+            "has_inbound_token":  bool(wh and wh.inbound_secret_hash),
         } if wh else None,
         "notifications": {
             "slack_webhook_url":    team.slack_webhook_url,
@@ -168,6 +174,10 @@ def api_put_my_webhook(
     # Every URL below is requested server-side, so validate before storing.
     webhook_url = _validated_url(req.url, "url")
 
+    # Returned once when a new inbound token is minted; declared here because
+    # the response is built outside the webhook branch below.
+    inbound_token = None
+
     # Update notification channels on Team
     team.slack_webhook_url    = _validated_url(req.slack_webhook_url, "slack_webhook_url")
     team.ms_teams_webhook_url = _validated_url(req.ms_teams_webhook_url, "ms_teams_webhook_url")
@@ -186,8 +196,10 @@ def api_put_my_webhook(
             wh.enabled         = req.enabled
             wh.events          = req.events
             wh.signing_enabled = req.signing_enabled
-            if req.secret is not None:
-                wh.secret = req.secret or secrets_lib.token_hex(32)
+            if req.signing_secret is not None:
+                wh.signing_secret = req.signing_secret or secrets_lib.token_hex(32)
+            elif req.signing_enabled and not wh.signing_secret:
+                wh.signing_secret = secrets_lib.token_hex(32)
         else:
             wh = Webhook(
                 team_id         = team.id,
@@ -195,12 +207,21 @@ def api_put_my_webhook(
                 enabled         = req.enabled,
                 events          = req.events,
                 signing_enabled = req.signing_enabled,
-                secret          = req.secret or (secrets_lib.token_hex(32) if req.signing_enabled else None),
+                signing_secret  = (req.signing_secret
+                                   or (secrets_lib.token_hex(32) if req.signing_enabled else None)),
                 created_by      = session["username"],
             )
             db.add(wh)
 
+        if req.rotate_inbound_token:
+            inbound_token = secrets_lib.token_urlsafe(32)
+            wh.inbound_secret_hash = hashlib.sha256(inbound_token.encode()).hexdigest()
+
     db.commit()
+    # Shown once. Only the hash is stored, so there is no way to display it
+    # again - the same contract as an API key.
+    if inbound_token:
+        return {"ok": True, "inbound_token": inbound_token}
     return {"ok": True}
 
 

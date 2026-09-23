@@ -9,6 +9,7 @@ routers import from deps, never the reverse.
 
 
 import contextlib
+import hashlib
 import ipaddress
 import json
 import logging
@@ -689,13 +690,17 @@ def _authenticate_team_webhook(db: Session, team_id_str: str, request: Request) 
     token = auth_header[7:]
 
     hook = team.webhook
-    if not hook or not hook.secret or not hook.signing_enabled:
+    # Gated on having an inbound token, not on outbound signing being enabled.
+    # Those were the same value and so the same switch; they are now separate
+    # credentials and one should not silently control the other.
+    if not hook or not hook.inbound_secret_hash:
         raise HTTPException(
             status_code=403,
-            detail="Inbound webhook not configured (enable signing and set secret)")
+            detail="Inbound webhook not configured (no inbound token set)")
 
     import hmac as _hmac2
-    if not _hmac2.compare_digest(token, hook.secret):
+    presented = hashlib.sha256(token.encode()).hexdigest()
+    if not _hmac2.compare_digest(presented, hook.inbound_secret_hash):
         raise HTTPException(status_code=403, detail="Invalid token")
 
     return team
