@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.4.1](https://github.com/gustav0thethird/Aegis/compare/v0.4.0...v0.4.1) (2026-09-23)
+
+
+### Fixes
+
+* **auth:** sessions carry identity, not authorisation ([#96](https://github.com/gustav0thethird/Aegis/issues/96)) ([4f8d41b](https://github.com/gustav0thethird/Aegis/commit/4f8d41ba2519383640c74038be021caf61fb01a6))
+* **ci:** keep the generated chart README free of version numbers ([#97](https://github.com/gustav0thethird/Aegis/issues/97)) ([ba65d7b](https://github.com/gustav0thethird/Aegis/commit/ba65d7b1f752dffd55d256e5c8018c9451578525))
+* **keys:** one implementation for issuing a team-registry key ([#99](https://github.com/gustav0thethird/Aegis/issues/99)) ([4786ef2](https://github.com/gustav0thethird/Aegis/commit/4786ef2f28b05b76b1addf916f715b172cb7baea))
+* **settings:** keep third-party credentials out of the API and the change log ([#100](https://github.com/gustav0thethird/Aegis/issues/100)) ([eae70a8](https://github.com/gustav0thethird/Aegis/commit/eae70a87a4049d04d27060582a750af9a0d5419e))
+
 ## [0.4.0](https://github.com/gustav0thethird/Aegis/compare/v0.3.0...v0.4.0) (2026-09-23)
 
 
