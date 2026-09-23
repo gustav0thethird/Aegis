@@ -68,9 +68,12 @@ jobs:
       packages: write
       security-events: write
       id-token: write
+    # No `secrets: inherit`. The called workflow needs only GITHUB_TOKEN,
+    # which is provided to it automatically and scoped by the permissions
+    # above; inheriting would hand it every secret in the repository for no
+    # reason. Anything it needs later has to be passed explicitly.
     uses: ./.github/workflows/release.yml
     with:
       tag: ${{ needs.release-please.outputs.tag_name }}
       # release-please has already written the release notes.
       skip_github_release: true
-    secrets: inherit
