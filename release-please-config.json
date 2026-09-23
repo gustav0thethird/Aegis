@@ -12,20 +12,55 @@
       "package-name": "aegis",
       "changelog-path": "CHANGELOG.md",
       "extra-files": [
-        "aegis/api.py",
-        "charts/aegis/Chart.yaml"
+        {
+          "type": "generic",
+          "path": "aegis/api.py"
+        },
+        {
+          "type": "generic",
+          "path": "charts/aegis/Chart.yaml"
+        }
       ]
     }
   },
   "changelog-sections": [
-    { "type": "feat", "section": "Features" },
-    { "type": "fix", "section": "Fixes" },
-    { "type": "perf", "section": "Performance" },
-    { "type": "refactor", "section": "Refactoring" },
-    { "type": "docs", "section": "Documentation" },
-    { "type": "build", "section": "Dependencies" },
-    { "type": "ci", "section": "Build and CI" },
-    { "type": "chore", "section": "Chores", "hidden": true },
-    { "type": "test", "section": "Tests", "hidden": true }
+    {
+      "type": "feat",
+      "section": "Features"
+    },
+    {
+      "type": "fix",
+      "section": "Fixes"
+    },
+    {
+      "type": "perf",
+      "section": "Performance"
+    },
+    {
+      "type": "refactor",
+      "section": "Refactoring"
+    },
+    {
+      "type": "docs",
+      "section": "Documentation"
+    },
+    {
+      "type": "build",
+      "section": "Dependencies"
+    },
+    {
+      "type": "ci",
+      "section": "Build and CI"
+    },
+    {
+      "type": "chore",
+      "section": "Chores",
+      "hidden": true
+    },
+    {
+      "type": "test",
+      "section": "Tests",
+      "hidden": true
+    }
   ]
 }
