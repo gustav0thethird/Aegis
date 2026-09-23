@@ -45,13 +45,45 @@ EDITABLE_SETTINGS = {
     "siem_destinations", "splunk_hec_url", "splunk_hec_token",
     "s3_log_bucket", "dd_api_key", "rate_limit_rpm",
     "change_number_required", "session_ttl_hours", "log_retention_days",
+    # Read by the expiry scheduler and offered by the settings form; its
+    # absence here made the whole PUT fail with "Unknown settings", so no
+    # general setting could be saved from the admin panel at all.
+    "key_warning_days",
 }
+
+# Third-party credentials. Their values are never returned by the API and
+# never written to the change log: a change-log entry recording
+# {"from": "<old token>", "to": "<new token>"} turns an audit trail into a
+# credential archive, and that log is deliberately append-only.
+SENSITIVE_SETTINGS = {"splunk_hec_token", "dd_api_key"}
+
+# Maintained by the application, not by an operator. Exposing the scan dedupe
+# key would let anyone who can read it precompute finding fingerprints, which
+# is the whole reason it is an HMAC key rather than a constant.
+INTERNAL_SETTINGS = {"scan.dedupe_key"}
+
+# What a sensitive setting reads back as. Sent by the form unchanged when the
+# operator has not retyped the secret, and skipped on write so redaction can
+# never overwrite the real value.
+REDACTED = "********"
 
 
 @router.get("/admin/api/settings")
 def admin_get_settings(session: dict = Depends(_require_admin), db: Session = Depends(get_db)):
-    rows = db.query(Setting).all()
-    return {r.key: r.value for r in rows}
+    """
+    Current settings. Credentials read back as REDACTED when set and as the
+    empty string when not, so the panel can still show whether one is
+    configured without handing it out.
+    """
+    out = {}
+    for row in db.query(Setting).all():
+        if row.key in INTERNAL_SETTINGS:
+            continue
+        if row.key in SENSITIVE_SETTINGS:
+            out[row.key] = REDACTED if row.value else ""
+        else:
+            out[row.key] = row.value
+    return out
 
 
 class SettingsPatch(BaseModel):
@@ -66,19 +98,30 @@ def admin_update_settings(req: SettingsPatch, session: dict = Depends(_require_a
         raise HTTPException(status_code=400, detail=f"Unknown settings: {unknown}")
     diff = {}
     for key, value in req.settings.items():
+        sensitive = key in SENSITIVE_SETTINGS
+        # The form posts back whatever it was given, so an untouched
+        # credential arrives as the redaction marker. Writing it would replace
+        # the real value with asterisks.
+        if sensitive and str(value) == REDACTED:
+            continue
         row = db.query(Setting).filter(Setting.key == key).first()
         if row:
-            diff[key] = {"from": row.value, "to": str(value)}
+            # A credential's value never enters the change log - only the fact
+            # that it changed, and who changed it.
+            diff[key] = ({"changed": True} if sensitive
+                         else {"from": row.value, "to": str(value)})
             row.value = str(value)
             row.updated_at = now
             row.updated_by = session["username"]
         else:
-            diff[key] = {"from": None, "to": str(value)}
+            diff[key] = ({"changed": True} if sensitive
+                         else {"from": None, "to": str(value)})
             db.add(Setting(key=key, value=str(value), updated_by=session["username"]))
     db.commit()
-    _write_change(db, "updated", "settings", "settings", "settings",
-                  None, session["username"], diff=diff)
-    return {r.key: r.value for r in db.query(Setting).all()}
+    if diff:
+        _write_change(db, "updated", "settings", "settings", "settings",
+                      None, session["username"], diff=diff)
+    return admin_get_settings(session=session, db=db)
 
 
 # ---------------------------------------------------------------------------
