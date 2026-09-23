@@ -23,7 +23,18 @@ Schema:
 import uuid
 from datetime import datetime, timezone
 
-from sqlalchemy import ARRAY, BigInteger, Boolean, Column, DateTime, ForeignKey, Integer, Text, Time
+from sqlalchemy import (
+    ARRAY,
+    BigInteger,
+    Boolean,
+    Column,
+    DateTime,
+    ForeignKey,
+    Integer,
+    Text,
+    Time,
+    UniqueConstraint,
+)
 from sqlalchemy.dialects.postgresql import JSONB as _JSONB
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
@@ -74,6 +85,39 @@ class RegistryObject(Base):
 
     registry = relationship("Registry", back_populates="registry_entries")
     object   = relationship("Object",   back_populates="registry_entries")
+
+
+class IdentityBinding(Base):
+    """
+    A workload identity that may authenticate as a team-registry pair.
+
+    The same authorisation unit an API key resolves to, reached by proving an
+    identity the caller's platform already issued rather than by presenting a
+    stored secret. Nothing here is a credential: issuer, audience, subject and
+    claim rules are all public facts about the workload, so a leaked row
+    grants nothing on its own.
+    """
+    __tablename__ = "identity_bindings"
+    __table_args__ = (
+        UniqueConstraint("issuer", "audience", "subject", "team_id", "registry_id",
+                         name="uq_identity_binding"),
+    )
+
+    id          = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name        = Column(Text, nullable=False)                 # operator-facing label
+    issuer      = Column(Text, nullable=False)                 # OIDC iss, exact match
+    audience    = Column(Text, nullable=False)                 # required aud; never "any"
+    subject     = Column(Text, nullable=False)                 # required sub, exact match
+    claim_rules = Column(_JSONB)                               # extra claims that must match
+    team_id     = Column(UUID(as_uuid=True), ForeignKey("teams.id",      ondelete="CASCADE"), nullable=False)
+    registry_id = Column(UUID(as_uuid=True), ForeignKey("registries.id", ondelete="CASCADE"), nullable=False)
+    enabled     = Column(Boolean, nullable=False, default=True)
+    created_at  = Column(DateTime(timezone=True), nullable=False, default=_now)
+    created_by  = Column(Text, nullable=False, default="admin")
+    last_used_at = Column(DateTime(timezone=True))
+
+    team     = relationship("Team")
+    registry = relationship("Registry")
 
 
 class TeamRegistryKey(Base):

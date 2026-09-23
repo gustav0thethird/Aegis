@@ -66,6 +66,7 @@ from aegis.deps import _hash_pw, _verify_pw
 from aegis.routers import (
     admin_config,
     admin_core,
+    admin_identity,
     admin_logs,
     admin_teams,
     admin_users,
@@ -179,6 +180,7 @@ app.include_router(admin_core.router)
 app.include_router(admin_teams.router)
 app.include_router(admin_users.router)
 app.include_router(admin_config.router)
+app.include_router(admin_identity.router)
 app.include_router(admin_logs.router)
 app.include_router(admin_webhooks.router)
 

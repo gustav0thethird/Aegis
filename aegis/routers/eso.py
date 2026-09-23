@@ -18,9 +18,9 @@ from sqlalchemy.orm import Session
 
 from aegis.database import get_db
 from aegis.deps import (
-    _authenticate_registry_key,
     _eso_registry_extract_allowed,
     _fetch_for_key,
+    authenticate_bearer,
     bearer,
 )
 
@@ -57,7 +57,7 @@ def eso_get_all(
 
     source_ip  = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
+    key_row = authenticate_bearer(db, credentials.credentials, source_ip, user_agent)
     fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent,
                              use_cache=True)
     return {
@@ -81,7 +81,7 @@ def eso_get_one(
 
     source_ip  = request.client.host if request.client else None
     user_agent = request.headers.get("user-agent")
-    key_row = _authenticate_registry_key(db, credentials.credentials, source_ip, user_agent)
+    key_row = authenticate_bearer(db, credentials.credentials, source_ip, user_agent)
     fetched = _fetch_for_key(db, key_row, x_change_number, source_ip, user_agent,
                              only=object_name, use_cache=True)
     return {"key": object_name, "value": fetched[object_name]}
