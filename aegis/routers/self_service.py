@@ -22,12 +22,10 @@ from fastapi import (
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
-from aegis import secret_cache
+from aegis import keylifecycle
 from aegis.database import get_db
 from aegis.deps import (
     _authenticate_team_webhook,
-    _generate_key,
-    _hash_key,
     _require_any_user,
     _resolve_user_team,
     _validated_url,
@@ -334,29 +332,15 @@ def api_inbound_webhook(
         if not tr:
             raise HTTPException(status_code=403, detail="Team does not have access to that registry")
 
-        # Rotate key — same generator, hash and preview format as every other
-        # rotation path, so inbound-rotated keys are indistinguishable downstream.
-        new_raw     = _generate_key()
-        new_hash    = _hash_key(new_raw)
-        new_preview = new_raw[:10] + "..."
-
-        old_keys = db.query(TeamRegistryKey).filter(
-            TeamRegistryKey.team_id    == tid,
-            TeamRegistryKey.registry_id == reg_uuid,
-            TeamRegistryKey.revoked_at == None,  # noqa: E711
-        ).all()
-        for k in old_keys:
-            k.revoked_at = datetime.now(timezone.utc)
-            secret_cache.invalidate(k.key_hash)
-
-        new_key = TeamRegistryKey(
-            team_id=tid, registry_id=reg_uuid,
-            key_hash=new_hash, key_preview=new_preview,
-        )
-        db.add(new_key)
-        db.commit()
+        # Rotated exactly as an operator rotation is: same expiry policy, same
+        # revocation and cache invalidation, same audit entry and notification.
+        # This path used to skip the change log and the webhook entirely, so a
+        # CI-triggered rotation left less of a trail than a manual one.
+        registry = db.query(Registry).filter(Registry.id == reg_uuid).first()
+        row, new_raw = keylifecycle.issue(
+            db, team, registry, actor=f"inbound:{team.name}", reason="inbound_rotation")
         logger.info("Inbound webhook rotated key team=%s registry=%s", tid, reg_uuid)
-        return {"ok": True, "key_preview": new_preview, "new_key": new_raw}
+        return {"ok": True, "key_preview": row.key_preview, "new_key": new_raw}
 
     raise HTTPException(status_code=400, detail=f"Unknown action: {req.action}")
 

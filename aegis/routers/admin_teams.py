@@ -18,6 +18,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
 from aegis import (
+    keylifecycle,
     secret_cache,
 )
 from aegis import (
@@ -25,11 +26,8 @@ from aegis import (
 )
 from aegis.database import get_db
 from aegis.deps import (
-    _generate_key,
-    _get_policy,
     _get_registry,
     _get_team,
-    _hash_key,
     _require_admin,
     _write_change,
 )
@@ -122,28 +120,16 @@ def admin_assign_registry(team_id: str, reg_id: str, session: dict = Depends(_re
         raise HTTPException(status_code=409, detail="Registry already assigned to team")
     db.add(TeamRegistry(team_id=team.id, registry_id=reg.id, assigned_by=session["username"]))
     db.flush()
-    # Issue a unique API key for this team-registry assignment
-    plaintext = _generate_key()
-    key_preview = plaintext[:10] + "..."
-    reg_policy   = _get_policy(db, "registry", reg.id)
-    key_expires  = None
-    if reg_policy and reg_policy.max_key_days:
-        from datetime import timedelta
-        key_expires = datetime.now(timezone.utc) + timedelta(days=reg_policy.max_key_days)
-    db.add(TeamRegistryKey(
-        team_id=team.id, registry_id=reg.id,
-        key_hash=_hash_key(plaintext), key_preview=key_preview,
-        expires_at=key_expires,
-    ))
-    db.commit()
+    # Nothing to revoke and nothing rotated, but the expiry, preview and audit
+    # entry come from the same place as every other issuance.
+    row, plaintext = keylifecycle.issue(
+        db, team, reg, actor=session["username"], reason="assignment",
+        revoke_existing=False, notify=False)
     db.refresh(team)
-    _write_change(db, "registry_assigned", "team", str(team.id), team.name,
-                  None, session["username"],
-                  diff={"registries": {"added": reg.name}, "key_preview": {"to": key_preview}})
     # Return key so it can be shown once
     resp = _team_response(team)
     resp["new_key"] = {"registry_id": str(reg.id), "registry_name": reg.name,
-                       "key": plaintext, "key_preview": key_preview}
+                       "key": plaintext, "key_preview": row.key_preview}
     return resp
 
 
@@ -153,30 +139,10 @@ def admin_rotate_assignment_key(team_id: str, reg_id: str, session: dict = Depen
     reg  = _get_registry(db, reg_id)
     if not db.query(TeamRegistry).filter(TeamRegistry.team_id == team.id, TeamRegistry.registry_id == reg.id).first():
         raise HTTPException(status_code=404, detail="Registry not assigned to team")
-    now = datetime.now(timezone.utc)
-    old_preview = next((k.key_preview for k in db.query(TeamRegistryKey).filter(
-        TeamRegistryKey.team_id == team.id, TeamRegistryKey.registry_id == reg.id,
-        TeamRegistryKey.revoked_at.is_(None),
-    ).all()), None)
-    for k in db.query(TeamRegistryKey).filter(
-        TeamRegistryKey.team_id == team.id, TeamRegistryKey.registry_id == reg.id,
-        TeamRegistryKey.revoked_at.is_(None),
-    ).all():
-        k.revoked_at = now
-        secret_cache.invalidate(k.key_hash)
-    plaintext = _generate_key()
-    new_preview = plaintext[:10] + "..."
-    db.add(TeamRegistryKey(
-        team_id=team.id, registry_id=reg.id,
-        key_hash=_hash_key(plaintext), key_preview=new_preview,
-    ))
-    db.commit()
-    _write_change(db, "key_rotated", "team", str(team.id), team.name, None, session["username"],
-                  diff={"registry": {"to": reg.name}, "key_preview": {"from": old_preview, "to": new_preview}})
-    wh.fire(db, team, "key.rotated",
-            registry={"id": str(reg.id), "name": reg.name},
-            new_key=plaintext, key_preview=new_preview, reason="manual_rotation")
-    return {"team_id": str(team.id), "registry_id": str(reg.id), "key": plaintext, "key_preview": new_preview}
+    row, plaintext = keylifecycle.issue(
+        db, team, reg, actor=session["username"], reason="manual_rotation")
+    return {"team_id": str(team.id), "registry_id": str(reg.id),
+            "key": plaintext, "key_preview": row.key_preview}
 
 
 @router.patch("/admin/api/keys/{key_id}/suspend")
