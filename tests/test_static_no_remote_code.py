@@ -13,6 +13,7 @@ so those are allowed by host; script must be same-origin.
 """
 import re
 from pathlib import Path
+from urllib.parse import urlparse
 
 import pytest
 
@@ -23,7 +24,22 @@ SCRIPT_SRC = re.compile(r'<script[^>]*\ssrc\s*=\s*["\']([^"\']+)["\']', re.I)
 LINK_HREF = re.compile(r'<link[^>]*\shref\s*=\s*["\']([^"\']+)["\']', re.I)
 
 # Stylesheets and fonts may come from these; nothing else, and never script.
-ALLOWED_STYLE_HOSTS = ("https://fonts.googleapis.com", "https://fonts.gstatic.com")
+ALLOWED_STYLE_HOSTS = frozenset({"fonts.googleapis.com", "fonts.gstatic.com"})
+
+
+def _host(url):
+    """
+    The host a URL actually resolves to, or None if it is same-origin.
+
+    Compared whole, never as a substring: "fonts.googleapis.com" appears in
+    "fonts.googleapis.com.example.net" and at the end of a path, and neither
+    is the host these tests mean to allow.
+    """
+    if url.startswith("//"):
+        url = "https:" + url
+    elif not url.startswith(("http://", "https://")):
+        return None
+    return (urlparse(url).hostname or "").lower()
 
 
 def test_there_are_pages_to_check():
@@ -33,10 +49,7 @@ def test_there_are_pages_to_check():
 
 @pytest.mark.parametrize("page", PAGES, ids=lambda p: p.name)
 def test_no_script_is_loaded_from_another_origin(page):
-    remote = [
-        src for src in SCRIPT_SRC.findall(page.read_text(encoding="utf-8"))
-        if src.startswith(("http://", "https://", "//"))
-    ]
+    remote = [src for src in SCRIPT_SRC.findall(page.read_text(encoding="utf-8")) if _host(src)]
     assert not remote, (
         f"{page.name} loads script from another origin: {remote}. "
         "Third-party script runs with full access to the page; vendor it instead."
@@ -47,10 +60,22 @@ def test_no_script_is_loaded_from_another_origin(page):
 def test_stylesheets_come_from_self_or_a_known_font_host(page):
     unexpected = [
         href for href in LINK_HREF.findall(page.read_text(encoding="utf-8"))
-        if href.startswith(("http://", "https://", "//"))
-        and not href.startswith(ALLOWED_STYLE_HOSTS)
+        if (h := _host(href)) and h not in ALLOWED_STYLE_HOSTS
     ]
     assert not unexpected, f"{page.name} loads a stylesheet from an unexpected host: {unexpected}"
+
+
+@pytest.mark.parametrize("url,expected", [
+    ("https://fonts.googleapis.com/css2?family=X", "fonts.googleapis.com"),
+    ("//fonts.gstatic.com/s/x.woff2", "fonts.gstatic.com"),
+    ("https://fonts.googleapis.com.example.net/x", "fonts.googleapis.com.example.net"),
+    ("https://evil.example/?u=fonts.googleapis.com", "evil.example"),
+    ("/static/admin.css", None),
+    ("styles.css", None),
+])
+def test_host_extraction_is_not_a_substring_match(url, expected):
+    """A look-alike host must not pass for the host it imitates."""
+    assert _host(url) == expected
 
 
 def test_tailwind_is_not_reintroduced():
@@ -61,7 +86,10 @@ def test_tailwind_is_not_reintroduced():
     """
     for page in PAGES:
         text = page.read_text(encoding="utf-8")
-        refs = [u for u in SCRIPT_SRC.findall(text) + LINK_HREF.findall(text) if "tailwindcss.com" in u]
+        refs = [
+            u for u in SCRIPT_SRC.findall(text) + LINK_HREF.findall(text)
+            if (h := _host(u)) and (h == "tailwindcss.com" or h.endswith(".tailwindcss.com"))
+        ]
         assert not refs, f"{page.name} loads the Tailwind CDN again: {refs}"
 
 
