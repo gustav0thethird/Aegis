@@ -1,0 +1,2129 @@
+// ═══════════════════════════════════════════════
+// State
+// ═══════════════════════════════════════════════
+const S = {
+  session: null,   // { token, username, role, team_id, theme }
+  view: 'dashboard',
+  objects: [], registries: [], teams: [], users: [], settings: {},
+  audit:     { rows: [], total: 0, page: 1 },
+  changelog: { rows: [], total: 0, page: 1 },
+  findings:  { rows: [], total: 0, page: 1 },
+  filter: {
+    obj:       { q: '', vendor: 'all' },
+    audit:     { outcome: '', change_number: '', registry_id: '' },
+    changelog: { entity_type: '', action: '' },
+    findings:  { status: 'open', severity: '', repository: '' },
+    teamKeyQ:  '',
+  },
+  page: { obj: 1, reg: 1, team: 1 },
+  settingsTab: 'general',
+};
+const PG = 50;
+
+const THEMES = ['default','midnight','slate','forest','contrast'];
+
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme === 'default' ? '' : theme);
+}
+
+// ═══════════════════════════════════════════════
+// Auth
+// ═══════════════════════════════════════════════
+async function doLogin() {
+  const username = g('login-user').value.trim();
+  const pw = g('login-pw').value;
+  if (!username || !pw) return;
+  const btn = g('login-btn'), err = g('login-err');
+  setBtn(btn, true, 'Signing in…');
+  err.style.display = 'none';
+  try {
+    const r = await fetch('/api/login', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({username, password: pw}),
+    });
+    const d = await r.json().catch(() => ({}));
+    if (r.status === 401) { showErr(err, 'Invalid credentials'); return; }
+    if (!r.ok)            { showErr(err, d.detail || 'Server error'); return; }
+    _initSession(d);
+    sessionStorage.setItem('aegis_session', JSON.stringify(d));
+    g('login-screen').style.display = 'none';
+    g('app').style.display = 'flex';
+    applyTheme(d.theme || 'default');
+    await loadAll();
+    setView(S.session.role === 'admin' ? 'dashboard' : 'my-team');
+  } finally { setBtn(btn, false, 'Sign In'); }
+}
+
+function _initSession(d) {
+  S.session = d;
+  g('header-user').textContent = d.username;
+  g('header-role').textContent = d.role;
+  g('header-role').className = `role-${d.role}`;
+  // Show/hide admin-only nav items
+  const adminOnly = ['nav-objects','nav-registries','nav-teams','nav-changelog','nav-audit'];
+  adminOnly.forEach(id => {
+    const el = g(id);
+    if (el) el.style.display = d.role === 'admin' ? '' : 'none';
+  });
+  const dashNav = g('nav-dashboard');
+  if (dashNav) dashNav.style.display = d.role === 'admin' ? '' : 'none';
+  const myTeamNav = g('nav-my-team');
+  if (myTeamNav) myTeamNav.style.display = d.role === 'user' ? '' : 'none';
+}
+
+function showErr(el, msg) { el.textContent = msg; el.style.display = 'block'; }
+
+async function signOut() {
+  if (S.session?.token) {
+    await fetch('/api/logout', {method:'POST', headers:{'Authorization':'Bearer '+S.session.token}}).catch(()=>{});
+  }
+  sessionStorage.removeItem('aegis_session');
+  location.reload();
+}
+
+function ah() {
+  return S.session?.token ? {'Authorization': 'Bearer ' + S.session.token} : {};
+}
+
+async function api(method, path, body) {
+  const o = { method, headers: { ...ah(), 'Content-Type': 'application/json' } };
+  if (body !== undefined) o.body = JSON.stringify(body);
+  const r = await fetch(path, o);
+  if (r.status === 204) return null;
+  if (r.status === 401) { sessionStorage.removeItem('aegis_session'); location.reload(); return; }
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(d.detail || `HTTP ${r.status}`);
+  return d;
+}
+
+// ═══════════════════════════════════════════════
+// Data loading
+// ═══════════════════════════════════════════════
+async function loadAll() {
+  if (S.session?.role === 'admin') {
+    await Promise.all([loadObjs(), loadRegs(), loadTeams()]);
+  }
+}
+async function loadObjs()     { S.objects    = await api('GET','/admin/api/objects');    }
+async function loadRegs()     { S.registries = await api('GET','/admin/api/registries'); }
+async function loadTeams()    { S.teams      = await api('GET','/admin/api/teams');      }
+async function loadUsers()    { S.users      = await api('GET','/admin/api/users');      }
+async function loadSettings() { S.settings   = await api('GET','/admin/api/settings');   }
+async function loadAudit() {
+  const f = S.filter.audit;
+  const p = new URLSearchParams({page:S.audit.page,limit:PG});
+  if(f.outcome)       p.set('outcome',f.outcome);
+  if(f.change_number) p.set('change_number',f.change_number);
+  if(f.registry_id)   p.set('registry_id',f.registry_id);
+  const d = await api('GET','/admin/api/audit?'+p);
+  S.audit = {rows:d.rows, total:d.total, page:d.page};
+}
+async function loadChangelog() {
+  const f = S.filter.changelog;
+  const p = new URLSearchParams({page:S.changelog.page,limit:PG});
+  if(f.entity_type) p.set('entity_type',f.entity_type);
+  if(f.action)      p.set('action',f.action);
+  const d = await api('GET','/admin/api/changelog?'+p);
+  S.changelog = {rows:d.rows, total:d.total, page:d.page};
+}
+
+async function loadFindings(page) {
+  if(page) S.findings.page = page;
+  const f = S.filter.findings;
+  const p = new URLSearchParams({ page: S.findings.page, limit: PG });
+  if(f.status)     p.set('status', f.status);
+  if(f.severity)   p.set('severity', f.severity);
+  if(f.repository) p.set('repository', f.repository);
+  const d = await api('GET','/admin/api/scan/findings?'+p);
+  S.findings = { rows: d.rows, total: d.total, page: d.page };
+}
+
+async function setFindingStatus(id, status) {
+  await api('PATCH','/admin/api/scan/findings/'+id, { status });
+  await loadFindings(); renderFindings();
+}
+
+async function realertFinding(id, btn) {
+  setBtn(btn, true, 'Sending…');
+  try {
+    const r = await api('POST','/admin/api/scan/findings/'+id+'/alert');
+    const delivered = (r.delivered||[]).join(', ');
+    toast(delivered ? ('Alert sent via '+delivered) : 'No sink delivered', delivered?'success':'error');
+  } catch(e) {
+    toast(e.message, 'error');
+  } finally {
+    setBtn(btn, false, 'Re-alert');
+    await loadFindings(); renderFindings();
+  }
+}
+
+// ═══════════════════════════════════════════════
+// Navigation
+// ═══════════════════════════════════════════════
+function setView(v) {
+  S.view = v;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const n = document.getElementById('nav-'+v); if(n) n.classList.add('active');
+  closeDrawer();
+  if      (v==='findings')  loadFindings().then(renderFindings);
+  else if (v==='audit')     loadAudit().then(renderAudit);
+  else if (v==='changelog') loadChangelog().then(renderChangelog);
+  else if (v==='settings')  loadSettings().then(()=>loadUsers()).then(renderSettings);
+  else if (v==='my-team')   renderMyTeam();
+  else render();
+}
+function render() {
+  ({dashboard:renderDash, objects:renderObjs, registries:renderRegs, teams:renderTeams}[S.view]||renderDash)();
+}
+
+// ═══════════════════════════════════════════════
+// Helpers
+// ═══════════════════════════════════════════════
+function g(id) { return document.getElementById(id); }
+function set(id, html) { const el=g(id); if(el) el.innerHTML=html; }
+
+Object.assign(ACTIONS, {
+  addMember:              ([teamId])            => addMember(teamId),
+  addObjToReg:            ([regId, name])       => addObjToReg(regId, name),
+  asgnReg:                ([teamId])            => asgnReg(teamId),
+  clip:                   ([value])             => clip(value),
+  delObj:                 ([name])              => delObj(name),
+  delReg:                 ([id, name])          => delReg(id, name),
+  delTeam:                ([id, name])          => delTeam(id, name),
+  deleteUser:             ([id, username])      => deleteUser(id, username),
+  deleteWebhook:          ([teamId])            => deleteWebhook(teamId),
+  editObj:                ([name])              => renderObjDrawer(S.objects.find(o => o.name === name), true),
+  filterRegObjs:          ([regId], el)         => filterRegObjs(el.value, regId),
+  filterVendor:           ([vendor])            => { S.filter.obj.vendor = vendor; S.page.obj = 1; renderObjs(); },
+  loadWebhookLog:         ([teamId])            => loadWebhookLog(teamId),
+  openObjDrawer:          ([name])              => openObjDrawer(name),
+  openRegDrawer:          ([id])                => openRegDrawer(id),
+  openTeamDrawer:         ([id])                => openTeamDrawer(id),
+  page:                   ([name, n])           => PAGERS[name](n),
+  previewTheme:           ([theme])             => previewTheme(theme),
+  realertFinding:         ([id], el)            => realertFinding(id, el),
+  regenerateWebhookSecret:([teamId])            => regenerateWebhookSecret(teamId),
+  remObjFromReg:          ([regId, name])       => remObjFromReg(regId, name),
+  remRegFromTeam:         ([teamId, regId, n])  => remRegFromTeam(teamId, regId, n),
+  removeMember:           ([teamId, userId, u]) => removeMember(teamId, userId, u),
+  revokeSession:          ([tokenKey])          => revokeSession(tokenKey),
+  rotateAssignmentKey:    ([teamId, regId, n])  => rotateAssignmentKey(teamId, regId, n),
+  saveObj:                ([name])              => saveObj(name),
+  saveTeamNotifications:  ([teamId])            => saveTeamNotifications(teamId),
+  saveWebhook:            ([teamId])            => saveWebhook(teamId),
+  setFindingStatus:       ([id], el)            => setFindingStatus(id, el.value),
+  settingsTab:            ([tab])               => { S.settingsTab = tab; renderSettings(); },
+  showAddMemberModal:     ([teamId])            => showAddMemberModal(teamId),
+  showEditUserModal:      ([userId])            => showEditUserModal(userId),
+  testBackend:            ([vendor, ref])       => testBackend(vendor, ref),
+  testWebhook:            ([teamId])            => testWebhook(teamId),
+  toggleKeySuspend:       ([keyId, teamId])     => toggleKeySuspend(keyId, teamId),
+  toggleWhSigning:        ([teamId], el)        => toggleWhSigning(el.checked, teamId),
+  updEditV:               ()                    => updEditV(),
+  updNewV:                ()                    => updNewV(),
+  updateUser:             ([userId])            => updateUser(userId),
+
+  // Policy drawers, which previously passed their handlers as source strings.
+  saveRegPolicy:    ([regId])  => saveRegPolicy(regId),
+  deleteRegPolicy:  ([regId])  => deleteRegPolicy(regId),
+  saveTeamPolicy:   ([teamId]) => saveTeamPolicy(teamId),
+  deleteTeamPolicy: ([teamId]) => deleteTeamPolicy(teamId),
+
+  // Static handlers, previously inline. They carried no data, so they were
+  // not injectable, but an inline handler is script in an attribute and
+  // blocks a Content-Security-Policy that forbids inline script.
+  closeDrawer:            ()                    => closeDrawer(),
+  createObj:              ()                    => createObj(),
+  createReg:              ()                    => createReg(),
+  createTeam:             ()                    => createTeam(),
+  createUser:             ()                    => createUser(),
+  doLogin:                ()                    => doLogin(),
+  hideModal:              ()                    => hideModal(),
+  renderSettingsSessions: ()                    => renderSettingsSessions(),
+  saveGeneralSettings:    ()                    => saveGeneralSettings(),
+  saveSiemSettings:       ()                    => saveSiemSettings(),
+  saveTheme:              ()                    => saveTheme(),
+  showNewObjModal:        ()                    => showNewObjModal(),
+  showNewRegModal:        ()                    => showNewRegModal(),
+  showNewTeamModal:       ()                    => showNewTeamModal(),
+  showNewUserModal:       ()                    => showNewUserModal(),
+  signOut:                ()                    => signOut(),
+  setView:                ([view])              => setView(view),
+  exportCsv:              ([which])             => exportCsv(which),
+  reload:                 ([which])             => RELOADERS[which](),
+  resolveConfirm:         ([answer])            => { hideModal(); window._cr(answer); },
+
+  filterAudit:      ([field], el) => { S.filter.audit[field] = el.value; S.audit.page = 1; loadAudit().then(renderAudit); },
+  filterChangelog:  ([field], el) => { S.filter.changelog[field] = el.value; S.changelog.page = 1; loadChangelog().then(renderChangelog); },
+  filterFindings:   ([field], el) => { S.filter.findings[field] = el.value; S.findings.page = 1; loadFindings().then(renderFindings); },
+  filterObjQuery:   (_a, el)      => { S.filter.obj.q = el.value; S.page.obj = 1; renderObjs(); },
+  filterTeamKeys:   (_a, el)      => { S.filter.teamKeyQ = el.value; S.page.team = 1; renderTeams(); },
+  gsearch:          (_a, el)      => gsearch(el.value),
+
+  // Global search results jump to a view and open the record there.
+  gotoTeam: ([id])   => { closeGsearch(); setView('teams');      setTimeout(() => openTeamDrawer(id), 60); },
+  gotoReg:  ([id])   => { closeGsearch(); setView('registries'); setTimeout(() => openRegDrawer(id), 60); },
+  gotoObj:  ([name]) => { closeGsearch(); setView('objects');    setTimeout(() => openObjDrawer(name), 60); },
+
+  copySecretAndClose: ([secret]) => {
+    navigator.clipboard.writeText(secret).then(() => toast('Copied', 'success'));
+    hideModal();
+  },
+});
+
+// Named so a page number cannot carry a callback of its own: pager() used to
+// stringify the function into the attribute for the browser to recompile.
+const RELOADERS = {
+  audit:     () => loadAudit().then(renderAudit),
+  changelog: () => loadChangelog().then(renderChangelog),
+  findings:  () => loadFindings().then(renderFindings),
+};
+
+const PAGERS = {
+  obj:       p => { S.page.obj = p;  renderObjs(); },
+  reg:       p => { S.page.reg = p;  renderRegs(); },
+  team:      p => { S.page.team = p; renderTeams(); },
+  changelog: p => { S.changelog.page = p; loadChangelog().then(renderChangelog); },
+  findings:  p => loadFindings(p).then(renderFindings),
+  audit:     p => { S.audit.page = p; loadAudit().then(renderAudit); },
+};
+function setBtn(b, dis, txt) { if(!b)return; b.disabled=dis; b.textContent=txt; }
+function vp(v) {
+  const cls = {cyberark:'pill-cyberark',vault:'pill-vault',aws:'pill-aws',conjur:'pill-conjur'}[v]||'';
+  return `<span class="pill ${cls}">${x(v)}</span>`;
+}
+function apill(a) {
+  const cls = `pill-${(a||'').replace(/[^a-z_]/g,'')}`;
+  const labels = {created:'Created',updated:'Updated',deleted:'Deleted',key_rotated:'Key Rotated',object_added:'Obj Added',object_removed:'Obj Removed',registry_assigned:'Reg Assigned',registry_unassigned:'Reg Removed'};
+  return `<span class="pill ${cls}">${x(labels[a]||a)}</span>`;
+}
+function epill(t) {
+  const colors = {object:'color:#a5b4fc',registry:'color:#7dd3fc',team:'color:#6ee7b7'};
+  return `<span style="font-size:10px;${colors[t]||'color:var(--text-2)'};font-weight:600;text-transform:uppercase;">${x(t)}</span>`;
+}
+const OC = {success:'color:#10b981',denied:'color:#f59e0b',error:'color:#ef4444'};
+
+function renderDiff(diff) {
+  if (!diff || !Object.keys(diff).length) return '';
+  return '<div style="margin-top:6px;display:flex;flex-direction:column;gap:3px;">' +
+    Object.entries(diff).map(([field, change]) => {
+      let inner = '';
+      if ('added'   in change) inner = `<span class="diff-added">+ ${x(change.added)}</span>`;
+      else if ('removed' in change) inner = `<span class="diff-removed">− ${x(change.removed)}</span>`;
+      else if ('from' in change && 'to' in change)
+        inner = `${change.from!=null?`<span class="diff-from">${x(String(change.from))}</span> `:''}<span class="diff-to">${x(String(change.to??''))}</span>`;
+      else if ('to' in change)  inner = `<span class="diff-to">${x(String(change.to??''))}</span>`;
+      else if ('from' in change) inner = `<span class="diff-from">${x(String(change.from??''))}</span>`;
+      return `<div class="diff-row"><span class="diff-field">${x(field)}</span>${inner}</div>`;
+    }).join('') + '</div>';
+}
+function pager(total, page, name, perPage=PG) {
+  const pages = Math.ceil(total/perPage); if(pages<=1) return '';
+  const nums = Array.from({length:pages},(_,i)=>i+1).map(i =>
+    `<button ${act('page', name, i)} style="padding:3px 9px;border-radius:4px;font-size:11px;border:1px solid ${i===page?'var(--indigo)':'var(--border)'};background:${i===page?'var(--indigo-lo)':'transparent'};color:${i===page?'var(--indigo-hi)':'var(--text-3)'};cursor:pointer;font-family:monospace;">${i}</button>`).join('');
+  return `<div style="display:flex;align-items:center;gap:6px;margin-top:16px;"><span style="font-size:11px;color:var(--text-3);">${total} total</span>${nums}</div>`;
+}
+
+// ═══════════════════════════════════════════════
+// DASHBOARD
+// ═══════════════════════════════════════════════
+function renderDash() {
+  const vendors = ['cyberark','vault','aws','conjur'];
+  const total = S.objects.length;
+  const vendorCounts = vendors.map(v=>({v, n:S.objects.filter(o=>o.vendor===v).length}));
+  const maxVC = Math.max(...vendorCounts.map(x=>x.n), 1);
+  const orphans = S.objects.filter(o=>o.registry_count===0).length;
+  const barColors = {cyberark:'#6366f1',vault:'#f97316',aws:'#f59e0b',conjur:'#10b981'};
+
+  set('main', `<div style="padding:24px;max-width:1200px;">
+    <div style="margin-bottom:24px;">
+      <div style="font-size:18px;font-weight:600;color:var(--text-1);">Dashboard</div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Aegis overview</div>
+    </div>
+
+    <!-- Stat cards -->
+    <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:24px;">
+      ${statCard('Objects',   total,      'indigo', iconDb(),      'Total secret objects')}
+      ${statCard('Registries',S.registries.length,'blue', iconLayers(),  'Named collections')}
+      ${statCard('Teams',     S.teams.length,'emerald', iconUsers(),  'Consumer teams')}
+      ${statCard('Orphans',   orphans,    'amber',  iconWarn(),    'Objects in no registry', orphans>0)}
+      ${statCard('Vendors',   vendors.filter(v=>S.objects.some(o=>o.vendor===v)).length, 'red', iconShield(), 'Active vault integrations')}
+    </div>
+
+    <!-- Row 2: vendor breakdown + recent changes -->
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-bottom:12px;">
+
+      <!-- Vendor breakdown -->
+      <div class="card" style="padding:20px;">
+        <div class="section-label" style="margin-bottom:16px;">Objects by Vendor</div>
+        <div style="display:flex;flex-direction:column;gap:12px;">
+          ${vendorCounts.map(({v,n})=>`
+            <div>
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px;">
+                ${vp(v)}
+                <span style="font-size:12px;color:var(--text-2);font-weight:600;">${n}</span>
+              </div>
+              <div class="bar-track"><div class="bar-fill" style="width:${total?Math.round(n/maxVC*100):0}%;background:${barColors[v]};"></div></div>
+            </div>`).join('')}
+        </div>
+        ${total===0?`<div style="text-align:center;padding:16px 0;font-size:11px;color:var(--text-3);">No objects yet</div>`:''}
+      </div>
+
+      <!-- Recent changes -->
+      <div class="card" style="padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="section-label">Recent Changes</div>
+          <button class="btn btn-ghost btn-sm" ${act('setView', 'changelog')}>View all →</button>
+        </div>
+        <div id="dash-changelog" style="font-size:12px;color:var(--text-3);">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Row 3: expiring keys + recent audit -->
+    <div style="display:grid;grid-template-columns:320px 1fr;gap:12px;margin-bottom:12px;">
+
+      <!-- Expiring keys -->
+      <div class="card" style="padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="section-label">Expiring Keys</div>
+          <button class="btn btn-ghost btn-sm" ${act('setView', 'teams')}>View teams →</button>
+        </div>
+        <div id="dash-expiring" style="font-size:12px;color:var(--text-3);">Loading…</div>
+      </div>
+
+      <!-- Recent audit -->
+      <div class="card" style="padding:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+          <div class="section-label">Recent Access Events</div>
+          <button class="btn btn-ghost btn-sm" ${act('setView', 'audit')}>View all →</button>
+        </div>
+        <div id="dash-audit" style="font-size:12px;color:var(--text-3);">Loading…</div>
+      </div>
+    </div>
+  </div>`);
+
+  // Load recent data
+  api('GET','/admin/api/changelog?page=1&limit=8').then(d=>{
+    set('dash-changelog', d.rows.length ? `<div style="display:flex;flex-direction:column;gap:2px;">` +
+      d.rows.map(r=>`
+        <div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);">
+          ${apill(r.action)}
+          ${epill(r.entity_type)}
+          <span style="color:var(--text-1);font-weight:500;">${x(r.entity_name)}</span>
+          ${r.detail?`<span style="color:var(--text-3);font-size:11px;">${x(r.detail)}</span>`:''}
+          <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+        </div>`).join('') + `</div>`
+      : `<div class="empty-state">No changes recorded yet</div>`);
+  }).catch(()=>set('dash-changelog','<div class="empty-state">Failed to load</div>'));
+
+  api('GET','/admin/api/audit?page=1&limit=6').then(d=>{
+    set('dash-audit', d.rows.length ? `
+      <table class="data-table">
+        <thead><tr><th>Time</th><th>Event</th><th>Outcome</th><th>Change #</th><th>Team</th><th>Registry</th><th>IP</th></tr></thead>
+        <tbody>${d.rows.map(r=>`<tr style="cursor:default;">
+          <td style="color:var(--text-3);font-size:11px;white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</td>
+          <td>${x(r.event)}</td>
+          <td style="${OC[r.outcome]||''};font-weight:600;">${x(r.outcome)}</td>
+          <td>${x(r.change_number||'—')}</td>
+          <td style="color:#6ee7b7;font-size:11px;">${x(r.team_name||'—')}</td>
+          <td>${x(r.registry_name||'—')}</td>
+          <td style="color:var(--text-3);">${x(r.source_ip||'—')}</td>
+        </tr>`).join('')}</tbody>
+      </table>`
+      : `<div class="empty-state">No access events yet</div>`);
+  }).catch(()=>set('dash-audit','<div class="empty-state">Failed to load</div>'));
+
+  // Expiring keys widget
+  const warnDays = parseInt(S.settings?.key_warning_days || '30', 10);
+  const now = Date.now();
+  const expiring = [];
+  S.teams.forEach(t => {
+    (t.registries||[]).forEach(r => {
+      if (r.expires_at) {
+        const ms = new Date(r.expires_at).getTime() - now;
+        if (ms > 0 && ms < warnDays * 86400000) {
+          expiring.push({ team: t.name, reg: r.name, expires_at: r.expires_at, days: Math.ceil(ms/86400000) });
+        }
+      }
+    });
+  });
+  expiring.sort((a,b)=>a.days-b.days);
+  set('dash-expiring', expiring.length
+    ? `<div style="display:flex;flex-direction:column;gap:6px;">` + expiring.map(e=>`
+        <div style="padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:2px;">
+            <span style="font-size:12px;color:var(--text-1);font-weight:500;">${x(e.team)}</span>
+            <span style="font-size:10px;padding:1px 6px;border-radius:3px;${e.days<=7?'background:rgba(239,68,68,0.1);color:var(--danger);border:1px solid rgba(239,68,68,0.25);':'background:rgba(245,158,11,0.1);color:var(--warning);border:1px solid rgba(245,158,11,0.25);'}">
+              ${e.days}d
+            </span>
+          </div>
+          <div style="font-size:11px;color:var(--text-3);">${x(e.reg)} · exp ${e.expires_at.slice(0,10)}</div>
+        </div>`).join('') + `</div>`
+    : `<div style="text-align:center;padding:24px;font-size:11px;color:var(--text-3);">No keys expiring soon</div>`);
+}
+
+function statCard(label, value, accent, icon, sub, warn=false) {
+  return `<div class="stat-card accent-${accent}" style="cursor:default;">
+    <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:12px;">
+      <div style="opacity:0.7;">${icon}</div>
+      ${warn&&value>0?`<div style="width:6px;height:6px;background:var(--warning);border-radius:50%;margin-top:2px;box-shadow:0 0 6px var(--warning);"></div>`:''}
+    </div>
+    <div style="font-size:28px;font-weight:700;color:var(--text-1);line-height:1;margin-bottom:4px;">${value}</div>
+    <div style="font-size:12px;font-weight:600;color:var(--text-1);">${x(label)}</div>
+    <div style="font-size:10px;color:var(--text-3);margin-top:2px;">${x(sub)}</div>
+  </div>`;
+}
+function iconDb()     { return `<svg width="20" height="20" fill="none" stroke="var(--indigo-hi)" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M20.25 6.375c0 2.278-3.694 4.125-8.25 4.125S3.75 8.653 3.75 6.375m16.5 0c0-2.278-3.694-4.125-8.25-4.125S3.75 4.097 3.75 6.375m16.5 0v11.25c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125V6.375m16.5 0v3.75m-16.5-3.75v3.75m16.5 0v3.75C20.25 16.153 16.556 18 12 18s-8.25-1.847-8.25-4.125v-3.75m16.5 0c0 2.278-3.694 4.125-8.25 4.125s-8.25-1.847-8.25-4.125"/></svg>`; }
+function iconLayers() { return `<svg width="20" height="20" fill="none" stroke="#3b82f6" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"/></svg>`; }
+function iconUsers()  { return `<svg width="20" height="20" fill="none" stroke="#10b981" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M18 18.72a9.094 9.094 0 003.741-.479 3 3 0 00-4.682-2.72m.94 3.198l.001.031c0 .225-.012.447-.037.666A11.944 11.944 0 0112 21c-2.17 0-4.207-.576-5.963-1.584A6.062 6.062 0 016 18.719m12 0a5.971 5.971 0 00-.941-3.197m0 0A5.995 5.995 0 0012 12.75a5.995 5.995 0 00-5.058 2.772m0 0a3 3 0 00-4.681 2.72 8.986 8.986 0 003.74.477m.94-3.197a5.971 5.971 0 00-.94 3.197M15 6.75a3 3 0 11-6 0 3 3 0 016 0zm6 3a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0zm-13.5 0a2.25 2.25 0 11-4.5 0 2.25 2.25 0 014.5 0z"/></svg>`; }
+function iconWarn()   { return `<svg width="20" height="20" fill="none" stroke="#f59e0b" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>`; }
+function iconShield() { return `<svg width="20" height="20" fill="none" stroke="#ef4444" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z"/></svg>`; }
+
+// ═══════════════════════════════════════════════
+// OBJECTS
+// ═══════════════════════════════════════════════
+function renderObjs() {
+  const f = S.filter.obj;
+  let rows = S.objects.filter(o => {
+    const q = f.q.toLowerCase();
+    return (!q||o.name.toLowerCase().includes(q)||(o.path||'').toLowerCase().includes(q)||(o.auth_ref||'').toLowerCase().includes(q))
+      && (f.vendor==='all'||o.vendor===f.vendor);
+  });
+  const total = rows.length;
+  rows = rows.slice((S.page.obj-1)*PG, S.page.obj*PG);
+  const vendors = ['all','cyberark','vault','aws','conjur'];
+
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Objects <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.objects.length})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Atomic secret definitions — vendor, auth, and location</div>
+      </div>
+      <button class="btn btn-primary" ${act('showNewObjModal')}>
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Object
+      </button>
+    </div>
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+      <div style="position:relative;">
+        <svg style="position:absolute;left:9px;top:50%;transform:translateY(-50%);pointer-events:none;" width="12" height="12" fill="none" stroke="var(--text-3)" stroke-width="2" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><path stroke-linecap="round" d="M21 21l-4.35-4.35"/></svg>
+        <input type="text" placeholder="Search…" style="padding-left:28px;width:220px;height:32px;" value="${x(f.q)}" ${actOn('input', 'filterObjQuery')}>
+      </div>
+      <div style="display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:3px;">
+        ${vendors.map(v=>`<button ${act('filterVendor', v)} style="padding:4px 10px;border-radius:3px;font-size:11px;border:none;cursor:pointer;font-family:monospace;transition:all .15s;background:${f.vendor===v?'var(--indigo)':'transparent'};color:${f.vendor===v?'#fff':'var(--text-3)'};">${v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>`).join('')}
+      </div>
+    </div>
+    <div class="card" style="overflow:hidden;">
+      <table class="data-table">
+        <thead><tr>
+          <th>Name</th><th>Vendor</th><th>Auth Ref</th><th>Path</th><th>Platform</th><th>Safe</th><th style="text-align:center;">In Registries</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${rows.length ? rows.map(o=>`
+            <tr ${act('openObjDrawer', o.name)}>
+              <td class="td-primary" style="color:var(--indigo-hi);">${x(o.name)}</td>
+              <td>${vp(o.vendor)}</td>
+              <td style="color:var(--text-3);font-size:11px;">${x(o.auth_ref||'')}</td>
+              <td class="truncate" style="max-width:160px;font-size:11px;" title="${x(o.path)}">${x(o.path)}</td>
+              <td style="font-size:11px;">${x(o.platform||'—')}</td>
+              <td style="font-size:11px;">${x(o.safe||'—')}</td>
+              <td style="text-align:center;">
+                ${o.registry_count>0?`<span class="badge-count">${o.registry_count}</span>`:`<span style="color:var(--text-3);font-size:11px;">—</span>`}
+              </td>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm ${o.registry_count>0?'':'btn-del'}" style="${o.registry_count>0?'opacity:0.3;pointer-events:none;':''}" ${act('delObj', o.name)} title="${o.registry_count>0?'Used by registries':'Delete'}">Delete</button>
+              </td>
+            </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state">No objects found</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(total, S.page.obj, 'obj')}
+  </div>`);
+}
+
+function openObjDrawer(name) {
+  const o = S.objects.find(o=>o.name===name); if(!o) return;
+  S.drawer = {type:'obj',name};
+  renderObjDrawer(o,false);
+  showDrawer();
+}
+
+function renderObjDrawer(o, editing) {
+  const usedBy = S.registries.filter(r=>r.objects?.includes(o.name));
+  if (!editing) {
+    set('drawer-body',`
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+        <div>
+          <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(o.name)}</div>
+          <div style="margin-top:4px;">${vp(o.vendor)}</div>
+        </div>
+        <button ${act('closeDrawer')} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;" aria-label="Close">✕</button>
+      </div>
+      <div class="drawer-section">
+        <div class="section-label">Details</div>
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          ${drow('Auth Ref', o.auth_ref)}
+          ${drow('Path', o.path)}
+          ${o.platform?drow('Platform',o.platform):''}
+          ${o.safe?drow('Safe',o.safe):''}
+          ${drow('Created', o.created_at?.slice(0,10)||'—')}
+        </div>
+      </div>
+      <div class="drawer-section">
+        <div class="section-label">Used by Registries <span class="badge-count" style="margin-left:6px;">${usedBy.length}</span></div>
+        ${usedBy.length ? usedBy.map(r=>`
+          <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--border);">
+            <div style="width:6px;height:6px;background:var(--indigo);border-radius:50%;flex-shrink:0;"></div>
+            <span style="font-size:12px;color:var(--text-1);">${x(r.name)}</span>
+          </div>`).join('')
+        : `<div style="font-size:12px;color:var(--text-3);padding:8px 0;">Not assigned to any registry</div>`}
+      </div>
+      <div class="drawer-section">
+        <div class="section-label" style="margin-bottom:12px;">Change History</div>
+        <div id="obj-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
+      </div>
+      <div class="drawer-section" style="display:flex;gap:8px;">
+        <button class="btn btn-ghost" ${act('editObj', o.name)}>Edit</button>
+        <button class="btn btn-danger ${usedBy.length?'':'btn-active'}" style="${usedBy.length?'opacity:0.35;pointer-events:none;':''}" ${act('delObj', o.name)} title="${usedBy.length?'Remove from registries first':'Delete object'}">Delete</button>
+      </div>`);
+    // load per-item history
+    api('GET',`/admin/api/changelog?entity_id=${encodeURIComponent(o.name)}&entity_type=object&limit=10`).then(d=>{
+      set('obj-history', d.rows.length ? d.rows.map(r=>`
+        <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+          <div style="display:flex;gap:8px;align-items:center;">
+            ${apill(r.action)}
+            <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+          </div>
+          ${renderDiff(r.diff)}
+        </div>`).join('')
+        : `<div style="color:var(--text-3);">No history</div>`);
+    });
+  } else {
+    const isCa = o.vendor==='cyberark', showSafe=o.vendor==='cyberark'||o.vendor==='conjur';
+    set('drawer-body',`
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+        <div style="font-size:14px;font-weight:600;">Edit: ${x(o.name)}</div>
+        <button ${act('closeDrawer')} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
+      </div>
+      <div class="drawer-section" style="display:flex;flex-direction:column;gap:14px;">
+        ${fi('Vendor','ed-v','select',o.vendor,['cyberark','vault','aws','conjur'],'updEditV')}
+        ${fi('Auth Ref','ed-ar','text',o.auth_ref||'')}
+        ${fi('Path','ed-p','text',o.path)}
+        <div id="ed-plat" style="${isCa?'':'display:none'}">${fi('Platform','ed-pl','text',o.platform||'')}</div>
+        <div id="ed-safe" style="${showSafe?'':'display:none'}">${fi('Safe','ed-sf','text',o.safe||'')}</div>
+      </div>
+      <div class="drawer-section" style="display:flex;gap:8px;">
+        <button class="btn btn-primary" id="save-o" ${act('saveObj', o.name)}>Save Changes</button>
+        <button class="btn btn-ghost" ${act('openObjDrawer', o.name)}>Cancel</button>
+      </div>`);
+  }
+}
+function updEditV() {
+  const v = g('ed-v').value;
+  g('ed-plat').style.display = v==='cyberark'?'':'none';
+  g('ed-safe').style.display = (v==='cyberark'||v==='conjur')?'':'none';
+}
+async function saveObj(name) {
+  const btn=g('save-o'); setBtn(btn,true,'Saving…');
+  try {
+    await api('PUT',`/admin/api/objects/${encodeURIComponent(name)}`,{
+      vendor:g('ed-v').value, auth_ref:g('ed-ar').value.trim(),
+      path:g('ed-p').value.trim(),
+      platform:g('ed-pl')?.value.trim()||null,
+      safe:g('ed-sf')?.value.trim()||null,
+    });
+    await loadObjs(); toast('Object updated','success');
+    openObjDrawer(name); renderObjs();
+  } catch(e) { toast(e.message,'error'); setBtn(btn,false,'Save Changes'); }
+}
+async function delObj(name) {
+  if(!await confirm(`Delete object "${name}"?`)) return;
+  try { await api('DELETE',`/admin/api/objects/${encodeURIComponent(name)}`); await loadObjs(); closeDrawer(); renderObjs(); toast('Object deleted','success'); }
+  catch(e) { toast(e.message,'error'); }
+}
+function showNewObjModal() {
+  modal(`
+    <div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Object</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${fi('Name','nm-n','text','')}
+      ${fi('Vendor','nm-v','select','cyberark',['cyberark','vault','aws','conjur'],'updNewV')}
+      ${fi('Auth Ref','nm-ar','text','')}
+      ${fi('Path','nm-p','text','')}
+      <div id="nm-plat">${fi('Platform','nm-pl','text','')}</div>
+      <div id="nm-safe">${fi('Safe','nm-sf','text','')}</div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-co" ${act('createObj')}>Create Object</button>
+      <button class="btn btn-ghost" ${act('hideModal')}>Cancel</button>
+    </div>`);
+  updNewV();
+}
+function updNewV() {
+  const v = g('nm-v')?.value;
+  if(g('nm-plat')) g('nm-plat').style.display = v==='cyberark'?'':'none';
+  if(g('nm-safe'))  g('nm-safe').style.display  = (v==='cyberark'||v==='conjur')?'':'none';
+}
+async function createObj() {
+  const btn=g('btn-co'); setBtn(btn,true,'Creating…');
+  try {
+    const name=g('nm-n').value.trim(); if(!name){toast('Name required','error');return;}
+    await api('POST','/admin/api/objects',{name,vendor:g('nm-v').value,auth_ref:g('nm-ar').value.trim(),path:g('nm-p').value.trim(),platform:g('nm-pl')?.value.trim()||null,safe:g('nm-sf')?.value.trim()||null});
+    await loadObjs(); hideModal(); renderObjs(); toast('Object created','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create Object');}
+}
+
+// ═══════════════════════════════════════════════
+// REGISTRIES
+// ═══════════════════════════════════════════════
+function renderRegs() {
+  const rows = S.registries.slice((S.page.reg-1)*PG,S.page.reg*PG);
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Registries <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.registries.length})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Named collections of objects — assign to teams to issue API keys</div>
+      </div>
+      <button class="btn btn-primary" ${act('showNewRegModal')}>
+        <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+        New Registry
+      </button>
+    </div>
+    <div class="card" style="overflow:hidden;">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Objects</th><th>Teams (each with own key)</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          ${rows.length?rows.map(r=>`
+            <tr ${act('openRegDrawer', r.id)}>
+              <td class="td-primary" style="color:var(--indigo-hi);">${x(r.name)}</td>
+              <td><span class="badge-count">${r.objects?.length||0}</span></td>
+              <td><span ${r.team_count>0?`class="badge-count" style="background:rgba(16,185,129,0.15);color:#6ee7b7;"`:''}>${r.team_count||'—'}</span></td>
+              <td style="font-size:11px;color:var(--text-3);">${r.created_at?.slice(0,10)||'—'}</td>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm" style="${r.team_count>0?'opacity:0.3;pointer-events:none;':''}" ${act('delReg', r.id, r.name)} title="${r.team_count>0?'Assigned to teams':'Delete'}">Delete</button>
+              </td>
+            </tr>`).join(''):
+          `<tr><td colspan="6"><div class="empty-state">No registries yet — create one to get started</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.registries.length, S.page.reg, 'reg')}
+  </div>`);
+}
+
+function openRegDrawer(id) {
+  const r=S.registries.find(r=>r.id===id); if(!r) return;
+  S.drawer={type:'reg',id};
+  renderRegDrawer(r); showDrawer();
+}
+
+function renderRegDrawer(r) {
+  const teams = S.teams.filter(t=>t.registries?.some(tr=>tr.id===r.id));
+  const objs  = (r.objects||[]).map(n=>S.objects.find(o=>o.name===n)).filter(Boolean);
+  const avail = S.objects.filter(o=>!(r.objects||[]).includes(o.name));
+  set('drawer-body',`
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(r.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Registry</div>
+      </div>
+      <button ${act('closeDrawer')} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+        <div class="section-label">API Keys</div>
+        <span style="font-size:10px;color:var(--text-3);">— one per team assignment</span>
+      </div>
+      ${teams.length ? teams.map(t=>{
+        const regEntry = t.registries?.find(tr=>tr.id===r.id);
+        return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;margin-bottom:4px;">
+          <div>
+            <div style="font-size:11px;color:var(--text-1);font-weight:500;">${x(t.name)}</div>
+            <div style="font-family:monospace;font-size:11px;color:var(--text-3);margin-top:2px;">${x(regEntry?.key_preview||'—')}</div>
+          </div>
+          <button class="btn btn-amber btn-sm" ${act('rotateAssignmentKey', t.id, r.id, t.name)}>Rotate</button>
+        </div>`;
+      }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:6px 0;">No teams assigned — keys are issued when a team is assigned</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Objects <span class="badge-count" style="margin-left:6px;">${objs.length}</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:10px;max-height:200px;overflow-y:auto;">
+        ${objs.length?objs.map(o=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;">
+            <div style="display:flex;align-items:center;gap:8px;">${vp(o.vendor)}<span style="font-size:12px;color:var(--text-1);">${x(o.name)}</span></div>
+            <button ${act('remObjFromReg', r.id, o.name)} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+          </div>`).join('')
+        :`<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No objects assigned</div>`}
+      </div>
+      ${avail.length?`<div style="position:relative;">
+        <input type="text" id="robj-q" placeholder="Add object…" style="height:32px;font-size:11px;" ${actOn('input', 'filterRegObjs', r.id)} ${actOn('focus', 'filterRegObjs', r.id)}>
+        <div id="robj-list" class="combo-list" style="display:none;"></div>
+      </div>`:`<div style="font-size:11px;color:var(--text-3);">All objects assigned</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <div class="section-label">Used by Teams <span class="badge-count" style="margin-left:6px;">${teams.length}</span></div>
+      ${teams.length?teams.map(t=>`<div style="font-size:12px;color:var(--text-1);padding:6px 0;border-bottom:1px solid var(--border);">${x(t.name)}</div>`).join('')
+        :`<div style="font-size:12px;color:var(--text-3);padding:6px 0;">No teams assigned</div>`}
+    </div>
+
+    <div class="drawer-section">
+      <div class="section-label" style="margin-bottom:12px;">Change History</div>
+      <div id="reg-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Access Policy</div>
+        <span style="font-size:10px;color:var(--text-3);">Registry-level rules</span>
+      </div>
+      <div id="reg-policy-body" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+
+    <div class="drawer-section" style="display:flex;gap:8px;">
+      <button class="btn btn-danger btn-sm" style="${r.team_count>0?'opacity:0.35;pointer-events:none;':''}" ${act('delReg', r.id, r.name)} title="${r.team_count>0?'Remove from teams first':'Delete registry'}">Delete Registry</button>
+    </div>`);
+
+  api('GET',`/admin/api/changelog?entity_id=${r.id}&entity_type=registry&limit=10`).then(d=>{
+    set('reg-history', d.rows.length ? d.rows.map(r=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${apill(r.action)}
+          <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+        </div>
+        ${renderDiff(r.diff)}
+      </div>`).join('') : `<div>No history</div>`);
+  });
+  loadRegPolicy(r.id);
+}
+
+function filterRegObjs(q,regId) {
+  const r=S.registries.find(r=>r.id===regId);
+  const avail=S.objects.filter(o=>!(r?.objects||[]).includes(o.name));
+  const hits=q?avail.filter(o=>o.name.toLowerCase().includes(q.toLowerCase())):avail;
+  const list=g('robj-list'); if(!list) return;
+  if(!hits.length){list.style.display='none';return;}
+  list.style.display='block';
+  list.innerHTML=hits.slice(0,20).map(o=>`<div class="combo-item" ${act('addObjToReg', regId, o.name)}>${vp(o.vendor)}<span>${x(o.name)}</span></div>`).join('');
+}
+async function addObjToReg(regId,name) {
+  try { await api('POST',`/admin/api/registries/${regId}/objects`,{object_name:name}); await Promise.all([loadObjs(),loadRegs()]); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); toast(`Added ${name}`,'success'); }
+  catch(e){toast(e.message,'error');}
+}
+async function remObjFromReg(regId,name) {
+  try { await api('DELETE',`/admin/api/registries/${regId}/objects/${encodeURIComponent(name)}`); await Promise.all([loadObjs(),loadRegs()]); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); toast(`Removed ${name}`,'success'); }
+  catch(e){toast(e.message,'error');}
+}
+async function rotateKey(regId) {
+  if(!await confirm('Rotate key? The current key stops working immediately.')) return;
+  const btn=g(`rbtn-${regId}`); setBtn(btn,true,'Rotating…');
+  try { const d=await api('POST',`/admin/api/registries/${regId}/rotate-key`); await loadRegs(); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); showKeyModal(d.key); }
+  catch(e){toast(e.message,'error');setBtn(btn,false,'Rotate Key');}
+}
+async function delReg(id,name) {
+  if(!await confirm(`Delete registry "${name}"?`)) return;
+  try { await api('DELETE',`/admin/api/registries/${id}`); await loadRegs(); closeDrawer(); renderRegs(); toast('Registry deleted','success'); }
+  catch(e){toast(e.message,'error');}
+}
+function showNewRegModal() {
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Registry</div>
+    <div style="margin-bottom:20px;">${fi('Name','nr-n','text','')}</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="btn-cr" ${act('createReg')}>Create Registry</button>
+      <button class="btn btn-ghost" ${act('hideModal')}>Cancel</button>
+    </div>`);
+}
+async function createReg() {
+  const btn=g('btn-cr');setBtn(btn,true,'Creating…');
+  try { const name=g('nr-n').value.trim(); if(!name){toast('Name required','error');return;} await api('POST','/admin/api/registries',{name}); await loadRegs(); hideModal(); renderRegs(); toast('Registry created','success'); }
+  catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create Registry');}
+}
+
+// ═══════════════════════════════════════════════
+// TEAMS
+// ═══════════════════════════════════════════════
+function renderTeams() {
+  const kq = (S.filter.teamKeyQ||'').toLowerCase();
+  let filtered = S.teams;
+  if (kq) {
+    filtered = S.teams.filter(t => {
+      if (t.name.toLowerCase().includes(kq)) return true;
+      return (t.registries||[]).some(r => r.key_preview && r.key_preview.toLowerCase().includes(kq));
+    });
+  }
+  const rows=filtered.slice((S.page.team-1)*PG,S.page.team*PG);
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Teams <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.teams.length})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Consumer teams — assigned to registries</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <input type="text" placeholder="Search by name or key prefix…" style="height:32px;width:240px;font-size:11px;" value="${x(S.filter.teamKeyQ||'')}" ${actOn('input', 'filterTeamKeys')}>
+        <button class="btn btn-primary" ${act('showNewTeamModal')}>
+          <svg width="13" height="13" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          New Team
+        </button>
+      </div>
+    </div>
+    <div class="card" style="overflow:hidden;">
+      <table class="data-table">
+        <thead><tr><th>Name</th><th>Registries</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          ${rows.length?rows.map(t=>`
+            <tr ${act('openTeamDrawer', t.id)}>
+              <td class="td-primary" style="color:var(--indigo-hi);">${x(t.name)}</td>
+              <td>${(t.registries||[]).length?
+                (t.registries||[]).map(r=>`<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;background:var(--indigo-lo);color:var(--indigo-hi);border:1px solid rgba(99,102,241,0.3);margin-right:4px;" title="${x(r.key_preview||'')}">${x(r.name)}</span>`).join('')
+                :`<span style="font-size:11px;color:var(--text-3);">—</span>`}
+              </td>
+              <td style="font-size:11px;color:var(--text-3);">${t.created_at?.slice(0,10)||'—'}</td>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm" ${act('delTeam', t.id, t.name)}>Delete</button>
+              </td>
+            </tr>`).join(''):
+          `<tr><td colspan="4"><div class="empty-state">${kq?'No teams match your search':'No teams yet'}</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(filtered.length, S.page.team, 'team')}
+  </div>`);
+}
+
+function openTeamDrawer(id) {
+  const t=S.teams.find(t=>t.id===id); if(!t) return;
+  S.drawer={type:'team',id};
+  renderTeamDrawer(t); showDrawer();
+}
+
+function renderTeamDrawer(t) {
+  const assigned=t.registries||[];
+  const avail=S.registries.filter(r=>!assigned.some(a=>a.id===r.id));
+  set('drawer-body',`
+    <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;background:var(--surface-1);z-index:10;">
+      <div>
+        <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(t.name)}</div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
+          <span style="font-size:10px;color:var(--text-3);letter-spacing:0.03em;font-family:'Fira Code',monospace;">${t.id}</span>
+          <button ${act('clip', t.id)} style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;line-height:1.4;" title="Copy team ID">copy</button>
+        </div>
+      </div>
+      <button ${act('closeDrawer')} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
+    </div>
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Members <span class="badge-count" style="margin-left:6px;">${(t.members||[]).length}</span></div>
+        <button class="btn btn-ghost btn-sm" ${act('showAddMemberModal', t.id)}>+ Add</button>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:4px;">
+        ${(t.members||[]).length?(t.members||[]).map(m=>`
+          <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <svg width="12" height="12" fill="none" stroke="var(--text-3)" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"/></svg>
+              <span style="font-size:12px;color:var(--text-1);">${x(m.username)}</span>
+              <span class="pill role-${m.role}" style="font-size:9px;">${x(m.role)}</span>
+            </div>
+            <button ${act('removeMember', t.id, m.id, m.username)} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+          </div>`).join('')
+        :`<div style="font-size:12px;color:var(--text-3);padding:4px 0;">No members yet</div>`}
+      </div>
+    </div>
+    <div class="drawer-section">
+      <div class="section-label">Assigned Registries <span class="badge-count" style="margin-left:6px;">${assigned.length}</span></div>
+      <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:12px;">
+        ${assigned.length?assigned.map(r=>`
+          <div style="padding:10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;margin-bottom:4px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <span style="font-size:12px;color:var(--text-1);font-weight:500;">${x(r.name)}</span>
+              <div style="display:flex;gap:6px;align-items:center;">
+                ${r.key_id?`
+                <button ${act('toggleKeySuspend', r.key_id, t.id)}
+                  title="${r.key_suspended?'Enable key':'Suspend key'}"
+                  style="display:flex;align-items:center;gap:4px;background:${r.key_suspended?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)'};border:1px solid ${r.key_suspended?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'};border-radius:12px;color:${r.key_suspended?'var(--success)':'var(--danger)'};cursor:pointer;font-size:10px;padding:2px 8px;font-family:inherit;transition:all .15s;">
+                  <span style="width:8px;height:8px;border-radius:50%;background:${r.key_suspended?'var(--success)':'var(--danger)'};display:inline-block;"></span>
+                  ${r.key_suspended?'Disabled':'Enabled'}
+                </button>`:``}
+                <button class="btn btn-amber btn-sm" ${act('rotateAssignmentKey', t.id, r.id, r.name)}>Rotate Key</button>
+                <button ${act('remRegFromTeam', t.id, r.id, r.name)} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+              </div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <svg width="11" height="11" fill="none" stroke="${r.key_suspended?'var(--danger)':'var(--text-3)'}" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M15.75 5.25a3 3 0 013 3m3 0a6 6 0 01-7.029 5.912c-.563-.097-1.159.026-1.563.43L10.5 17.25H8.25v2.25H6v2.25H2.25v-2.818c0-.597.237-1.17.659-1.591l6.499-6.499c.404-.404.527-1 .43-1.563A6 6 0 1121.75 8.25z"/></svg>
+              <span style="font-size:11px;font-family:monospace;color:${r.key_suspended?'var(--danger)':'var(--text-3)'};">${x(r.key_preview||'—')}${r.key_suspended?' [SUSPENDED]':''}</span>
+              <span style="font-size:10px;color:var(--text-3);">&nbsp;· ${(r.objects||[]).length} objects</span>
+              ${r.expires_at?`<span style="font-size:10px;padding:1px 6px;border-radius:3px;background:rgba(245,158,11,0.12);color:var(--amber);border:1px solid rgba(245,158,11,0.25);">exp ${r.expires_at.slice(0,10)}</span>`:''}
+            </div>
+          </div>`).join(''):`<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No registries assigned</div>`}
+      </div>
+      ${avail.length?`<div style="display:flex;gap:8px;align-items:center;">
+        <select id="t-reg-sel" style="height:32px;font-size:11px;flex:1;"><option value="">Select registry…</option>${avail.map(r=>`<option value="${r.id}">${x(r.name)}</option>`).join('')}</select>
+        <button class="btn btn-primary btn-sm" id="btn-asgn" ${act('asgnReg', t.id)}>Assign</button>
+      </div>`:`<div style="font-size:11px;color:var(--text-3);">All registries assigned</div>`}
+    </div>
+    <div class="drawer-section">
+      <div class="section-label" style="margin-bottom:12px;">Change History</div>
+      <div id="team-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Access Policy</div>
+        <span style="font-size:10px;color:var(--text-3);">Team-level rules</span>
+      </div>
+      <div id="team-policy-body" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Webhook</div>
+        <span style="font-size:10px;color:var(--text-3);">Event notifications</span>
+      </div>
+      <div id="team-webhook-body" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+    <div class="drawer-section">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <div class="section-label">Notification Channels</div>
+        <span style="font-size:10px;color:var(--text-3);">Slack · MS Teams · Discord</span>
+      </div>
+      <div id="team-notif-body" style="font-size:11px;color:var(--text-3);">Loading…</div>
+    </div>
+    <div class="drawer-section">
+      <button class="btn btn-danger btn-sm" ${act('delTeam', t.id, t.name)}>Delete Team</button>
+    </div>`);
+
+  api('GET',`/admin/api/changelog?entity_id=${t.id}&entity_type=team&limit=10`).then(d=>{
+    set('team-history', d.rows.length ? d.rows.map(r=>`
+      <div style="padding:8px 0;border-bottom:1px solid var(--border);">
+        <div style="display:flex;gap:8px;align-items:center;">
+          ${apill(r.action)}
+          <span style="font-size:10px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span><span style="margin-left:auto;font-size:10px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,16).replace('T',' ')}</span>
+        </div>
+        ${renderDiff(r.diff)}
+      </div>`).join('') : `<div>No history</div>`);
+  });
+  loadTeamPolicy(t.id);
+  loadWebhook(t.id);
+  loadTeamNotifications(t.id, t.notifications || {});
+}
+
+async function asgnReg(teamId) {
+  const regId=g('t-reg-sel')?.value; if(!regId) return;
+  const btn=g('btn-asgn'); setBtn(btn,true,'…');
+  try {
+    const d = await api('POST',`/admin/api/teams/${teamId}/registries/${regId}`);
+    await loadTeams();
+    const t=S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t);
+    renderTeams();
+    if(d.new_key) showKeyModal(d.new_key.key, d.new_key.registry_name);
+    else toast('Registry assigned','success');
+  } catch(e){toast(e.message,'error');setBtn(btn,false,'Assign');}
+}
+async function rotateAssignmentKey(teamId, regId, regName) {
+  if(!await confirm(`Rotate key for "${regName}"? The current key stops working immediately.`)) return;
+  try {
+    const d = await api('POST',`/admin/api/teams/${teamId}/registries/${regId}/rotate-key`);
+    await loadTeams();
+    const t=S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t);
+    // Also refresh registry drawer if open
+    const r=S.registries.find(r=>r.id===regId); if(r&&S.drawer?.type==='reg') renderRegDrawer(r);
+    showKeyModal(d.key, regName);
+  } catch(e){toast(e.message,'error');}
+}
+async function toggleKeySuspend(keyId, teamId) {
+  try {
+    const d = await api('PATCH', `/admin/api/keys/${keyId}/suspend`);
+    await loadTeams();
+    const t = S.teams.find(t => t.id === teamId);
+    if (t) renderTeamDrawer(t);
+    toast(d.suspended ? 'Key suspended — requests will be rejected' : 'Key enabled', d.suspended ? 'warning' : 'success');
+  } catch(e) { toast(e.message, 'error'); }
+}
+async function remRegFromTeam(teamId,regId,regName) {
+  if(!await confirm(`Remove "${regName}" from this team?`)) return;
+  try { await api('DELETE',`/admin/api/teams/${teamId}/registries/${regId}`); await loadTeams(); const t=S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t); renderTeams(); toast('Removed','success'); }
+  catch(e){toast(e.message,'error');}
+}
+async function delTeam(id,name) {
+  if(!await confirm(`Delete team "${name}"?`)) return;
+  try { await api('DELETE',`/admin/api/teams/${id}`); await loadTeams(); closeDrawer(); renderTeams(); toast('Team deleted','success'); }
+  catch(e){toast(e.message,'error');}
+}
+function showNewTeamModal() {
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Team</div>
+    <div style="margin-bottom:20px;">${fi('Name','nt-n','text','')}</div>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-primary" id="btn-ct" ${act('createTeam')}>Create Team</button>
+      <button class="btn btn-ghost" ${act('hideModal')}>Cancel</button>
+    </div>`);
+}
+async function createTeam() {
+  const btn=g('btn-ct');setBtn(btn,true,'Creating…');
+  try { const name=g('nt-n').value.trim(); if(!name){toast('Name required','error');return;} await api('POST','/admin/api/teams',{name}); await loadTeams(); hideModal(); renderTeams(); toast('Team created','success'); }
+  catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create Team');}
+}
+
+// ═══════════════════════════════════════════════
+// CHANGE LOG
+// ═══════════════════════════════════════════════
+function renderChangelog() {
+  const f=S.filter.changelog;
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Change Log <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.changelog.total})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Every admin mutation — global and per-item</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" ${act('exportCsv', 'changelog')}>↓ CSV</button>
+        <button class="btn btn-ghost btn-sm" ${act('reload', 'changelog')}>↻ Refresh</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;">
+      <select style="width:160px;height:32px;font-size:11px;" ${actOn('change', 'filterChangelog', 'entity_type')}>
+        <option value="">All entities</option>
+        ${['object','registry','team'].map(v=>`<option value="${v}" ${f.entity_type===v?'selected':''}>${v[0].toUpperCase()+v.slice(1)}</option>`).join('')}
+      </select>
+      <select style="width:200px;height:32px;font-size:11px;" ${actOn('change', 'filterChangelog', 'action')}>
+        <option value="">All actions</option>
+        ${['created','updated','deleted','key_rotated','object_added','object_removed','registry_assigned','registry_unassigned'].map(a=>`<option value="${a}" ${f.action===a?'selected':''}>${a}</option>`).join('')}
+      </select>
+    </div>
+    <div class="card" style="overflow:hidden;overflow-x:auto;">
+      <table class="data-table" style="min-width:700px;">
+        <thead><tr><th>Timestamp</th><th>Action</th><th>Entity Type</th><th>Name</th><th>Changes</th><th>By</th></tr></thead>
+        <tbody>
+          ${S.changelog.rows.length?S.changelog.rows.map(r=>`
+            <tr style="cursor:default;">
+              <td style="font-size:11px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,19).replace('T',' ')}</td>
+              <td>${apill(r.action)}</td>
+              <td>${epill(r.entity_type)}</td>
+              <td style="color:var(--text-1);font-weight:500;">${x(r.entity_name)}</td>
+              <td style="font-size:11px;">${renderDiff(r.diff)||`<span style="color:var(--text-3);">${x(r.detail||'')}</span>`}</td>
+              <td><span style="font-size:11px;color:#60a5fa;font-family:monospace;">${x(r.performed_by)}</span></td>
+            </tr>`).join(''):
+          `<tr><td colspan="6"><div class="empty-state">No changes recorded yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.changelog.total, S.changelog.page, 'changelog')}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// AUDIT LOG
+// ═══════════════════════════════════════════════
+const SEV = {
+  critical: 'color:#fca5a5;font-weight:600;',
+  high:     'color:#fca5a5;font-weight:600;',
+  medium:   'color:#fcd34d;font-weight:600;',
+  low:      'color:#93c5fd;',
+  info:     'color:var(--text-3);',
+};
+const FSTATUS = ['open','triaged','resolved','false_positive'];
+
+function renderFindings() {
+  const f = S.filter.findings;
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Secret Findings <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.findings.total})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Credentials detected in source by CI scanners. The secret itself is never stored — only a masked preview.</div>
+      </div>
+      <button class="btn btn-ghost btn-sm" ${act('reload', 'findings')}>↻ Refresh</button>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <select style="width:150px;height:32px;font-size:11px;" ${actOn('change', 'filterFindings', 'status')}>
+        <option value="">All statuses</option>
+        ${FSTATUS.map(o=>`<option value="${o}" ${f.status===o?'selected':''}>${o.replace('_',' ')}</option>`).join('')}
+      </select>
+      <select style="width:150px;height:32px;font-size:11px;" ${actOn('change', 'filterFindings', 'severity')}>
+        <option value="">All severities</option>
+        ${['critical','high','medium','low','info'].map(o=>`<option value="${o}" ${f.severity===o?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="Repository…" style="width:220px;height:32px;font-size:11px;" value="${x(f.repository)}" ${actOn('change', 'filterFindings', 'repository')}>
+    </div>
+    <div class="card" style="overflow:hidden;overflow-x:auto;">
+      <table class="data-table" style="min-width:1100px;">
+        <thead><tr><th>Severity</th><th>Repository</th><th>Location</th><th>Rule</th><th>Match</th><th>Seen</th><th>Ticket</th><th>Status</th><th></th></tr></thead>
+        <tbody>
+          ${S.findings.rows.length?S.findings.rows.map(r=>{
+            const loc = r.file_path ? `${r.file_path}${r.line_start?':'+r.line_start:''}` : '—';
+            const ticket = r.ticket_url
+              ? `<a href="${x(r.ticket_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--indigo-hi);">${x(r.ticket_key||'ticket')}</a>`
+              : (r.alert_error ? `<span style="color:var(--danger);" title="${x(r.alert_error)}">failed</span>`
+                               : (r.alerted_at ? '<span style="color:var(--text-3);">sent</span>' : '—'));
+            return `<tr style="cursor:default;">
+              <td style="${SEV[r.severity]||''}">${x(r.severity)}${r.validated?' <span title="Scanner confirmed this credential is live" style="color:#fca5a5;">●</span>':''}</td>
+              <td class="td-primary">${x(r.repository)}</td>
+              <td class="truncate" style="max-width:240px;font-size:11px;font-family:monospace;" title="${x(loc)}">${x(loc)}</td>
+              <td class="truncate" style="max-width:180px;font-size:11px;color:var(--text-3);" title="${x(r.rule_id||'')}">${x(r.rule_id||'—')}</td>
+              <td style="font-family:monospace;font-size:11px;color:var(--text-3);">${x(r.secret_preview||'—')}</td>
+              <td style="font-size:11px;color:var(--text-3);white-space:nowrap;" title="First seen ${x(r.first_seen_at||'')}">${r.last_seen_at?.slice(0,10)||'—'} ×${r.occurrences}</td>
+              <td style="font-size:11px;">${ticket}</td>
+              <td>
+                <select style="height:28px;font-size:11px;width:130px;" ${actOn('change', 'setFindingStatus', r.id)}>
+                  ${FSTATUS.map(o=>`<option value="${o}" ${r.status===o?'selected':''}>${o.replace('_',' ')}</option>`).join('')}
+                </select>
+              </td>
+              <td><button class="btn btn-ghost btn-sm" ${act('realertFinding', r.id)}>Re-alert</button></td>
+            </tr>`;}).join(''):
+          `<tr><td colspan="9"><div class="empty-state">No findings — nothing has been reported for this filter</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.findings.total, S.findings.page, 'findings')}
+  </div>`);
+}
+
+function renderAudit() {
+  const f=S.filter.audit;
+  set('main',`<div style="padding:24px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;">
+      <div>
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Audit Log <span style="font-size:13px;color:var(--text-3);font-weight:400;">(${S.audit.total})</span></div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">All developer /secrets endpoint access — with change number correlation</div>
+      </div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-ghost btn-sm" ${act('exportCsv', 'audit')}>↓ CSV</button>
+        <button class="btn btn-ghost btn-sm" ${act('reload', 'audit')}>↻ Refresh</button>
+      </div>
+    </div>
+    <div style="display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;">
+      <select style="width:160px;height:32px;font-size:11px;" ${actOn('change', 'filterAudit', 'outcome')}>
+        <option value="">All outcomes</option>
+        ${['success','denied','error'].map(o=>`<option value="${o}" ${f.outcome===o?'selected':''}>${o}</option>`).join('')}
+      </select>
+      <input type="text" placeholder="Change number…" style="width:180px;height:32px;font-size:11px;" value="${x(f.change_number)}" ${actOn('change', 'filterAudit', 'change_number')}>
+      <input type="text" placeholder="Registry ID…"   style="width:180px;height:32px;font-size:11px;" value="${x(f.registry_id)}"   ${actOn('change', 'filterAudit', 'registry_id')}>
+    </div>
+    <div class="card" style="overflow:hidden;overflow-x:auto;">
+      <table class="data-table" style="min-width:900px;">
+        <thead><tr><th>Timestamp</th><th>Event</th><th>Outcome</th><th>Change #</th><th>Team</th><th>Registry</th><th>Objects</th><th>IP</th><th>Error</th></tr></thead>
+        <tbody>
+          ${S.audit.rows.length?S.audit.rows.map(r=>{
+            const objs=r.objects||[];
+            const os=objs.length<=3?objs.join(', '):objs.slice(0,3).join(', ')+` +${objs.length-3}`;
+            return `<tr style="cursor:default;">
+              <td style="font-size:11px;color:var(--text-3);white-space:nowrap;">${r.timestamp?.slice(0,19).replace('T',' ')}</td>
+              <td style="font-size:11px;">${x(r.event)}</td>
+              <td style="font-weight:600;${OC[r.outcome]||''}">${x(r.outcome)}</td>
+              <td style="font-family:monospace;">${x(r.change_number||'—')}</td>
+              <td style="font-size:11px;color:#6ee7b7;">${x(r.team_name||'—')}</td>
+              <td>${x(r.registry_name||'—')}</td>
+              <td class="truncate" style="max-width:180px;font-size:11px;" title="${x(objs.join(', '))}">${x(os)||'—'}</td>
+              <td style="font-size:11px;color:var(--text-3);">${x(r.source_ip||'—')}</td>
+              <td class="truncate" style="max-width:140px;font-size:11px;color:var(--danger);" title="${x(r.error_detail||'')}">${x(r.error_detail||'')}</td>
+            </tr>`;}).join(''):
+          `<tr><td colspan="8"><div class="empty-state">No audit entries yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>
+    ${pager(S.audit.total, S.audit.page, 'audit')}
+  </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// Global search
+// ═══════════════════════════════════════════════
+let _gst;
+function gsearch(q) {
+  clearTimeout(_gst);
+  _gst = setTimeout(()=>{
+    const box=g('gsearch-results');
+    if(!q.trim()){box.style.display='none';return;}
+    const lq=q.toLowerCase();
+    const oR=S.objects.filter(o=>o.name.toLowerCase().includes(lq)).slice(0,4).map(o=>
+      `<div class="combo-item" ${act('gotoObj', o.name)}>${vp(o.vendor)}<span style="color:var(--text-3);font-size:10px;">obj</span><span>${x(o.name)}</span></div>`);
+    const rR=S.registries.filter(r=>r.name.toLowerCase().includes(lq)).slice(0,4).map(r=>
+      `<div class="combo-item" ${act('gotoReg', r.id)}><span style="color:#7dd3fc;font-size:10px;">reg</span><span>${x(r.name)}</span></div>`);
+    const tR=S.teams.filter(t=>t.name.toLowerCase().includes(lq)).slice(0,4).map(t=>
+      `<div class="combo-item" ${act('gotoTeam', t.id)}><span style="color:#6ee7b7;font-size:10px;">team</span><span>${x(t.name)}</span></div>`);
+    const all=[...oR,...rR,...tR];
+    if(!all.length){box.style.display='none';return;}
+    box.innerHTML=all.join(''); box.style.display='block';
+  },200);
+}
+function closeGsearch(){g('gsearch-results').style.display='none';g('gsearch').value='';}
+document.addEventListener('click',e=>{if(!e.target.closest('#gsearch')&&!e.target.closest('#gsearch-results'))g('gsearch-results').style.display='none';});
+
+// ═══════════════════════════════════════════════
+// Drawer / Modal
+// ═══════════════════════════════════════════════
+function showDrawer(){g('drawer').classList.add('drawer-open');g('backdrop').style.display='block';}
+function closeDrawer(){g('drawer').classList.remove('drawer-open');g('backdrop').style.display='none';S.drawer=null;}
+function modal(html){
+  const ov=g('modal-overlay');
+  g('modal-box').innerHTML=html;
+  ov.style.display='flex';
+}
+function hideModal(){g('modal-overlay').style.display='none';}
+function showKeyModal(key, context='') {
+  modal(`<div style="border:1px solid rgba(245,158,11,0.5);border-radius:8px;padding:20px;background:rgba(120,72,0,0.15);">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">
+      <svg width="16" height="16" fill="none" stroke="#f59e0b" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z"/></svg>
+      <div style="font-size:15px;font-weight:600;color:#f59e0b;">Save Your API Key${context?` — ${x(context)}`:''}</div>
+    </div>
+    <div style="font-size:12px;color:var(--text-2);margin-bottom:16px;">This key will <strong style="color:var(--text-1);">not</strong> be shown again. Copy it now and store it securely.</div>
+    <div style="background:var(--surface-2);border:1px solid var(--border-hi);border-radius:6px;padding:12px 14px;font-family:monospace;font-size:12px;color:var(--text-1);word-break:break-all;margin-bottom:10px;">${x(key)}</div>
+    <button class="btn btn-ghost btn-sm" ${act('clip', key)} style="width:100%;justify-content:center;margin-bottom:16px;">Copy to clipboard</button>
+    <button class="btn btn-primary" ${act('hideModal')} style="width:100%;justify-content:center;">I've copied the key — Close</button>
+  </div>`);
+}
+function confirm(msg) {
+  return new Promise(res=>{
+    modal(`<div style="font-size:15px;font-weight:600;margin-bottom:10px;">Confirm Action</div>
+      <div style="font-size:12px;color:var(--text-2);margin-bottom:20px;line-height:1.6;">${x(msg)}</div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;">
+        <button class="btn btn-ghost" ${act('resolveConfirm', false)}>Cancel</button>
+        <button class="btn btn-danger" ${act('resolveConfirm', true)}>Confirm</button>
+      </div>`);
+    window._cr=res;
+  });
+}
+
+// ═══════════════════════════════════════════════
+// Toasts
+// ═══════════════════════════════════════════════
+function toast(msg,type='success') {
+  const el=document.createElement('div');
+  const bg=type==='success'?'rgba(16,185,129,0.15)':type==='error'?'rgba(239,68,68,0.15)':'var(--surface-2)';
+  const border=type==='success'?'rgba(16,185,129,0.4)':type==='error'?'rgba(239,68,68,0.4)':'var(--border)';
+  const icon=type==='success'?'✓':type==='error'?'✕':'ℹ';
+  const ic=type==='success'?'#10b981':type==='error'?'#ef4444':'var(--text-2)';
+  el.style.cssText=`background:${bg};border:1px solid ${border};border-radius:6px;padding:10px 14px;font-size:12px;color:var(--text-1);box-shadow:0 4px 16px rgba(0,0,0,0.4);display:flex;align-items:center;gap:8px;pointer-events:auto;`;
+  el.className='fade-in';
+  el.innerHTML=`<span style="color:${ic};font-weight:700;">${icon}</span>${x(msg)}`;
+  g('toasts').appendChild(el);
+  setTimeout(()=>el.remove(),3500);
+}
+
+// ═══════════════════════════════════════════════
+// Form helpers
+// ═══════════════════════════════════════════════
+function fi(label, id, type, val, opts, onchange='') {   // onchange names an ACTIONS entry
+  const lbl=`<label for="${id}" style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;letter-spacing:0.04em;text-transform:uppercase;">${x(label)}</label>`;
+  if(type==='select') {
+    return `<div>${lbl}<select id="${id}" style="height:34px;" ${onchange?actOn('change', onchange):''}>
+      ${(opts||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}
+    </select></div>`;
+  }
+  return `<div>${lbl}<input type="text" id="${id}" value="${x(val)}" style="height:34px;" ${onchange?actOn('input', onchange):''} ${onchange?actOn('change', onchange):''} autocomplete="off"></div>`;
+}
+function drow(label, val) {
+  return `<div style="display:flex;gap:12px;align-items:baseline;">
+    <span style="font-size:11px;color:var(--text-3);width:72px;flex-shrink:0;text-transform:uppercase;letter-spacing:0.04em;">${x(label)}</span>
+    <span style="font-size:12px;color:var(--text-1);word-break:break-all;">${x(val||'—')}</span>
+  </div>`;
+}
+function clip(t){navigator.clipboard.writeText(t).then(()=>toast('Copied!','success')).catch(()=>toast('Copy failed','error'));}
+function exportCsv(type) {
+  const params = new URLSearchParams();
+  if (type === 'audit') {
+    const f = S.filter.audit;
+    if (f.outcome)       params.set('outcome', f.outcome);
+    if (f.change_number) params.set('change_number', f.change_number);
+    if (f.registry_id)   params.set('registry_id', f.registry_id);
+  } else {
+    const f = S.filter.changelog;
+    if (f.entity_type) params.set('entity_type', f.entity_type);
+    if (f.action)      params.set('action', f.action);
+  }
+  const url = `/admin/api/${type}/export?` + params;
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = '';
+  // Attach auth via a fetch to trigger the download with credentials
+  fetch(url, { headers: { 'Authorization': 'Bearer ' + S.session?.token } })
+    .then(r => { if (!r.ok) throw new Error('Export failed'); return r.blob(); })
+    .then(blob => {
+      const burl = URL.createObjectURL(blob);
+      a.href = burl;
+      a.click();
+      setTimeout(()=>URL.revokeObjectURL(burl), 5000);
+    })
+    .catch(e => toast(e.message, 'error'));
+}
+
+// ═══════════════════════════════════════════════
+// Settings view
+// ═══════════════════════════════════════════════
+function renderSettings() {
+  const t = S.settingsTab;
+  const tabs = [{k:'general',l:'General'},{k:'siem',l:'SIEM / Logging'},{k:'users',l:'Users'},{k:'backends',l:'Auth Backends'},{k:'sessions',l:'Sessions'}];
+  set('main',`<div style="padding:24px;max-width:900px;">
+    <div style="margin-bottom:20px;">
+      <div style="display:flex;align-items:baseline;gap:16px;">
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">Settings</div>
+        <a href="/openapi.json" target="_blank" style="font-size:11px;color:var(--indigo-hi);text-decoration:none;opacity:0.8;">OpenAPI spec ↗</a>
+      </div>
+      <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Runtime configuration — no restart required</div>
+    </div>
+    <div style="display:flex;gap:4px;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px;width:fit-content;margin-bottom:24px;flex-wrap:wrap;">
+      ${tabs.map(({k,l})=>`<button class="stab ${t===k?'active':''}" ${act('settingsTab', k)}>${l}</button>`).join('')}
+    </div>
+    <div id="settings-body"></div>
+  </div>`);
+  if(t==='general') renderSettingsGeneral();
+  else if(t==='siem') renderSettingsSiem();
+  else if(t==='users') renderSettingsUsers();
+  else if(t==='backends') renderSettingsBackends();
+  else if(t==='sessions') renderSettingsSessions();
+}
+
+function renderSettingsGeneral() {
+  const s = S.settings;
+  const themeOptions = THEMES.map(th=>`<option value="${th}" ${(S.session?.theme||'default')===th?'selected':''}>${th[0].toUpperCase()+th.slice(1)}</option>`).join('');
+  set('settings-body',`
+    <div style="display:flex;flex-direction:column;gap:16px;">
+      <div class="card" style="padding:20px;">
+        <div class="section-label" style="margin-bottom:16px;">Access Control</div>
+        <div style="display:flex;flex-direction:column;gap:14px;">
+          <div>
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+              <label style="font-size:11px;color:var(--text-3);text-transform:uppercase;letter-spacing:.04em;">Change Number Required</label>
+              <label style="display:flex;align-items:center;gap:8px;cursor:pointer;">
+                <input type="checkbox" id="s-cnr" ${s.change_number_required==='true'?'checked':''} style="width:auto;">
+                <span style="font-size:11px;color:var(--text-2);">Enforce X-Change-Number header on /secrets</span>
+              </label>
+            </div>
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Rate Limit (req/min per key)</label>
+            <input type="number" id="s-rpm" value="${x(s.rate_limit_rpm||'60')}" style="height:34px;width:120px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Session TTL (hours)</label>
+            <input type="number" id="s-ttl" value="${x(s.session_ttl_hours||'8')}" style="height:34px;width:120px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Log Retention (days)</label>
+            <input type="number" id="s-ret" value="${x(s.log_retention_days||'90')}" style="height:34px;width:120px;">
+          </div>
+          <div>
+            <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Key Expiry Warning (days)</label>
+            <input type="number" id="s-kwarn" value="${x(s.key_warning_days||'7')}" style="height:34px;width:120px;" min="1" max="90">
+            <div style="font-size:10px;color:var(--text-3);margin-top:4px;">Days before expiry to fire key.expiring_soon webhook</div>
+          </div>
+        </div>
+        <div style="margin-top:16px;">
+          <button class="btn btn-primary btn-sm" ${act('saveGeneralSettings')}>Save Changes</button>
+        </div>
+      </div>
+      <div class="card" style="padding:20px;">
+        <div class="section-label" style="margin-bottom:16px;">My Theme</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
+          ${THEMES.map(th=>`
+            <button ${act('previewTheme', th)} style="padding:8px 16px;border-radius:6px;font-size:12px;border:2px solid ${(S.session?.theme||'default')===th?'var(--indigo)':'var(--border)'};background:var(--surface-2);color:var(--text-1);cursor:pointer;font-family:monospace;transition:all .15s;">${th[0].toUpperCase()+th.slice(1)}</button>`
+          ).join('')}
+        </div>
+        <button class="btn btn-primary btn-sm" id="save-theme-btn" ${act('saveTheme')}>Apply Theme</button>
+      </div>
+    </div>`);
+}
+
+let _previewTheme = null;
+function previewTheme(theme) {
+  _previewTheme = theme;
+  applyTheme(theme);
+  // update active border
+  document.querySelectorAll('[onclick^="previewTheme"]').forEach(btn => {
+    const t = btn.getAttribute('onclick').match(/'(\w+)'/)?.[1];
+    btn.style.borderColor = t === theme ? 'var(--indigo)' : 'var(--border)';
+  });
+}
+async function saveTheme() {
+  const theme = _previewTheme || S.session?.theme || 'default';
+  const btn = g('save-theme-btn'); setBtn(btn,true,'Saving…');
+  try {
+    await api('PUT','/api/me/theme',{theme});
+    S.session.theme = theme;
+    sessionStorage.setItem('aegis_session', JSON.stringify(S.session));
+    applyTheme(theme);
+    toast(`Theme set to ${theme}`,'success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Apply Theme');}
+}
+async function saveGeneralSettings() {
+  const settings = {
+    change_number_required: g('s-cnr').checked ? 'true' : 'false',
+    rate_limit_rpm: g('s-rpm').value,
+    session_ttl_hours: g('s-ttl').value,
+    log_retention_days: g('s-ret').value,
+    key_warning_days: g('s-kwarn').value,
+  };
+  try {
+    await api('PUT','/admin/api/settings',{settings});
+    S.settings = {...S.settings, ...settings};
+    toast('Settings saved','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+function renderSettingsSiem() {
+  const s = S.settings;
+  const dests = (s.siem_destinations||'stdout').split(',').map(d=>d.trim());
+  const destOptions = ['stdout','splunk','s3','datadog'];
+  set('settings-body',`
+    <div class="card" style="padding:20px;">
+      <div class="section-label" style="margin-bottom:16px;">Log Destinations</div>
+      <div style="display:flex;gap:12px;margin-bottom:20px;">
+        ${destOptions.map(d=>`<label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:12px;color:var(--text-2);">
+          <input type="checkbox" class="dest-cb" value="${d}" ${dests.includes(d)?'checked':''} style="width:auto;">
+          ${d[0].toUpperCase()+d.slice(1)}
+        </label>`).join('')}
+      </div>
+      <div class="section-label" style="margin-bottom:12px;">Splunk HEC</div>
+      <div style="display:flex;flex-direction:column;gap:10px;margin-bottom:16px;">
+        <div>
+          <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">HEC URL</label>
+          <input type="text" id="s-splunk-url" value="${x(s.splunk_hec_url||'')}" placeholder="https://splunk:8088" style="height:34px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">HEC Token</label>
+          <input type="password" id="s-splunk-tok" value="${x(s.splunk_hec_token||'')}" placeholder="••••••••" style="height:34px;">
+        </div>
+      </div>
+      <div class="section-label" style="margin-bottom:12px;">S3</div>
+      <div style="margin-bottom:16px;">
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Bucket Name</label>
+        <input type="text" id="s-s3" value="${x(s.s3_log_bucket||'')}" placeholder="my-audit-logs" style="height:34px;">
+      </div>
+      <div class="section-label" style="margin-bottom:12px;">Datadog</div>
+      <div style="margin-bottom:20px;">
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">API Key</label>
+        <input type="password" id="s-dd" value="${x(s.dd_api_key||'')}" placeholder="••••••••" style="height:34px;">
+      </div>
+      <button class="btn btn-primary btn-sm" ${act('saveSiemSettings')}>Save Changes</button>
+    </div>`);
+}
+async function saveSiemSettings() {
+  const checked = [...document.querySelectorAll('.dest-cb:checked')].map(el=>el.value);
+  const settings = {
+    siem_destinations: checked.join(',') || 'stdout',
+    splunk_hec_url: g('s-splunk-url').value.trim(),
+    splunk_hec_token: g('s-splunk-tok').value.trim(),
+    s3_log_bucket: g('s-s3').value.trim(),
+    dd_api_key: g('s-dd').value.trim(),
+  };
+  try {
+    await api('PUT','/admin/api/settings',{settings});
+    S.settings = {...S.settings, ...settings};
+    toast('SIEM settings saved','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+function renderSettingsUsers() {
+  set('settings-body',`
+    <div class="card" style="overflow:hidden;">
+      <div style="padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div class="section-label">User Accounts <span class="badge-count" style="margin-left:6px;">${S.users.length}</span></div>
+        <button class="btn btn-primary btn-sm" ${act('showNewUserModal')}>
+          <svg width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 4.5v15m7.5-7.5h-15"/></svg>
+          New User
+        </button>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>Username</th><th>Role</th><th>Team</th><th>Theme</th><th>Created</th><th></th></tr></thead>
+        <tbody>
+          ${S.users.length?S.users.map(u=>`
+            <tr style="cursor:default;">
+              <td class="td-primary">${x(u.username)}</td>
+              <td><span class="pill role-${u.role}">${x(u.role)}</span></td>
+              <td style="font-size:11px;color:var(--text-3);">${(u.team_ids||[]).length?(u.team_ids||[]).map(tid=>{const t=S.teams.find(t=>t.id===tid);return t?`<span style="margin-right:4px;display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-size:10px;background:var(--indigo-lo);color:var(--indigo-hi);border:1px solid rgba(99,102,241,0.3);">${x(t.name)}</span>`:'';}).join(''):'—'}</td>
+              <td style="font-size:11px;color:var(--text-3);">${x(u.theme)}</td>
+              <td style="font-size:11px;color:var(--text-3);">${u.created_at?.slice(0,10)||'—'}</td>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;display:flex;gap:6px;justify-content:flex-end;align-items:center;">
+                <button class="btn btn-ghost btn-sm" ${act('showEditUserModal', u.id)}>Edit</button>
+                <button class="btn btn-danger btn-sm" style="${u.username==='admin'?'opacity:.3;pointer-events:none;':''}" ${act('deleteUser', u.id, u.username)}>Delete</button>
+              </td>
+            </tr>`).join(''):
+          `<tr><td colspan="6"><div class="empty-state">No users yet</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>`);
+}
+
+// ═══════════════════════════════════════════════
+// AUTH BACKENDS
+// ═══════════════════════════════════════════════
+async function renderSettingsBackends() {
+  set('settings-body','<div class="empty-state">Loading…</div>');
+  let data;
+  try { data = await api('GET','/admin/api/auth-backends'); }
+  catch(e){ set('settings-body',`<div class="empty-state" style="color:var(--danger)">Failed to load backends: ${x(e.message)}</div>`); return; }
+
+  const vendors = Object.keys(data);
+  if(!vendors.length){
+    set('settings-body','<div class="empty-state">No auth backends configured in auth.json</div>');
+    return;
+  }
+  const html = vendors.map(vendor => {
+    const refs = Object.keys(data[vendor]);
+    return refs.map(ref => {
+      const cfg = data[vendor][ref];
+      const rows = Object.entries(cfg).map(([k,v])=>`
+        <tr style="cursor:default;">
+          <td style="font-size:11px;color:var(--text-3);font-weight:600;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap;">${x(k)}</td>
+          <td style="font-size:11px;color:${v==='••••••••'?'var(--text-3)':'var(--text-1)'};">${x(v)}</td>
+        </tr>`).join('');
+      return `
+      <div class="card" style="margin-bottom:12px;overflow:hidden;">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+          <div style="display:flex;align-items:center;gap:8px;">
+            <span class="pill pill-${vendor}">${x(vendor)}</span>
+            <span style="font-size:12px;color:var(--text-2);font-weight:500;">${x(ref)}</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" id="test-btn-${x(vendor)}-${x(ref)}" ${act('testBackend', vendor, ref)}>Test Connectivity</button>
+        </div>
+        <table class="data-table">
+          <thead><tr><th>Key</th><th>Value</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div id="test-result-${x(vendor)}-${x(ref)}" style="padding:10px 16px;font-size:11px;display:none;"></div>
+      </div>`;
+    }).join('');
+  }).join('');
+  set('settings-body', html);
+}
+
+async function testBackend(vendor, ref) {
+  const btnId = `test-btn-${vendor}-${ref}`;
+  const resId  = `test-result-${vendor}-${ref}`;
+  const btn = g(btnId); setBtn(btn,true,'Testing…');
+  const resEl = g(resId); resEl.style.display='none';
+  try {
+    const d = await api('POST',`/admin/api/auth-backends/${vendor}/${ref}/test`);
+    resEl.style.cssText='display:block;padding:10px 16px;font-size:11px;color:var(--success);border-top:1px solid var(--border);';
+    resEl.textContent = `✓ ${d.message || 'Connection OK'} (${d.latency_ms}ms)`;
+  } catch(e) {
+    resEl.style.cssText='display:block;padding:10px 16px;font-size:11px;color:var(--danger);border-top:1px solid var(--border);';
+    resEl.textContent = `✗ ${e.message}`;
+  } finally { setBtn(btn,false,'Test Connectivity'); }
+}
+
+// ═══════════════════════════════════════════════
+// SESSIONS
+// ═══════════════════════════════════════════════
+async function renderSettingsSessions() {
+  set('settings-body','<div class="empty-state">Loading…</div>');
+  let data;
+  try { data = await api('GET','/admin/api/sessions'); }
+  catch(e){ set('settings-body',`<div class="empty-state" style="color:var(--danger)">Failed to load sessions: ${x(e.message)}</div>`); return; }
+
+  const rows = (data.sessions||[]).map(s=>`
+    <tr style="cursor:default;">
+      <td class="td-primary" style="font-family:monospace;">${x(s.username)}</td>
+      <td><span class="pill role-${s.role}">${x(s.role)}</span></td>
+      <td style="font-size:11px;color:var(--text-3);font-family:monospace;">${x(s.token_preview)}</td>
+      <td style="font-size:11px;color:var(--text-2);">${s.ttl_seconds>0?Math.ceil(s.ttl_seconds/60)+'m':'∞'}</td>
+      <td ${act('stop')} style="text-align:right;padding-right:16px;">
+        ${s.username!==S.session?.username?`<button class="btn btn-danger btn-sm" ${act('revokeSession', s.token_key)}>Revoke</button>`:
+          `<span style="font-size:10px;color:var(--text-3);">current</span>`}
+      </td>
+    </tr>`).join('');
+
+  set('settings-body',`
+    <div class="card" style="overflow:hidden;">
+      <div style="padding:12px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;">
+        <div class="section-label">Active Sessions <span class="badge-count" style="margin-left:6px;">${data.total}</span></div>
+        <button class="btn btn-ghost btn-sm" ${act('renderSettingsSessions')}>↻ Refresh</button>
+      </div>
+      <table class="data-table">
+        <thead><tr><th>User</th><th>Role</th><th>Token</th><th>TTL</th><th></th></tr></thead>
+        <tbody>
+          ${rows||`<tr><td colspan="5"><div class="empty-state">No active sessions</div></td></tr>`}
+        </tbody>
+      </table>
+    </div>`);
+}
+
+async function revokeSession(tokenKey) {
+  if(!await confirm('Revoke this session? The user will be signed out immediately.')) return;
+  try {
+    await api('DELETE',`/admin/api/sessions/${encodeURIComponent(tokenKey)}`);
+    toast('Session revoked','success');
+    renderSettingsSessions();
+  } catch(e){toast(e.message,'error');}
+}
+
+function _teamCheckboxes(selectedIds=[]) {
+  if(!S.teams.length) return `<span style="font-size:11px;color:var(--text-3)">No teams yet</span>`;
+  return S.teams.map(t=>`
+    <label class="team-check">
+      <input type="checkbox" value="${t.id}" ${selectedIds.includes(t.id)?'checked':''} style="width:auto;accent-color:var(--indigo);">
+      <span style="font-size:12px;color:var(--text-1);">${x(t.name)}</span>
+    </label>`).join('');
+}
+function _selectedTeamIds(containerSel) {
+  return Array.from(document.querySelectorAll(`${containerSel} input[type=checkbox]:checked`)).map(el=>el.value);
+}
+
+function showNewUserModal() {
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">New User</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${fi('Username','nu-user','text','')}
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Password</label>
+        <input type="password" id="nu-pw" style="height:34px;" autocomplete="new-password">
+      </div>
+      ${fi('Role','nu-role','select','user',['admin','user'])}
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Teams</label>
+        <div id="nu-teams" style="background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:4px;max-height:140px;overflow-y:auto;">${_teamCheckboxes([])}</div>
+      </div>
+      ${fi('Theme','nu-theme','select','default',THEMES)}
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-cu" ${act('createUser')}>Create User</button>
+      <button class="btn btn-ghost" ${act('hideModal')}>Cancel</button>
+    </div>`);
+}
+async function createUser() {
+  const btn=g('btn-cu'); setBtn(btn,true,'Creating…');
+  try {
+    const username=g('nu-user').value.trim(); if(!username){toast('Username required','error');return;}
+    const password=g('nu-pw').value; if(!password){toast('Password required','error');return;}
+    await api('POST','/admin/api/users',{
+      username, password,
+      role:     g('nu-role').value,
+      team_ids: _selectedTeamIds('#nu-teams'),
+      theme:    g('nu-theme').value,
+    });
+    await loadUsers();
+    hideModal();
+    renderSettingsUsers();
+    toast('User created','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Create User');}
+}
+function showEditUserModal(userId) {
+  const u = S.users.find(u=>u.id===userId); if(!u) return;
+  const themeOpts = THEMES.map(th=>`<option value="${th}" ${u.theme===th?'selected':''}>${th[0].toUpperCase()+th.slice(1)}</option>`).join('');
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:20px;">Edit: ${x(u.username)}</div>
+    <div style="display:flex;flex-direction:column;gap:14px;">
+      ${fi('Role','eu-role','select',u.role,['admin','user'])}
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Teams</label>
+        <div id="eu-teams" style="background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:4px;max-height:140px;overflow-y:auto;">${_teamCheckboxes(u.team_ids||[])}</div>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">Theme</label>
+        <select id="eu-theme" style="height:34px;">${themeOpts}</select>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">New Password (leave blank to keep)</label>
+        <input type="password" id="eu-pw" style="height:34px;" autocomplete="new-password" placeholder="••••••••">
+      </div>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-eu" ${act('updateUser', userId)}>Save Changes</button>
+      <button class="btn btn-ghost" ${act('hideModal')}>Cancel</button>
+    </div>`);
+}
+async function updateUser(userId) {
+  const btn=g('btn-eu'); setBtn(btn,true,'Saving…');
+  try {
+    const body = {
+      role:     g('eu-role').value,
+      team_ids: _selectedTeamIds('#eu-teams'),
+      theme:    g('eu-theme').value,
+    };
+    const pw=g('eu-pw').value; if(pw) body.password=pw;
+    await api('PUT',`/admin/api/users/${userId}`,body);
+    await loadUsers(); hideModal(); renderSettingsUsers(); toast('User updated','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Save Changes');}
+}
+async function deleteUser(userId, username) {
+  if(!await confirm(`Delete user "${username}"?`)) return;
+  try {
+    await api('DELETE',`/admin/api/users/${userId}`);
+    await loadUsers(); renderSettingsUsers(); toast('User deleted','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════════════
+// Policy helpers (registry + team)
+// ═══════════════════════════════════════════════
+
+function _policyForm(p, idPrefix, showMaxKeyDays) {
+  const ips = (p?.ip_allowlist||[]).join('\n');
+  return `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">IP Allowlist (one CIDR per line, blank = unrestricted)</label>
+        <textarea id="${idPrefix}-ips" rows="3" style="font-family:monospace;font-size:11px;resize:vertical;">${x(ips)}</textarea>
+      </div>
+      <div style="display:flex;gap:12px;">
+        <div>
+          <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Allowed From (UTC)</label>
+          <input type="time" id="${idPrefix}-from" value="${x(p?.allowed_from?.slice(0,5)||'')}" style="height:34px;width:110px;">
+        </div>
+        <div>
+          <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Allowed To (UTC)</label>
+          <input type="time" id="${idPrefix}-to" value="${x(p?.allowed_to?.slice(0,5)||'')}" style="height:34px;width:110px;">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="${idPrefix}-cn" ${p?.cn_required===true?'checked':''} style="width:auto;">
+        <label for="${idPrefix}-cn" style="font-size:11px;color:var(--text-2);cursor:pointer;">Require X-Change-Number (overrides global)</label>
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Rate Limit (req/min, blank = global default)</label>
+        <input type="number" id="${idPrefix}-rpm" value="${x(p?.rate_limit_rpm!=null?p.rate_limit_rpm:'')}" placeholder="inherit" style="height:34px;width:120px;">
+      </div>
+      ${showMaxKeyDays?`<div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Max Key Age (days, blank = no expiry)</label>
+        <input type="number" id="${idPrefix}-mkd" value="${x(p?.max_key_days!=null?p.max_key_days:'')}" placeholder="no limit" style="height:34px;width:120px;" min="1">
+        <div style="font-size:10px;color:var(--text-3);margin-top:3px;">Applied when keys are issued or rotated for this registry</div>
+      </div>`:''}
+    </div>`;
+}
+
+function _policyBody(p, idPrefix, showMaxKeyDays, saveFn, clearFn) {   // saveFn/clearFn: [action, ...args]
+  return _policyForm(p, idPrefix, showMaxKeyDays) + `
+    <div style="display:flex;gap:6px;margin-top:12px;">
+      <button class="btn btn-primary btn-sm" ${act(...saveFn)}>Save Policy</button>
+      ${p?`<button class="btn btn-ghost btn-sm" ${act(...clearFn)} style="color:var(--red);">Clear Policy</button>`:''}
+    </div>
+    ${!p?`<div style="font-size:10px;color:var(--text-3);margin-top:6px;">No policy set — global defaults apply</div>`:''}`;
+}
+
+async function loadRegPolicy(regId) {
+  let p = null;
+  try { const d = await api('GET',`/admin/api/registries/${regId}/policy`); if(d?.id) p = d; } catch(e) {}
+  set('reg-policy-body', _policyBody(p,'rp',true,['saveRegPolicy',regId],['deleteRegPolicy',regId]));
+}
+async function saveRegPolicy(regId) {
+  const ips = document.getElementById('rp-ips').value.trim().split('\n').map(s=>s.trim()).filter(Boolean);
+  const body = {
+    ip_allowlist: ips.length ? ips : null,
+    allowed_from: document.getElementById('rp-from').value || null,
+    allowed_to:   document.getElementById('rp-to').value || null,
+    cn_required:  document.getElementById('rp-cn').checked,
+    rate_limit_rpm: document.getElementById('rp-rpm').value ? parseInt(document.getElementById('rp-rpm').value) : null,
+    max_key_days: document.getElementById('rp-mkd').value ? parseInt(document.getElementById('rp-mkd').value) : null,
+  };
+  try {
+    await api('PUT',`/admin/api/registries/${regId}/policy`,body);
+    toast('Registry policy saved','success');
+    loadRegPolicy(regId);
+  } catch(e){toast(e.message,'error');}
+}
+async function deleteRegPolicy(regId) {
+  if(!await confirm('Clear registry policy? Global defaults will apply.')) return;
+  try {
+    await api('DELETE',`/admin/api/registries/${regId}/policy`);
+    toast('Policy cleared','success');
+    loadRegPolicy(regId);
+  } catch(e){toast(e.message,'error');}
+}
+
+async function loadTeamPolicy(teamId) {
+  let p = null;
+  try { const d = await api('GET',`/admin/api/teams/${teamId}/policy`); if(d?.id) p = d; } catch(e) {}
+  set('team-policy-body', _policyBody(p,'tp',false,['saveTeamPolicy',teamId],['deleteTeamPolicy',teamId]));
+}
+async function saveTeamPolicy(teamId) {
+  const ips = document.getElementById('tp-ips').value.trim().split('\n').map(s=>s.trim()).filter(Boolean);
+  const body = {
+    ip_allowlist: ips.length ? ips : null,
+    allowed_from: document.getElementById('tp-from').value || null,
+    allowed_to:   document.getElementById('tp-to').value || null,
+    cn_required:  document.getElementById('tp-cn').checked,
+    rate_limit_rpm: document.getElementById('tp-rpm').value ? parseInt(document.getElementById('tp-rpm').value) : null,
+  };
+  try {
+    await api('PUT',`/admin/api/teams/${teamId}/policy`,body);
+    toast('Team policy saved','success');
+    loadTeamPolicy(teamId);
+  } catch(e){toast(e.message,'error');}
+}
+async function deleteTeamPolicy(teamId) {
+  if(!await confirm('Clear team policy? Global defaults will apply.')) return;
+  try {
+    await api('DELETE',`/admin/api/teams/${teamId}/policy`);
+    toast('Policy cleared','success');
+    loadTeamPolicy(teamId);
+  } catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════════════
+// Team member management
+// ═══════════════════════════════════════════════
+
+function showAddMemberModal(teamId) {
+  const team = S.teams.find(t=>t.id===teamId); if(!team) return;
+  const existing = new Set((team.members||[]).map(m=>m.id));
+  const available = S.users.filter(u=>!existing.has(u.id) && u.role!=='admin');
+  if(!available.length) { toast('No eligible users to add','error'); return; }
+  const opts = available.map(u=>`<option value="${u.id}">${x(u.username)}</option>`).join('');
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:16px;">Add Member to ${x(team.name)}</div>
+    <div>
+      <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">User</label>
+      <select id="am-user" style="height:34px;">${opts}</select>
+    </div>
+    <div style="display:flex;gap:8px;margin-top:20px;">
+      <button class="btn btn-primary" id="btn-am" ${act('addMember', teamId)}>Add Member</button>
+      <button class="btn btn-ghost" ${act('hideModal')}>Cancel</button>
+    </div>`);
+}
+async function addMember(teamId) {
+  const btn=g('btn-am'); setBtn(btn,true,'Adding…');
+  try {
+    await api('POST',`/admin/api/teams/${teamId}/members`,{user_id: g('am-user').value});
+    await loadTeams();
+    const t = S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t);
+    hideModal(); toast('Member added','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Add Member');}
+}
+async function removeMember(teamId, userId, username) {
+  if(!await confirm(`Remove ${username} from this team?`)) return;
+  try {
+    await api('DELETE',`/admin/api/teams/${teamId}/members/${userId}`);
+    await loadTeams();
+    const t = S.teams.find(t=>t.id===teamId); if(t) renderTeamDrawer(t);
+    toast('Member removed','success');
+  } catch(e){toast(e.message,'error');}
+}
+
+// ═══════════════════════════════════════════════
+// Team notification channels
+// ═══════════════════════════════════════════════
+
+function loadTeamNotifications(teamId, notifs) {
+  const slack = notifs.slack_webhook_url    || '';
+  const teams = notifs.ms_teams_webhook_url || '';
+  const disc  = notifs.discord_webhook_url  || '';
+  set('team-notif-body',`
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:10px;color:var(--text-3);display:flex;align-items:center;gap:6px;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#e8b44e"><path d="M5.042 15.165a2.528 2.528 0 0 1-2.52 2.523A2.528 2.528 0 0 1 0 15.165a2.527 2.527 0 0 1 2.522-2.52h2.52v2.52zM6.313 15.165a2.527 2.527 0 0 1 2.521-2.52 2.527 2.527 0 0 1 2.521 2.52v6.313A2.528 2.528 0 0 1 8.834 24a2.528 2.528 0 0 1-2.521-2.522v-6.313zM8.834 5.042a2.528 2.528 0 0 1-2.521-2.52A2.528 2.528 0 0 1 8.834 0a2.528 2.528 0 0 1 2.521 2.522v2.52H8.834zM8.834 6.313a2.528 2.528 0 0 1 2.521 2.521 2.528 2.528 0 0 1-2.521 2.521H2.522A2.528 2.528 0 0 1 0 8.834a2.528 2.528 0 0 1 2.522-2.521h6.312zM18.956 8.834a2.528 2.528 0 0 1 2.522-2.521A2.528 2.528 0 0 1 24 8.834a2.528 2.528 0 0 1-2.522 2.521h-2.522V8.834zM17.688 8.834a2.528 2.528 0 0 1-2.523 2.521 2.527 2.527 0 0 1-2.52-2.521V2.522A2.527 2.527 0 0 1 15.165 0a2.528 2.528 0 0 1 2.523 2.522v6.312zM15.165 18.956a2.528 2.528 0 0 1 2.523 2.522A2.528 2.528 0 0 1 15.165 24a2.527 2.527 0 0 1-2.52-2.522v-2.522h2.52zM15.165 17.688a2.527 2.527 0 0 1-2.52-2.523 2.526 2.526 0 0 1 2.52-2.52h6.313A2.527 2.527 0 0 1 24 15.165a2.528 2.528 0 0 1-2.522 2.523h-6.313z"/></svg>
+          Slack
+        </label>
+        <input type="url" id="tn-slack" placeholder="https://hooks.slack.com/services/…" value="${x(slack)}" style="height:32px;font-size:11px;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-3);display:flex;align-items:center;gap:6px;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#5558AF"><path d="M24 12c0 6.627-5.373 12-12 12S0 18.627 0 12 5.373 0 12 0s12 5.373 12 12z"/><path fill="#fff" d="M10.154 13.5h-.677l-.247-.738H7.884L7.64 13.5H7l1.215-3.5h.725l1.214 3.5zm-1.106-1.284-.39-1.17-.39 1.17h.78zM14.077 13.5h-.63l-.03-.447c-.202.338-.544.507-.926.507-.917 0-1.463-.74-1.463-1.81 0-1.072.566-1.812 1.465-1.812.365 0 .694.152.895.44V10h.69v3.5zm-.69-1.75c0-.7-.283-1.122-.775-1.122-.492 0-.775.422-.775 1.122 0 .7.283 1.122.775 1.122.492 0 .775-.422.775-1.122zM16.077 13.5h-.69V10h.69v3.5zM17 13.5h-.69V10H17v3.5z"/></svg>
+          Microsoft Teams
+        </label>
+        <input type="url" id="tn-teams" placeholder="https://outlook.office.com/webhook/…" value="${x(teams)}" style="height:32px;font-size:11px;">
+      </div>
+      <div>
+        <label style="font-size:10px;color:var(--text-3);display:flex;align-items:center;gap:6px;margin-bottom:5px;text-transform:uppercase;letter-spacing:.04em;">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="#5865F2"><path d="M20.317 4.37a19.791 19.791 0 0 0-4.885-1.515.074.074 0 0 0-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 0 0-5.487 0 12.64 12.64 0 0 0-.617-1.25.077.077 0 0 0-.079-.037A19.736 19.736 0 0 0 3.677 4.37a.07.07 0 0 0-.032.027C.533 9.046-.32 13.58.099 18.057.1 18.08.114 18.1.133 18.11a19.9 19.9 0 0 0 5.993 3.03.078.078 0 0 0 .084-.028 14.09 14.09 0 0 0 1.226-1.994.076.076 0 0 0-.041-.106 13.107 13.107 0 0 1-1.872-.892.077.077 0 0 1-.008-.128 10.2 10.2 0 0 0 .372-.292.074.074 0 0 1 .077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 0 1 .078.01c.12.098.246.198.373.292a.077.077 0 0 1-.006.127 12.299 12.299 0 0 1-1.873.892.077.077 0 0 0-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 0 0 .084.028 19.839 19.839 0 0 0 6.002-3.03.077.077 0 0 0 .032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 0 0-.031-.03z"/></svg>
+          Discord
+        </label>
+        <input type="url" id="tn-discord" placeholder="https://discord.com/api/webhooks/…" value="${x(disc)}" style="height:32px;font-size:11px;">
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-tn-${teamId}" ${act('saveTeamNotifications', teamId)}>Save Channels</button>
+    </div>`);
+}
+async function saveTeamNotifications(teamId) {
+  const btn=g(`btn-tn-${teamId}`); setBtn(btn,true,'Saving…');
+  try {
+    await api('PUT',`/admin/api/teams/${teamId}/notifications`,{
+      slack_webhook_url:    g('tn-slack').value.trim()||null,
+      ms_teams_webhook_url: g('tn-teams').value.trim()||null,
+      discord_webhook_url:  g('tn-discord').value.trim()||null,
+    });
+    await loadTeams();
+    toast('Notification channels saved','success');
+  } catch(e){toast(e.message,'error');} finally{setBtn(btn,false,'Save Channels');}
+}
+
+// ═══════════════════════════════════════════════
+// Webhook helpers (team)
+// ═══════════════════════════════════════════════
+
+const WH_EVENTS = ['key.expiring_soon','key.rotated','key.revoked','policy.violated'];
+
+async function loadWebhook(teamId) {
+  let wh = null;
+  try { const d = await api('GET',`/admin/api/teams/${teamId}/webhook`); if(d?.id) wh = d; } catch(e) {}
+  set('team-webhook-body', _webhookForm(wh, teamId));
+}
+
+function _webhookForm(wh, teamId) {
+  const evts = wh?.events || [];
+  return `
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:4px;text-transform:uppercase;letter-spacing:.04em;">Endpoint URL</label>
+        <input type="text" id="wh-url" value="${x(wh?.url||'')}" placeholder="https://example.com/hooks/aegis" style="height:34px;">
+      </div>
+      <div>
+        <label style="font-size:11px;color:var(--text-3);display:block;margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Subscribe to Events</label>
+        <div style="display:flex;flex-direction:column;gap:6px;">
+          ${WH_EVENTS.map(ev=>`<label style="display:flex;align-items:center;gap:8px;cursor:pointer;font-size:11px;color:var(--text-2);">
+            <input type="checkbox" class="wh-ev" value="${ev}" ${evts.includes(ev)?'checked':''} style="width:auto;">
+            <span style="font-family:monospace;">${ev}</span>
+          </label>`).join('')}
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="wh-enabled" ${wh?.enabled!==false?'checked':''} style="width:auto;">
+        <label for="wh-enabled" style="font-size:11px;color:var(--text-2);cursor:pointer;">Enabled</label>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;">
+        <input type="checkbox" id="wh-signing" ${wh?.signing_enabled?'checked':''} style="width:auto;" ${actOn('change', 'toggleWhSigning', teamId)}>
+        <label for="wh-signing" style="font-size:11px;color:var(--text-2);cursor:pointer;">Enable HMAC signing <span style="color:var(--text-3);">(adds X-Aegis-Signature header)</span></label>
+      </div>
+      <div id="wh-signing-info" style="display:${wh?.signing_enabled?'block':'none'}">
+        ${wh?.signing_enabled?`<div style="padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;font-size:11px;color:var(--text-3);">
+          Signing active. Use <strong style="color:var(--text-2);">Regenerate Secret</strong> to rotate the HMAC key.
+        </div>`:`<div style="font-size:10px;color:var(--text-3);padding:6px 0;">A signing secret will be generated and shown once when you save.</div>`}
+      </div>
+    </div>
+    <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
+      <button class="btn btn-primary btn-sm" ${act('saveWebhook', teamId)}>${wh?'Update Webhook':'Create Webhook'}</button>
+      ${wh?.signing_enabled?`<button class="btn btn-ghost btn-sm" ${act('regenerateWebhookSecret', teamId)}>Regenerate Secret</button>`:''}
+      ${wh?`<button class="btn btn-ghost btn-sm" ${act('testWebhook', teamId)}>Test</button>`:''}
+      ${wh?`<button class="btn btn-ghost btn-sm" ${act('loadWebhookLog', teamId)}>View Log</button>`:''}
+      ${wh?`<button class="btn btn-ghost btn-sm" style="color:var(--red);" ${act('deleteWebhook', teamId)}>Remove</button>`:''}
+    </div>
+    <div id="wh-log-body" style="margin-top:12px;"></div>`;
+}
+
+function toggleWhSigning(enabled, teamId) {
+  const info = document.getElementById('wh-signing-info');
+  if(info) info.style.display = enabled ? 'block' : 'none';
+}
+async function saveWebhook(teamId) {
+  const url = document.getElementById('wh-url').value.trim();
+  if(!url){toast('URL is required','error');return;}
+  const events = [...document.querySelectorAll('.wh-ev:checked')].map(el=>el.value);
+  if(!events.length){toast('Select at least one event','error');return;}
+  const signing_enabled = document.getElementById('wh-signing').checked;
+  try {
+    const d = await api('PUT',`/admin/api/teams/${teamId}/webhook`,{
+      url, events,
+      enabled: document.getElementById('wh-enabled').checked,
+      signing_enabled,
+    });
+    if(d?.new_secret) showWebhookSecretModal(d.new_secret);
+    else toast('Webhook saved','success');
+    loadWebhook(teamId);
+  } catch(e){toast(e.message,'error');}
+}
+async function regenerateWebhookSecret(teamId) {
+  if(!await confirm('Regenerate signing secret? The current secret stops working immediately. You will need to update your endpoint.')) return;
+  try {
+    const d = await api('POST',`/admin/api/teams/${teamId}/webhook/regenerate-secret`);
+    showWebhookSecretModal(d.new_secret);
+  } catch(e){toast(e.message,'error');}
+}
+function showWebhookSecretModal(secret) {
+  modal(`<div style="font-size:15px;font-weight:600;margin-bottom:8px;">Webhook Signing Secret</div>
+    <div style="font-size:12px;color:var(--text-3);margin-bottom:16px;">Copy this now — it will not be shown again. Use it to verify the <code style="font-size:11px;background:var(--surface-2);padding:1px 4px;border-radius:3px;">X-Aegis-Signature</code> header on incoming requests.</div>
+    <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:monospace;font-size:13px;color:var(--indigo-hi);word-break:break-all;margin-bottom:16px;">${x(secret)}</div>
+    <div style="font-size:11px;color:var(--text-3);margin-bottom:16px;">Verify with: <code style="font-size:11px;">HMAC-SHA256(secret, request_body)</code></div>
+    <button class="btn btn-primary" ${act('copySecretAndClose', secret)}>Copy &amp; Close</button>`);
+}
+async function deleteWebhook(teamId) {
+  if(!await confirm('Remove webhook?')) return;
+  try {
+    await api('DELETE',`/admin/api/teams/${teamId}/webhook`);
+    toast('Webhook removed','success');
+    loadWebhook(teamId);
+  } catch(e){toast(e.message,'error');}
+}
+async function testWebhook(teamId) {
+  try {
+    const r = await api('POST',`/admin/api/teams/${teamId}/webhook/test`);
+    toast(r.detail||'Test fired','success');
+  } catch(e){toast(e.message,'error');}
+}
+async function loadWebhookLog(teamId) {
+  const el = document.getElementById('wh-log-body');
+  if(!el) return;
+  el.innerHTML = `<div style="font-size:11px;color:var(--text-3);">Loading log…</div>`;
+  try {
+    const d = await api('GET',`/admin/api/teams/${teamId}/webhook/log`);
+    if(!d.rows?.length){el.innerHTML=`<div style="font-size:11px;color:var(--text-3);">No delivery attempts yet</div>`;return;}
+    el.innerHTML = `<div style="margin-top:4px;font-size:10px;color:var(--text-3);margin-bottom:6px;text-transform:uppercase;letter-spacing:.04em;">Recent Deliveries</div>
+      <div style="display:flex;flex-direction:column;gap:3px;max-height:200px;overflow-y:auto;">
+        ${d.rows.map(row=>`<div style="display:flex;gap:6px;align-items:center;padding:5px 8px;background:var(--surface-2);border:1px solid var(--border);border-radius:4px;font-size:10px;">
+          <span style="width:14px;height:14px;border-radius:50%;background:${row.success?'var(--green)':'var(--red)'};flex-shrink:0;"></span>
+          <span style="font-family:monospace;color:var(--text-2);flex:1;">${x(row.event)}</span>
+          <span style="color:var(--text-3);">attempt ${row.attempt}</span>
+          ${row.status_code?`<span style="color:var(--text-3);">${row.status_code}</span>`:''}
+          <span style="color:var(--text-3);white-space:nowrap;">${row.fired_at?.slice(0,16).replace('T',' ')}</span>
+        </div>`).join('')}
+      </div>`;
+  } catch(e){el.innerHTML=`<span style="color:var(--red);font-size:11px;">Failed to load log</span>`;}
+}
+
+// ═══════════════════════════════════════════════
+// My Team view (user role)
+// ═══════════════════════════════════════════════
+async function renderMyTeam() {
+  set('main','<div style="padding:24px;"><div style="color:var(--text-3);font-size:12px;">Loading…</div></div>');
+  try {
+    const d = await api('GET','/api/my-team');
+    if(!d.team) {
+      set('main',`<div style="padding:24px;"><div class="empty-state">You are not assigned to a team yet.<br>Contact your administrator.</div></div>`);
+      return;
+    }
+    const allObjs = d.objects||[];
+    set('main',`<div style="padding:24px;max-width:900px;">
+      <div style="margin-bottom:24px;">
+        <div style="font-size:18px;font-weight:600;color:var(--text-1);">${x(d.team.name)}</div>
+        <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Your team's secrets access — read-only</div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        ${(d.registries||[]).map(reg=>{
+          const regObjs = allObjs.filter(o=>reg.objects.includes(o.name));
+          return `<div class="card" style="padding:20px;">
+            <div style="display:flex;align-items:center;gap:10px;margin-bottom:16px;">
+              <svg width="14" height="14" fill="none" stroke="var(--indigo-hi)" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 6.878V6a2.25 2.25 0 012.25-2.25h7.5A2.25 2.25 0 0118 6v.878m-12 0c.235-.083.487-.128.75-.128h10.5c.263 0 .515.045.75.128m-12 0A2.25 2.25 0 004.5 9v.878m13.5-3A2.25 2.25 0 0119.5 9v.878m0 0a2.246 2.246 0 00-.75-.128H5.25c-.263 0-.515.045-.75.128m15 0A2.25 2.25 0 0121 12v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6c0-.98.626-1.813 1.5-2.122"/></svg>
+              <span style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(reg.name)}</span>
+              <span class="badge-count">${regObjs.length} objects</span>
+            </div>
+            <table class="data-table">
+              <thead><tr><th>Object</th><th>Vendor</th><th>Path</th></tr></thead>
+              <tbody>
+                ${regObjs.length?regObjs.map(o=>`
+                  <tr style="cursor:default;">
+                    <td class="td-primary">${x(o.name)}</td>
+                    <td>${vp(o.vendor)}</td>
+                    <td style="font-size:11px;color:var(--text-3);">${x(o.path)}</td>
+                  </tr>`).join(''):
+                `<tr><td colspan="3"><div class="empty-state">No objects in this registry</div></td></tr>`}
+              </tbody>
+            </table>
+          </div>`;
+        }).join('')}
+        ${!d.registries?.length?`<div class="empty-state">No registries assigned to your team yet.</div>`:''}
+      </div>
+    </div>`);
+  } catch(e) {
+    set('main',`<div style="padding:24px;"><div class="empty-state">Failed to load team data: ${x(e.message)}</div></div>`);
+  }
+}
+
+// ═══════════════════════════════════════════════
+// Boot
+// ═══════════════════════════════════════════════
+(function boot(){
+  const saved = sessionStorage.getItem('aegis_session');
+  if(saved){
+    try {
+      const d = JSON.parse(saved);
+      fetch('/api/me', {headers:{'Authorization':'Bearer '+d.token}}).then(r=>{
+        if(r.ok) return r.json();
+        sessionStorage.removeItem('aegis_session');
+        window.location.href = '/login';
+      }).then(me=>{
+        if(!me) return;
+        _initSession({...d, ...me});
+        applyTheme(me.theme || 'default');
+        g('login-screen').style.display='none';
+        g('app').style.display='flex';
+        loadAll().then(()=>setView(me.role==='admin'?'dashboard':'my-team'));
+      }).catch(()=>{ window.location.href = '/login'; });
+    } catch(e){ window.location.href = '/login'; }
+  } else {
+    window.location.href = '/login';
+  }
+})();
