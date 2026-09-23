@@ -162,8 +162,15 @@ def admin_delete_user(user_id: str, session: dict = Depends(_require_admin), db:
         raise HTTPException(status_code=404, detail="User not found")
     if user.username == "admin":
         raise HTTPException(status_code=400, detail="Cannot delete the built-in admin account")
+    # Memberships are rows in user_teams; User has had no team_id column since
+    # a user could belong to more than one team, so this raised AttributeError
+    # and every delete returned 500. Recording the full membership list is
+    # also what the audit entry wanted in the first place: which teams this
+    # account could reach when it was removed.
+    team_names = sorted(m.team.name for m in user.team_memberships if m.team)
     _write_change(db, "deleted", "user", str(user.id), user.username, None, session["username"],
-                  diff={"role": {"from": user.role}, "team_id": {"from": str(user.team_id) if user.team_id else None}})
+                  diff={"role": {"from": user.role},
+                        "teams": {"from": team_names}})
     db.delete(user)
     db.commit()
 
