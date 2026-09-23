@@ -1892,7 +1892,7 @@ while the chart said `0.4.0` and the published image said `0.3.0`.
 merge to main ──► release-please keeps one open PR
                     "chore(main): release 0.4.1"
                     CHANGELOG.md
-                    version.txt
+                    .release-please-manifest.json   (the version of record)
                     aegis/api.py          version="…"
                     charts/aegis/Chart.yaml  version, appVersion, images annotation
                           │
@@ -2061,6 +2061,7 @@ you would the key itself: TLS, an allowlisted destination, no request logging.
 ### Session Security
 
 - Admin and user sessions use `secrets.token_urlsafe(32)` tokens stored in Redis as `aegis:session:<token>`.
+- A session records **who** signed in, not what they may do. Role and team membership are read from the database on every request, so a demotion, a membership change or a deleted account applies to sessions that already exist rather than waiting out the token's TTL.
 - Session payload (`user_id`, `username`, `role`, `team_ids`, `theme`) is stored server-side. Clients hold only the opaque token.
 - No JWTs. No signing keys to rotate. No `alg:none` attacks.
 - Sessions are invalidated immediately on logout — the Redis key is deleted.

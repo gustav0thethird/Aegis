@@ -115,18 +115,55 @@ def _session_key(token: str) -> str:
 
 
 def _create_session(user: User, ttl_hours: int = 8) -> str:
+    """
+    Create a session that records who signed in, and nothing about what they
+    may do.
+
+    Role and team membership used to be copied in here and trusted for the
+    session's whole lifetime, so demoting an administrator or removing someone
+    from a team did not take effect until their token expired - eight hours by
+    default. The HTTP Basic path already resolved both from the database on
+    every request and said so in a comment; this one did not, and it is the
+    path everything actually uses.
+    """
     token = secrets_lib.token_urlsafe(32)
     r = _get_redis()
-    team_ids = [str(m.team_id) for m in (user.team_memberships or [])]
     payload = json.dumps({
         "user_id":  str(user.id),
-        "username": user.username,
-        "role":     user.role,
-        "team_ids": team_ids,
-        "theme":    user.theme,
+        "issued_at": datetime.now(timezone.utc).isoformat(),
     })
     r.setex(_session_key(token), ttl_hours * 3600, payload)
     return token
+
+
+def _principal_from_session(db: Session, session: dict) -> Optional[dict]:
+    """
+    Resolve a session to its current authorisation state.
+
+    Read on every request rather than cached in the token, so a role change,
+    a membership change or a deleted account applies to sessions that already
+    exist. Returns None when the account is gone, which rejects the session.
+    """
+    raw_id = session.get("user_id")
+    if not raw_id:
+        return None
+    try:
+        user_id = uuid.UUID(raw_id)
+    except (ValueError, TypeError):
+        return None
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        return None
+    team_ids = [str(m.team_id) for m in (user.team_memberships or [])]
+    return {
+        "user_id":  str(user.id),
+        "username": user.username,
+        "role":     user.role,
+        "team_id":  team_ids[0] if len(team_ids) == 1 else None,
+        "team_ids": team_ids,
+        "theme":    user.theme,
+        "issued_at": session.get("issued_at"),
+    }
 
 
 def _get_session(token: str) -> Optional[dict]:
@@ -157,8 +194,9 @@ async def _require_admin(request: Request, db: Session = Depends(get_db)) -> dic
     token = _extract_bearer_token(request)
     if token:
         session = _get_session(token)
-        if session and session["role"] == "admin":
-            return session
+        principal = _principal_from_session(db, session) if session else None
+        if principal and principal["role"] == "admin":
+            return principal
 
     # Fall back to HTTP Basic (for curl / API access). Credentials are verified
     # against the users table — never against ADMIN_PASSWORD, which is a
@@ -193,13 +231,19 @@ async def _require_admin(request: Request, db: Session = Depends(get_db)) -> dic
     )
 
 
-async def _require_any_user(request: Request) -> dict:
-    """Accept any valid session token (admin or user)."""
+async def _require_any_user(request: Request, db: Session = Depends(get_db)) -> dict:
+    """
+    Accept any valid session token (admin or user).
+
+    The role and memberships returned are the ones in the database now, not
+    the ones that were there at sign-in.
+    """
     token = _extract_bearer_token(request)
     if token:
         session = _get_session(token)
-        if session:
-            return session
+        principal = _principal_from_session(db, session) if session else None
+        if principal:
+            return principal
     raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Unauthorized")
 
 
