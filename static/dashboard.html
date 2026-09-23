@@ -375,6 +375,17 @@ function copyTeamId() {
   navigator.clipboard.writeText(val).then(() => flash('Team ID copied'));
 }
 
+// Copy-to-clipboard buttons carry their value in data-copy rather than in
+// an inline handler: an attribute value is decoded by the HTML parser before
+// any script in it is compiled, so an interpolated quote used to escape the
+// string and run as code.
+document.addEventListener('click', e => {
+  const el = e.target.closest('[data-copy]');
+  if (!el) return;
+  navigator.clipboard.writeText(el.dataset.copy)
+    .then(() => flash(el.dataset.copied || 'Copied'));
+});
+
 function flash(msg) {
   const el = Object.assign(document.createElement('div'), {
     textContent: msg,
@@ -438,7 +449,7 @@ function render(teams) {
            <div style="font-size:10px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--text-3);">${x(team.name)}</div>
            <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
              <code style="font-size:10px;color:var(--text-3);background:var(--surface-2);border:1px solid var(--border);border-radius:3px;padding:1px 6px;">${team.id}</code>
-             <button onclick="navigator.clipboard.writeText('${team.id}').then(()=>flash('ID copied'))" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;">copy</button>
+             <button data-copy="${x(team.id)}" data-copied="ID copied" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;">copy</button>
            </div>
          </div>`
       : '';
@@ -485,7 +496,7 @@ function renderWebhooks(d) {
         <div style="font-size:11px;color:var(--text-3);margin-bottom:6px">POST to this URL with your signing secret as the Bearer token:</div>
         <div class="inbound-url-box">
           <code style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${x(inboundUrl)}</code>
-          <button onclick="navigator.clipboard.writeText('${x(inboundUrl)}').then(()=>flash('URL copied'))" style="background:none;border:1px solid var(--border-hi);border-radius:4px;color:var(--text-2);cursor:pointer;font-size:10px;padding:3px 8px;font-family:'Fira Code',monospace;white-space:nowrap;">Copy URL</button>
+          <button data-copy="${x(inboundUrl)}" data-copied="URL copied" style="background:none;border:1px solid var(--border-hi);border-radius:4px;color:var(--text-2);cursor:pointer;font-size:10px;padding:3px 8px;font-family:'Fira Code',monospace;white-space:nowrap;">Copy URL</button>
         </div>
         <div style="font-size:11px;color:var(--text-3);margin-top:10px">
           Supported actions: <code style="color:var(--text-2)">ping</code>, <code style="color:var(--text-2)">rotate_key</code><br>
