@@ -21,13 +21,9 @@ from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.background import BackgroundScheduler
 from sqlalchemy import text as sa_text
 
-from aegis import policy as policy_mod
-from aegis import secret_cache
+from aegis import keylifecycle
 from aegis import webhook as wh
 from aegis.database import SessionLocal, engine
-from aegis.keys import generate_key as _generate_key
-from aegis.keys import hash_key as _hash_key
-from aegis.keys import preview as _key_preview
 from aegis.models import Setting, TeamRegistryKey, WebhookLog
 
 logger = logging.getLogger("aegis.scheduler")
@@ -74,30 +70,17 @@ def _job_lock(lock_id: int):
 
 
 def _rotate_key(db, key_row: TeamRegistryKey, reason: str) -> str:
-    """Revoke key_row, issue a new key, set expires_at from registry policy. Returns plaintext."""
-    now       = datetime.now(timezone.utc)
-    team      = key_row.team
-    registry  = key_row.registry
+    """
+    Rotate the key behind key_row. Returns the plaintext.
 
-    # Revoke old key. Drop anything it fetched from the cache too — a cached
-    # value must not outlive the credential that was allowed to read it.
-    key_row.revoked_at = now
-    secret_cache.invalidate(key_row.key_hash)
-
-    # Shortest lifetime any applicable policy sets, team as well as registry.
-    max_key_days = policy_mod.max_key_days(db, team, registry)
-    expires_at   = now + timedelta(days=max_key_days) if max_key_days else None
-
-    plaintext   = _generate_key()
-    new_preview = _key_preview(plaintext)
-    db.add(TeamRegistryKey(
-        team_id=team.id,
-        registry_id=registry.id,
-        key_hash=_hash_key(plaintext),
-        key_preview=new_preview,
-        expires_at=expires_at,
-    ))
-    db.commit()
+    The scheduler has no caller to hand the new key to, so the webhook is how
+    the team learns to collect it. Issuance itself is shared with every other
+    rotation path.
+    """
+    team     = key_row.team
+    registry = key_row.registry
+    _row, plaintext = keylifecycle.issue(
+        db, team, registry, actor="system", reason=reason, notify=False)
     logger.info("Auto-rotated key team=%s registry=%s reason=%s", team.name, registry.name, reason)
     return plaintext
 
