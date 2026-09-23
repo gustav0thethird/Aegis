@@ -2,6 +2,7 @@
 session.py — Session authentication.
 """
 
+import contextlib
 import json
 import logging
 import uuid
@@ -27,7 +28,6 @@ from aegis.deps import (
     _hash_pw,
     _require_admin,
     _require_any_user,
-    _session_key,
     _verify_pw,
 )
 from aegis.models import User
@@ -136,14 +136,10 @@ def api_update_theme(req: ThemeUpdate, request: Request, session: dict = Depends
         raise HTTPException(status_code=404, detail="User not found")
     user.theme = req.theme
     db.commit()
-    # Refresh session in Redis
-    token = _extract_bearer_token(request)
-    if token:
-        session["theme"] = req.theme
-        r = _get_redis()
-        ttl = r.ttl(_session_key(token))
-        if ttl > 0:
-            r.setex(_session_key(token), ttl, json.dumps(session))
+    # No session rewrite: the stored session holds identity only, and the
+    # theme is read from the user row on each request. Writing the resolved
+    # principal back would put role and team membership into the token again,
+    # which is exactly what made revocation take up to eight hours.
     return {"theme": req.theme}
 
 
@@ -152,29 +148,48 @@ def api_update_theme(req: ThemeUpdate, request: Request, session: dict = Depends
 # ---------------------------------------------------------------------------
 
 @router.get("/admin/api/sessions")
-def admin_list_sessions(session: dict = Depends(_require_admin)):
+def admin_list_sessions(session: dict = Depends(_require_admin),
+                        db: Session = Depends(get_db)):
     """List all active sessions from Redis."""
     r = _get_redis()
     sessions = []
     try:
+        # The token records a user id and nothing else, so who each session
+        # belongs to - and what they can currently do - is read from the
+        # users table. One query for the whole listing rather than one per
+        # session.
+        raw_sessions = []
         for key in r.scan_iter("aegis:session:*"):
             raw = r.get(key)
             if not raw:
                 continue
             try:
-                data = json.loads(raw)
-                token_preview = key.replace("aegis:session:", "")[:12] + "..."
-                ttl = r.ttl(key)
-                sessions.append({
-                    "token_preview": token_preview,
-                    "token_key":     key,            # full Redis key for deletion
-                    "username":      data.get("username"),
-                    "role":          data.get("role"),
-                    "team_id":       data.get("team_id"),
-                    "ttl_seconds":   ttl,
-                })
+                raw_sessions.append((key, json.loads(raw), r.ttl(key)))
             except Exception:
                 continue
+
+        user_ids = set()
+        for _key, data, _ttl in raw_sessions:
+            with contextlib.suppress(ValueError, TypeError):
+                user_ids.add(uuid.UUID(data.get("user_id")))
+        users = {u.id: u for u in db.query(User).filter(User.id.in_(user_ids)).all()} if user_ids else {}
+
+        for key, data, ttl in raw_sessions:
+            user = None
+            with contextlib.suppress(ValueError, TypeError):
+                user = users.get(uuid.UUID(data.get("user_id")))
+            team_ids = [str(m.team_id) for m in (user.team_memberships or [])] if user else []
+            sessions.append({
+                "token_preview": key.replace("aegis:session:", "")[:12] + "...",
+                "token_key":     key,            # full Redis key for deletion
+                # None when the account has been deleted: the session is dead
+                # but its key lingers until the TTL expires.
+                "username":      user.username if user else None,
+                "role":          user.role if user else None,
+                "team_id":       team_ids[0] if len(team_ids) == 1 else None,
+                "issued_at":     data.get("issued_at"),
+                "ttl_seconds":   ttl,
+            })
     except Exception as e:
         raise HTTPException(status_code=503, detail=f"Redis error: {e}") from e
     return {"sessions": sessions, "total": len(sessions)}
