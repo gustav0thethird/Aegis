@@ -558,6 +558,125 @@ function render() {
 function g(id) { return document.getElementById(id); }
 function set(id, html) { const el=g(id); if(el) el.innerHTML=html; }
 function x(s) { return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#x27;'); }
+
+// ═══════════════════════════════════════════════
+// Action dispatch
+// ═══════════════════════════════════════════════
+//
+// Handlers used to be written inline with data interpolated into them:
+//
+//     onclick="delObj('${x(o.name)}')"
+//
+// x() escapes for HTML, but a browser decodes an attribute value before it
+// compiles the JavaScript inside it, so &#x27; reaches the parser as a real
+// quote. An object named  '-fetch(...)-'  therefore closed the string and
+// ran as code as soon as an admin opened the list. Object, registry, team
+// and user names are all chosen by users of the broker, so that was
+// reachable by anyone who could create one.
+//
+// Arguments now travel as JSON in data-args: read back through dataset and
+// parsed, never compiled. data-act names an entry in ACTIONS rather than an
+// expression, so a crafted attribute cannot reach an arbitrary global.
+
+function _args(args) {
+  return args.length ? ` data-args="${x(JSON.stringify(args))}"` : '';
+}
+/** Attributes binding an element's click to ACTIONS[name], called with args. */
+function act(name, ...args) { return `data-act="${name}"${_args(args)}`; }
+/** As act(), for an event other than click. */
+function actOn(event, name, ...args) { return `data-act-${event}="${name}"${_args(args)}`; }
+
+const ACTIONS = Object.create(null);
+
+// One listener per event type. closest() matches the innermost element, so a
+// button inside a clickable row wins over the row without needing to stop
+// propagation.
+for (const ev of ['click', 'change', 'input', 'focus', 'keyup']) {
+  const attr = ev === 'click' ? 'data-act' : `data-act-${ev}`;
+  document.addEventListener(ev, e => {
+    const el = e.target.closest(`[${attr}]`);
+    if (!el) return;
+    const fn = ACTIONS[el.getAttribute(attr)];
+    if (!fn) return;
+    let args = [];
+    if (el.dataset.args) {
+      try { args = JSON.parse(el.dataset.args); } catch { return; }
+    }
+    fn(args, el, e);
+  }, ev === 'focus');   // focus does not bubble
+}
+
+Object.assign(ACTIONS, {
+  // Marks a cell whose clicks must not reach the row behind it.
+  stop: () => {},
+
+  addMember:              ([teamId])            => addMember(teamId),
+  addObjToReg:            ([regId, name])       => addObjToReg(regId, name),
+  asgnReg:                ([teamId])            => asgnReg(teamId),
+  clip:                   ([value])             => clip(value),
+  delObj:                 ([name])              => delObj(name),
+  delReg:                 ([id, name])          => delReg(id, name),
+  delTeam:                ([id, name])          => delTeam(id, name),
+  deleteUser:             ([id, username])      => deleteUser(id, username),
+  deleteWebhook:          ([teamId])            => deleteWebhook(teamId),
+  editObj:                ([name])              => renderObjDrawer(S.objects.find(o => o.name === name), true),
+  filterRegObjs:          ([regId], el)         => filterRegObjs(el.value, regId),
+  filterVendor:           ([vendor])            => { S.filter.obj.vendor = vendor; S.page.obj = 1; renderObjs(); },
+  loadWebhookLog:         ([teamId])            => loadWebhookLog(teamId),
+  openObjDrawer:          ([name])              => openObjDrawer(name),
+  openRegDrawer:          ([id])                => openRegDrawer(id),
+  openTeamDrawer:         ([id])                => openTeamDrawer(id),
+  page:                   ([name, n])           => PAGERS[name](n),
+  previewTheme:           ([theme])             => previewTheme(theme),
+  realertFinding:         ([id], el)            => realertFinding(id, el),
+  regenerateWebhookSecret:([teamId])            => regenerateWebhookSecret(teamId),
+  remObjFromReg:          ([regId, name])       => remObjFromReg(regId, name),
+  remRegFromTeam:         ([teamId, regId, n])  => remRegFromTeam(teamId, regId, n),
+  removeMember:           ([teamId, userId, u]) => removeMember(teamId, userId, u),
+  revokeSession:          ([tokenKey])          => revokeSession(tokenKey),
+  rotateAssignmentKey:    ([teamId, regId, n])  => rotateAssignmentKey(teamId, regId, n),
+  saveObj:                ([name])              => saveObj(name),
+  saveTeamNotifications:  ([teamId])            => saveTeamNotifications(teamId),
+  saveWebhook:            ([teamId])            => saveWebhook(teamId),
+  setFindingStatus:       ([id], el)            => setFindingStatus(id, el.value),
+  settingsTab:            ([tab])               => { S.settingsTab = tab; renderSettings(); },
+  showAddMemberModal:     ([teamId])            => showAddMemberModal(teamId),
+  showEditUserModal:      ([userId])            => showEditUserModal(userId),
+  testBackend:            ([vendor, ref])       => testBackend(vendor, ref),
+  testWebhook:            ([teamId])            => testWebhook(teamId),
+  toggleKeySuspend:       ([keyId, teamId])     => toggleKeySuspend(keyId, teamId),
+  toggleWhSigning:        ([teamId], el)        => toggleWhSigning(el.checked, teamId),
+  updEditV:               ()                    => updEditV(),
+  updNewV:                ()                    => updNewV(),
+  updateUser:             ([userId])            => updateUser(userId),
+
+  // Policy drawers, which previously passed their handlers as source strings.
+  saveRegPolicy:    ([regId])  => saveRegPolicy(regId),
+  deleteRegPolicy:  ([regId])  => deleteRegPolicy(regId),
+  saveTeamPolicy:   ([teamId]) => saveTeamPolicy(teamId),
+  deleteTeamPolicy: ([teamId]) => deleteTeamPolicy(teamId),
+
+  // Global search results jump to a view and open the record there.
+  gotoTeam: ([id])   => { closeGsearch(); setView('teams');      setTimeout(() => openTeamDrawer(id), 60); },
+  gotoReg:  ([id])   => { closeGsearch(); setView('registries'); setTimeout(() => openRegDrawer(id), 60); },
+  gotoObj:  ([name]) => { closeGsearch(); setView('objects');    setTimeout(() => openObjDrawer(name), 60); },
+
+  copySecretAndClose: ([secret]) => {
+    navigator.clipboard.writeText(secret).then(() => toast('Copied', 'success'));
+    hideModal();
+  },
+});
+
+// Named so a page number cannot carry a callback of its own: pager() used to
+// stringify the function into the attribute for the browser to recompile.
+const PAGERS = {
+  obj:       p => { S.page.obj = p;  renderObjs(); },
+  reg:       p => { S.page.reg = p;  renderRegs(); },
+  team:      p => { S.page.team = p; renderTeams(); },
+  changelog: p => { S.changelog.page = p; loadChangelog().then(renderChangelog); },
+  findings:  p => loadFindings(p).then(renderFindings),
+  audit:     p => { S.audit.page = p; loadAudit().then(renderAudit); },
+};
 function setBtn(b, dis, txt) { if(!b)return; b.disabled=dis; b.textContent=txt; }
 function vp(v) {
   const cls = {cyberark:'pill-cyberark',vault:'pill-vault',aws:'pill-aws',conjur:'pill-conjur'}[v]||'';
@@ -588,10 +707,10 @@ function renderDiff(diff) {
       return `<div class="diff-row"><span class="diff-field">${x(field)}</span>${inner}</div>`;
     }).join('') + '</div>';
 }
-function pager(total, page, fn, perPage=PG) {
+function pager(total, page, name, perPage=PG) {
   const pages = Math.ceil(total/perPage); if(pages<=1) return '';
   const nums = Array.from({length:pages},(_,i)=>i+1).map(i =>
-    `<button onclick="(${fn})(${i})" style="padding:3px 9px;border-radius:4px;font-size:11px;border:1px solid ${i===page?'var(--indigo)':'var(--border)'};background:${i===page?'var(--indigo-lo)':'transparent'};color:${i===page?'var(--indigo-hi)':'var(--text-3)'};cursor:pointer;font-family:monospace;">${i}</button>`).join('');
+    `<button ${act('page', name, i)} style="padding:3px 9px;border-radius:4px;font-size:11px;border:1px solid ${i===page?'var(--indigo)':'var(--border)'};background:${i===page?'var(--indigo-lo)':'transparent'};color:${i===page?'var(--indigo-hi)':'var(--text-3)'};cursor:pointer;font-family:monospace;">${i}</button>`).join('');
   return `<div style="display:flex;align-items:center;gap:6px;margin-top:16px;"><span style="font-size:11px;color:var(--text-3);">${total} total</span>${nums}</div>`;
 }
 
@@ -781,7 +900,7 @@ function renderObjs() {
         <input type="text" placeholder="Search…" style="padding-left:28px;width:220px;height:32px;" value="${x(f.q)}" oninput="S.filter.obj.q=this.value;S.page.obj=1;renderObjs()">
       </div>
       <div style="display:flex;gap:4px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;padding:3px;">
-        ${vendors.map(v=>`<button onclick="S.filter.obj.vendor='${v}';S.page.obj=1;renderObjs()" style="padding:4px 10px;border-radius:3px;font-size:11px;border:none;cursor:pointer;font-family:monospace;transition:all .15s;background:${f.vendor===v?'var(--indigo)':'transparent'};color:${f.vendor===v?'#fff':'var(--text-3)'};">${v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>`).join('')}
+        ${vendors.map(v=>`<button ${act('filterVendor', v)} style="padding:4px 10px;border-radius:3px;font-size:11px;border:none;cursor:pointer;font-family:monospace;transition:all .15s;background:${f.vendor===v?'var(--indigo)':'transparent'};color:${f.vendor===v?'#fff':'var(--text-3)'};">${v==='all'?'All':v[0].toUpperCase()+v.slice(1)}</button>`).join('')}
       </div>
     </div>
     <div class="card" style="overflow:hidden;">
@@ -791,7 +910,7 @@ function renderObjs() {
         </tr></thead>
         <tbody>
           ${rows.length ? rows.map(o=>`
-            <tr onclick="openObjDrawer('${x(o.name)}')">
+            <tr ${act('openObjDrawer', o.name)}>
               <td class="td-primary" style="color:var(--indigo-hi);">${x(o.name)}</td>
               <td>${vp(o.vendor)}</td>
               <td style="color:var(--text-3);font-size:11px;">${x(o.auth_ref||'')}</td>
@@ -801,14 +920,14 @@ function renderObjs() {
               <td style="text-align:center;">
                 ${o.registry_count>0?`<span class="badge-count">${o.registry_count}</span>`:`<span style="color:var(--text-3);font-size:11px;">—</span>`}
               </td>
-              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
-                <button class="btn btn-ghost btn-sm ${o.registry_count>0?'':'btn-del'}" style="${o.registry_count>0?'opacity:0.3;pointer-events:none;':''}" onclick="delObj('${x(o.name)}')" title="${o.registry_count>0?'Used by registries':'Delete'}">Delete</button>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm ${o.registry_count>0?'':'btn-del'}" style="${o.registry_count>0?'opacity:0.3;pointer-events:none;':''}" ${act('delObj', o.name)} title="${o.registry_count>0?'Used by registries':'Delete'}">Delete</button>
               </td>
             </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state">No objects found</div></td></tr>`}
         </tbody>
       </table>
     </div>
-    ${pager(total, S.page.obj, p=>{S.page.obj=p;renderObjs();})}
+    ${pager(total, S.page.obj, 'obj')}
   </div>`);
 }
 
@@ -854,8 +973,8 @@ function renderObjDrawer(o, editing) {
         <div id="obj-history" style="font-size:11px;color:var(--text-3);">Loading…</div>
       </div>
       <div class="drawer-section" style="display:flex;gap:8px;">
-        <button class="btn btn-ghost" onclick="renderObjDrawer(S.objects.find(o=>o.name==='${x(o.name)}'),true)">Edit</button>
-        <button class="btn btn-danger ${usedBy.length?'':'btn-active'}" style="${usedBy.length?'opacity:0.35;pointer-events:none;':''}" onclick="delObj('${x(o.name)}')" title="${usedBy.length?'Remove from registries first':'Delete object'}">Delete</button>
+        <button class="btn btn-ghost" ${act('editObj', o.name)}>Edit</button>
+        <button class="btn btn-danger ${usedBy.length?'':'btn-active'}" style="${usedBy.length?'opacity:0.35;pointer-events:none;':''}" ${act('delObj', o.name)} title="${usedBy.length?'Remove from registries first':'Delete object'}">Delete</button>
       </div>`);
     // load per-item history
     api('GET',`/admin/api/changelog?entity_id=${encodeURIComponent(o.name)}&entity_type=object&limit=10`).then(d=>{
@@ -877,15 +996,15 @@ function renderObjDrawer(o, editing) {
         <button onclick="closeDrawer()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
       </div>
       <div class="drawer-section" style="display:flex;flex-direction:column;gap:14px;">
-        ${fi('Vendor','ed-v','select',o.vendor,['cyberark','vault','aws','conjur'],'updEditV()')}
+        ${fi('Vendor','ed-v','select',o.vendor,['cyberark','vault','aws','conjur'],'updEditV')}
         ${fi('Auth Ref','ed-ar','text',o.auth_ref||'')}
         ${fi('Path','ed-p','text',o.path)}
         <div id="ed-plat" style="${isCa?'':'display:none'}">${fi('Platform','ed-pl','text',o.platform||'')}</div>
         <div id="ed-safe" style="${showSafe?'':'display:none'}">${fi('Safe','ed-sf','text',o.safe||'')}</div>
       </div>
       <div class="drawer-section" style="display:flex;gap:8px;">
-        <button class="btn btn-primary" id="save-o" onclick="saveObj('${x(o.name)}')">Save Changes</button>
-        <button class="btn btn-ghost" onclick="openObjDrawer('${x(o.name)}')">Cancel</button>
+        <button class="btn btn-primary" id="save-o" ${act('saveObj', o.name)}>Save Changes</button>
+        <button class="btn btn-ghost" ${act('openObjDrawer', o.name)}>Cancel</button>
       </div>`);
   }
 }
@@ -917,7 +1036,7 @@ function showNewObjModal() {
     <div style="font-size:15px;font-weight:600;margin-bottom:20px;">New Object</div>
     <div style="display:flex;flex-direction:column;gap:14px;">
       ${fi('Name','nm-n','text','')}
-      ${fi('Vendor','nm-v','select','cyberark',['cyberark','vault','aws','conjur'],'updNewV()')}
+      ${fi('Vendor','nm-v','select','cyberark',['cyberark','vault','aws','conjur'],'updNewV')}
       ${fi('Auth Ref','nm-ar','text','')}
       ${fi('Path','nm-p','text','')}
       <div id="nm-plat">${fi('Platform','nm-pl','text','')}</div>
@@ -964,20 +1083,20 @@ function renderRegs() {
         <thead><tr><th>Name</th><th>Objects</th><th>Teams (each with own key)</th><th>Created</th><th></th></tr></thead>
         <tbody>
           ${rows.length?rows.map(r=>`
-            <tr onclick="openRegDrawer('${r.id}')">
+            <tr ${act('openRegDrawer', r.id)}>
               <td class="td-primary" style="color:var(--indigo-hi);">${x(r.name)}</td>
               <td><span class="badge-count">${r.objects?.length||0}</span></td>
               <td><span ${r.team_count>0?`class="badge-count" style="background:rgba(16,185,129,0.15);color:#6ee7b7;"`:''}>${r.team_count||'—'}</span></td>
               <td style="font-size:11px;color:var(--text-3);">${r.created_at?.slice(0,10)||'—'}</td>
-              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
-                <button class="btn btn-ghost btn-sm" style="${r.team_count>0?'opacity:0.3;pointer-events:none;':''}" onclick="delReg('${r.id}','${x(r.name)}')" title="${r.team_count>0?'Assigned to teams':'Delete'}">Delete</button>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm" style="${r.team_count>0?'opacity:0.3;pointer-events:none;':''}" ${act('delReg', r.id, r.name)} title="${r.team_count>0?'Assigned to teams':'Delete'}">Delete</button>
               </td>
             </tr>`).join(''):
           `<tr><td colspan="6"><div class="empty-state">No registries yet — create one to get started</div></td></tr>`}
         </tbody>
       </table>
     </div>
-    ${pager(S.registries.length,S.page.reg,p=>{S.page.reg=p;renderRegs();})}
+    ${pager(S.registries.length, S.page.reg, 'reg')}
   </div>`);
 }
 
@@ -1012,7 +1131,7 @@ function renderRegDrawer(r) {
             <div style="font-size:11px;color:var(--text-1);font-weight:500;">${x(t.name)}</div>
             <div style="font-family:monospace;font-size:11px;color:var(--text-3);margin-top:2px;">${x(regEntry?.key_preview||'—')}</div>
           </div>
-          <button class="btn btn-amber btn-sm" onclick="rotateAssignmentKey('${t.id}','${r.id}','${x(t.name)}')">Rotate</button>
+          <button class="btn btn-amber btn-sm" ${act('rotateAssignmentKey', t.id, r.id, t.name)}>Rotate</button>
         </div>`;
       }).join('') : `<div style="font-size:12px;color:var(--text-3);padding:6px 0;">No teams assigned — keys are issued when a team is assigned</div>`}
     </div>
@@ -1025,12 +1144,12 @@ function renderRegDrawer(r) {
         ${objs.length?objs.map(o=>`
           <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 10px;background:var(--surface-2);border:1px solid var(--border);border-radius:5px;">
             <div style="display:flex;align-items:center;gap:8px;">${vp(o.vendor)}<span style="font-size:12px;color:var(--text-1);">${x(o.name)}</span></div>
-            <button onclick="remObjFromReg('${r.id}','${x(o.name)}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+            <button ${act('remObjFromReg', r.id, o.name)} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
           </div>`).join('')
         :`<div style="font-size:12px;color:var(--text-3);padding:8px 0;">No objects assigned</div>`}
       </div>
       ${avail.length?`<div style="position:relative;">
-        <input type="text" id="robj-q" placeholder="Add object…" style="height:32px;font-size:11px;" oninput="filterRegObjs(this.value,'${r.id}')" onfocus="filterRegObjs(this.value,'${r.id}')">
+        <input type="text" id="robj-q" placeholder="Add object…" style="height:32px;font-size:11px;" ${actOn('input', 'filterRegObjs', r.id)} ${actOn('focus', 'filterRegObjs', r.id)}>
         <div id="robj-list" class="combo-list" style="display:none;"></div>
       </div>`:`<div style="font-size:11px;color:var(--text-3);">All objects assigned</div>`}
     </div>
@@ -1055,7 +1174,7 @@ function renderRegDrawer(r) {
     </div>
 
     <div class="drawer-section" style="display:flex;gap:8px;">
-      <button class="btn btn-danger btn-sm" style="${r.team_count>0?'opacity:0.35;pointer-events:none;':''}" onclick="delReg('${r.id}','${x(r.name)}')" title="${r.team_count>0?'Remove from teams first':'Delete registry'}">Delete Registry</button>
+      <button class="btn btn-danger btn-sm" style="${r.team_count>0?'opacity:0.35;pointer-events:none;':''}" ${act('delReg', r.id, r.name)} title="${r.team_count>0?'Remove from teams first':'Delete registry'}">Delete Registry</button>
     </div>`);
 
   api('GET',`/admin/api/changelog?entity_id=${r.id}&entity_type=registry&limit=10`).then(d=>{
@@ -1078,7 +1197,7 @@ function filterRegObjs(q,regId) {
   const list=g('robj-list'); if(!list) return;
   if(!hits.length){list.style.display='none';return;}
   list.style.display='block';
-  list.innerHTML=hits.slice(0,20).map(o=>`<div class="combo-item" onclick="addObjToReg('${regId}','${x(o.name)}')">${vp(o.vendor)}<span>${x(o.name)}</span></div>`).join('');
+  list.innerHTML=hits.slice(0,20).map(o=>`<div class="combo-item" ${act('addObjToReg', regId, o.name)}>${vp(o.vendor)}<span>${x(o.name)}</span></div>`).join('');
 }
 async function addObjToReg(regId,name) {
   try { await api('POST',`/admin/api/registries/${regId}/objects`,{object_name:name}); await Promise.all([loadObjs(),loadRegs()]); const r=S.registries.find(r=>r.id===regId); if(r) renderRegDrawer(r); renderRegs(); toast(`Added ${name}`,'success'); }
@@ -1145,22 +1264,22 @@ function renderTeams() {
         <thead><tr><th>Name</th><th>Registries</th><th>Created</th><th></th></tr></thead>
         <tbody>
           ${rows.length?rows.map(t=>`
-            <tr onclick="openTeamDrawer('${t.id}')">
+            <tr ${act('openTeamDrawer', t.id)}>
               <td class="td-primary" style="color:var(--indigo-hi);">${x(t.name)}</td>
               <td>${(t.registries||[]).length?
                 (t.registries||[]).map(r=>`<span style="display:inline-flex;align-items:center;padding:2px 8px;border-radius:4px;font-size:10px;background:var(--indigo-lo);color:var(--indigo-hi);border:1px solid rgba(99,102,241,0.3);margin-right:4px;" title="${x(r.key_preview||'')}">${x(r.name)}</span>`).join('')
                 :`<span style="font-size:11px;color:var(--text-3);">—</span>`}
               </td>
               <td style="font-size:11px;color:var(--text-3);">${t.created_at?.slice(0,10)||'—'}</td>
-              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
-                <button class="btn btn-ghost btn-sm" onclick="delTeam('${t.id}','${x(t.name)}')">Delete</button>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;">
+                <button class="btn btn-ghost btn-sm" ${act('delTeam', t.id, t.name)}>Delete</button>
               </td>
             </tr>`).join(''):
           `<tr><td colspan="4"><div class="empty-state">${kq?'No teams match your search':'No teams yet'}</div></td></tr>`}
         </tbody>
       </table>
     </div>
-    ${pager(filtered.length,S.page.team,p=>{S.page.team=p;renderTeams();})}
+    ${pager(filtered.length, S.page.team, 'team')}
   </div>`);
 }
 
@@ -1179,7 +1298,7 @@ function renderTeamDrawer(t) {
         <div style="font-size:14px;font-weight:600;color:var(--indigo-hi);">${x(t.name)}</div>
         <div style="display:flex;align-items:center;gap:6px;margin-top:4px;">
           <span style="font-size:10px;color:var(--text-3);letter-spacing:0.03em;font-family:'Fira Code',monospace;">${t.id}</span>
-          <button onclick="clip('${t.id}')" style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;line-height:1.4;" title="Copy team ID">copy</button>
+          <button ${act('clip', t.id)} style="background:none;border:1px solid var(--border);border-radius:3px;color:var(--text-3);cursor:pointer;font-size:9px;padding:1px 5px;font-family:'Fira Code',monospace;line-height:1.4;" title="Copy team ID">copy</button>
         </div>
       </div>
       <button onclick="closeDrawer()" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:20px;line-height:1;padding:4px;">✕</button>
@@ -1187,7 +1306,7 @@ function renderTeamDrawer(t) {
     <div class="drawer-section">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
         <div class="section-label">Members <span class="badge-count" style="margin-left:6px;">${(t.members||[]).length}</span></div>
-        <button class="btn btn-ghost btn-sm" onclick="showAddMemberModal('${t.id}')">+ Add</button>
+        <button class="btn btn-ghost btn-sm" ${act('showAddMemberModal', t.id)}>+ Add</button>
       </div>
       <div style="display:flex;flex-direction:column;gap:4px;margin-bottom:4px;">
         ${(t.members||[]).length?(t.members||[]).map(m=>`
@@ -1197,7 +1316,7 @@ function renderTeamDrawer(t) {
               <span style="font-size:12px;color:var(--text-1);">${x(m.username)}</span>
               <span class="pill role-${m.role}" style="font-size:9px;">${x(m.role)}</span>
             </div>
-            <button onclick="removeMember('${t.id}','${m.id}','${x(m.username)}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+            <button ${act('removeMember', t.id, m.id, m.username)} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
           </div>`).join('')
         :`<div style="font-size:12px;color:var(--text-3);padding:4px 0;">No members yet</div>`}
       </div>
@@ -1211,14 +1330,14 @@ function renderTeamDrawer(t) {
               <span style="font-size:12px;color:var(--text-1);font-weight:500;">${x(r.name)}</span>
               <div style="display:flex;gap:6px;align-items:center;">
                 ${r.key_id?`
-                <button onclick="toggleKeySuspend('${r.key_id}','${t.id}')"
+                <button ${act('toggleKeySuspend', r.key_id, t.id)}
                   title="${r.key_suspended?'Enable key':'Suspend key'}"
                   style="display:flex;align-items:center;gap:4px;background:${r.key_suspended?'rgba(16,185,129,0.1)':'rgba(239,68,68,0.1)'};border:1px solid ${r.key_suspended?'rgba(16,185,129,0.3)':'rgba(239,68,68,0.3)'};border-radius:12px;color:${r.key_suspended?'var(--success)':'var(--danger)'};cursor:pointer;font-size:10px;padding:2px 8px;font-family:inherit;transition:all .15s;">
                   <span style="width:8px;height:8px;border-radius:50%;background:${r.key_suspended?'var(--success)':'var(--danger)'};display:inline-block;"></span>
                   ${r.key_suspended?'Disabled':'Enabled'}
                 </button>`:``}
-                <button class="btn btn-amber btn-sm" onclick="rotateAssignmentKey('${t.id}','${r.id}','${x(r.name)}')">Rotate Key</button>
-                <button onclick="remRegFromTeam('${t.id}','${r.id}','${x(r.name)}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
+                <button class="btn btn-amber btn-sm" ${act('rotateAssignmentKey', t.id, r.id, r.name)}>Rotate Key</button>
+                <button ${act('remRegFromTeam', t.id, r.id, r.name)} style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:14px;padding:2px 4px;" title="Remove">✕</button>
               </div>
             </div>
             <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
@@ -1231,7 +1350,7 @@ function renderTeamDrawer(t) {
       </div>
       ${avail.length?`<div style="display:flex;gap:8px;align-items:center;">
         <select id="t-reg-sel" style="height:32px;font-size:11px;flex:1;"><option value="">Select registry…</option>${avail.map(r=>`<option value="${r.id}">${x(r.name)}</option>`).join('')}</select>
-        <button class="btn btn-primary btn-sm" id="btn-asgn" onclick="asgnReg('${t.id}')">Assign</button>
+        <button class="btn btn-primary btn-sm" id="btn-asgn" ${act('asgnReg', t.id)}>Assign</button>
       </div>`:`<div style="font-size:11px;color:var(--text-3);">All registries assigned</div>`}
     </div>
     <div class="drawer-section">
@@ -1260,7 +1379,7 @@ function renderTeamDrawer(t) {
       <div id="team-notif-body" style="font-size:11px;color:var(--text-3);">Loading…</div>
     </div>
     <div class="drawer-section">
-      <button class="btn btn-danger btn-sm" onclick="delTeam('${t.id}','${x(t.name)}')">Delete Team</button>
+      <button class="btn btn-danger btn-sm" ${act('delTeam', t.id, t.name)}>Delete Team</button>
     </div>`);
 
   api('GET',`/admin/api/changelog?entity_id=${t.id}&entity_type=team&limit=10`).then(d=>{
@@ -1377,7 +1496,7 @@ function renderChangelog() {
         </tbody>
       </table>
     </div>
-    ${pager(S.changelog.total,S.changelog.page,p=>{S.changelog.page=p;loadChangelog().then(renderChangelog);})}
+    ${pager(S.changelog.total, S.changelog.page, 'changelog')}
   </div>`);
 }
 
@@ -1433,17 +1552,17 @@ function renderFindings() {
               <td style="font-size:11px;color:var(--text-3);white-space:nowrap;" title="First seen ${x(r.first_seen_at||'')}">${r.last_seen_at?.slice(0,10)||'—'} ×${r.occurrences}</td>
               <td style="font-size:11px;">${ticket}</td>
               <td>
-                <select style="height:28px;font-size:11px;width:130px;" onchange="setFindingStatus('${r.id}', this.value)">
+                <select style="height:28px;font-size:11px;width:130px;" ${actOn('change', 'setFindingStatus', r.id)}>
                   ${FSTATUS.map(o=>`<option value="${o}" ${r.status===o?'selected':''}>${o.replace('_',' ')}</option>`).join('')}
                 </select>
               </td>
-              <td><button class="btn btn-ghost btn-sm" onclick="realertFinding('${r.id}', this)">Re-alert</button></td>
+              <td><button class="btn btn-ghost btn-sm" ${act('realertFinding', r.id)}>Re-alert</button></td>
             </tr>`;}).join(''):
           `<tr><td colspan="9"><div class="empty-state">No findings — nothing has been reported for this filter</div></td></tr>`}
         </tbody>
       </table>
     </div>
-    ${pager(S.findings.total, S.findings.page, 'p=>loadFindings(p).then(renderFindings)')}
+    ${pager(S.findings.total, S.findings.page, 'findings')}
   </div>`);
 }
 
@@ -1490,7 +1609,7 @@ function renderAudit() {
         </tbody>
       </table>
     </div>
-    ${pager(S.audit.total,S.audit.page,p=>{S.audit.page=p;loadAudit().then(renderAudit);})}
+    ${pager(S.audit.total, S.audit.page, 'audit')}
   </div>`);
 }
 
@@ -1505,11 +1624,11 @@ function gsearch(q) {
     if(!q.trim()){box.style.display='none';return;}
     const lq=q.toLowerCase();
     const oR=S.objects.filter(o=>o.name.toLowerCase().includes(lq)).slice(0,4).map(o=>
-      `<div class="combo-item" onclick="closeGsearch();setView('objects');setTimeout(()=>openObjDrawer('${x(o.name)}'),60)">${vp(o.vendor)}<span style="color:var(--text-3);font-size:10px;">obj</span><span>${x(o.name)}</span></div>`);
+      `<div class="combo-item" ${act('gotoObj', o.name)}>${vp(o.vendor)}<span style="color:var(--text-3);font-size:10px;">obj</span><span>${x(o.name)}</span></div>`);
     const rR=S.registries.filter(r=>r.name.toLowerCase().includes(lq)).slice(0,4).map(r=>
-      `<div class="combo-item" onclick="closeGsearch();setView('registries');setTimeout(()=>openRegDrawer('${r.id}'),60)"><span style="color:#7dd3fc;font-size:10px;">reg</span><span>${x(r.name)}</span></div>`);
+      `<div class="combo-item" ${act('gotoReg', r.id)}><span style="color:#7dd3fc;font-size:10px;">reg</span><span>${x(r.name)}</span></div>`);
     const tR=S.teams.filter(t=>t.name.toLowerCase().includes(lq)).slice(0,4).map(t=>
-      `<div class="combo-item" onclick="closeGsearch();setView('teams');setTimeout(()=>openTeamDrawer('${t.id}'),60)"><span style="color:#6ee7b7;font-size:10px;">team</span><span>${x(t.name)}</span></div>`);
+      `<div class="combo-item" ${act('gotoTeam', t.id)}><span style="color:#6ee7b7;font-size:10px;">team</span><span>${x(t.name)}</span></div>`);
     const all=[...oR,...rR,...tR];
     if(!all.length){box.style.display='none';return;}
     box.innerHTML=all.join(''); box.style.display='block';
@@ -1537,7 +1656,7 @@ function showKeyModal(key, context='') {
     </div>
     <div style="font-size:12px;color:var(--text-2);margin-bottom:16px;">This key will <strong style="color:var(--text-1);">not</strong> be shown again. Copy it now and store it securely.</div>
     <div style="background:var(--surface-2);border:1px solid var(--border-hi);border-radius:6px;padding:12px 14px;font-family:monospace;font-size:12px;color:var(--text-1);word-break:break-all;margin-bottom:10px;">${x(key)}</div>
-    <button class="btn btn-ghost btn-sm" onclick="clip('${x(key)}')" style="width:100%;justify-content:center;margin-bottom:16px;">Copy to clipboard</button>
+    <button class="btn btn-ghost btn-sm" ${act('clip', key)} style="width:100%;justify-content:center;margin-bottom:16px;">Copy to clipboard</button>
     <button class="btn btn-primary" onclick="hideModal()" style="width:100%;justify-content:center;">I've copied the key — Close</button>
   </div>`);
 }
@@ -1572,14 +1691,14 @@ function toast(msg,type='success') {
 // ═══════════════════════════════════════════════
 // Form helpers
 // ═══════════════════════════════════════════════
-function fi(label, id, type, val, opts, onchange='') {
+function fi(label, id, type, val, opts, onchange='') {   // onchange names an ACTIONS entry
   const lbl=`<label for="${id}" style="font-size:11px;color:var(--text-3);display:block;margin-bottom:5px;letter-spacing:0.04em;text-transform:uppercase;">${x(label)}</label>`;
   if(type==='select') {
-    return `<div>${lbl}<select id="${id}" style="height:34px;" ${onchange?`onchange="${onchange}"`:''}>
+    return `<div>${lbl}<select id="${id}" style="height:34px;" ${onchange?actOn('change', onchange):''}>
       ${(opts||[]).map(o=>`<option value="${o}" ${val===o?'selected':''}>${o}</option>`).join('')}
     </select></div>`;
   }
-  return `<div>${lbl}<input type="text" id="${id}" value="${x(val)}" style="height:34px;" ${onchange?`oninput="${onchange}"`:''} ${onchange?`onchange="${onchange}"`:''} autocomplete="off"></div>`;
+  return `<div>${lbl}<input type="text" id="${id}" value="${x(val)}" style="height:34px;" ${onchange?actOn('input', onchange):''} ${onchange?actOn('change', onchange):''} autocomplete="off"></div>`;
 }
 function drow(label, val) {
   return `<div style="display:flex;gap:12px;align-items:baseline;">
@@ -1631,7 +1750,7 @@ function renderSettings() {
       <div style="font-size:11px;color:var(--text-3);margin-top:2px;">Runtime configuration — no restart required</div>
     </div>
     <div style="display:flex;gap:4px;background:var(--surface-1);border:1px solid var(--border);border-radius:6px;padding:4px;width:fit-content;margin-bottom:24px;flex-wrap:wrap;">
-      ${tabs.map(({k,l})=>`<button class="stab ${t===k?'active':''}" onclick="S.settingsTab='${k}';renderSettings()">${l}</button>`).join('')}
+      ${tabs.map(({k,l})=>`<button class="stab ${t===k?'active':''}" ${act('settingsTab', k)}>${l}</button>`).join('')}
     </div>
     <div id="settings-body"></div>
   </div>`);
@@ -1685,7 +1804,7 @@ function renderSettingsGeneral() {
         <div class="section-label" style="margin-bottom:16px;">My Theme</div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px;">
           ${THEMES.map(th=>`
-            <button onclick="previewTheme('${th}')" style="padding:8px 16px;border-radius:6px;font-size:12px;border:2px solid ${(S.session?.theme||'default')===th?'var(--indigo)':'var(--border)'};background:var(--surface-2);color:var(--text-1);cursor:pointer;font-family:monospace;transition:all .15s;">${th[0].toUpperCase()+th.slice(1)}</button>`
+            <button ${act('previewTheme', th)} style="padding:8px 16px;border-radius:6px;font-size:12px;border:2px solid ${(S.session?.theme||'default')===th?'var(--indigo)':'var(--border)'};background:var(--surface-2);color:var(--text-1);cursor:pointer;font-family:monospace;transition:all .15s;">${th[0].toUpperCase()+th.slice(1)}</button>`
           ).join('')}
         </div>
         <button class="btn btn-primary btn-sm" id="save-theme-btn" onclick="saveTheme()">Apply Theme</button>
@@ -1802,9 +1921,9 @@ function renderSettingsUsers() {
               <td style="font-size:11px;color:var(--text-3);">${(u.team_ids||[]).length?(u.team_ids||[]).map(tid=>{const t=S.teams.find(t=>t.id===tid);return t?`<span style="margin-right:4px;display:inline-flex;align-items:center;padding:1px 6px;border-radius:3px;font-size:10px;background:var(--indigo-lo);color:var(--indigo-hi);border:1px solid rgba(99,102,241,0.3);">${x(t.name)}</span>`:'';}).join(''):'—'}</td>
               <td style="font-size:11px;color:var(--text-3);">${x(u.theme)}</td>
               <td style="font-size:11px;color:var(--text-3);">${u.created_at?.slice(0,10)||'—'}</td>
-              <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;display:flex;gap:6px;justify-content:flex-end;align-items:center;">
-                <button class="btn btn-ghost btn-sm" onclick="showEditUserModal('${u.id}')">Edit</button>
-                <button class="btn btn-danger btn-sm" style="${u.username==='admin'?'opacity:.3;pointer-events:none;':''}" onclick="deleteUser('${u.id}','${x(u.username)}')">Delete</button>
+              <td ${act('stop')} style="text-align:right;padding-right:16px;display:flex;gap:6px;justify-content:flex-end;align-items:center;">
+                <button class="btn btn-ghost btn-sm" ${act('showEditUserModal', u.id)}>Edit</button>
+                <button class="btn btn-danger btn-sm" style="${u.username==='admin'?'opacity:.3;pointer-events:none;':''}" ${act('deleteUser', u.id, u.username)}>Delete</button>
               </td>
             </tr>`).join(''):
           `<tr><td colspan="6"><div class="empty-state">No users yet</div></td></tr>`}
@@ -1843,7 +1962,7 @@ async function renderSettingsBackends() {
             <span class="pill pill-${vendor}">${x(vendor)}</span>
             <span style="font-size:12px;color:var(--text-2);font-weight:500;">${x(ref)}</span>
           </div>
-          <button class="btn btn-ghost btn-sm" id="test-btn-${x(vendor)}-${x(ref)}" onclick="testBackend('${x(vendor)}','${x(ref)}')">Test Connectivity</button>
+          <button class="btn btn-ghost btn-sm" id="test-btn-${x(vendor)}-${x(ref)}" ${act('testBackend', vendor, ref)}>Test Connectivity</button>
         </div>
         <table class="data-table">
           <thead><tr><th>Key</th><th>Value</th></tr></thead>
@@ -1886,8 +2005,8 @@ async function renderSettingsSessions() {
       <td><span class="pill role-${s.role}">${x(s.role)}</span></td>
       <td style="font-size:11px;color:var(--text-3);font-family:monospace;">${x(s.token_preview)}</td>
       <td style="font-size:11px;color:var(--text-2);">${s.ttl_seconds>0?Math.ceil(s.ttl_seconds/60)+'m':'∞'}</td>
-      <td onclick="event.stopPropagation()" style="text-align:right;padding-right:16px;">
-        ${s.username!==S.session?.username?`<button class="btn btn-danger btn-sm" onclick="revokeSession('${x(s.token_key)}')">Revoke</button>`:
+      <td ${act('stop')} style="text-align:right;padding-right:16px;">
+        ${s.username!==S.session?.username?`<button class="btn btn-danger btn-sm" ${act('revokeSession', s.token_key)}>Revoke</button>`:
           `<span style="font-size:10px;color:var(--text-3);">current</span>`}
       </td>
     </tr>`).join('');
@@ -1985,7 +2104,7 @@ function showEditUserModal(userId) {
       </div>
     </div>
     <div style="display:flex;gap:8px;margin-top:20px;">
-      <button class="btn btn-primary" id="btn-eu" onclick="updateUser('${userId}')">Save Changes</button>
+      <button class="btn btn-primary" id="btn-eu" ${act('updateUser', userId)}>Save Changes</button>
       <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
     </div>`);
 }
@@ -2048,11 +2167,11 @@ function _policyForm(p, idPrefix, showMaxKeyDays) {
     </div>`;
 }
 
-function _policyBody(p, idPrefix, showMaxKeyDays, saveFn, clearFn) {
+function _policyBody(p, idPrefix, showMaxKeyDays, saveFn, clearFn) {   // saveFn/clearFn: [action, ...args]
   return _policyForm(p, idPrefix, showMaxKeyDays) + `
     <div style="display:flex;gap:6px;margin-top:12px;">
-      <button class="btn btn-primary btn-sm" onclick="${saveFn}">Save Policy</button>
-      ${p?`<button class="btn btn-ghost btn-sm" onclick="${clearFn}" style="color:var(--red);">Clear Policy</button>`:''}
+      <button class="btn btn-primary btn-sm" ${act(...saveFn)}>Save Policy</button>
+      ${p?`<button class="btn btn-ghost btn-sm" ${act(...clearFn)} style="color:var(--red);">Clear Policy</button>`:''}
     </div>
     ${!p?`<div style="font-size:10px;color:var(--text-3);margin-top:6px;">No policy set — global defaults apply</div>`:''}`;
 }
@@ -2060,7 +2179,7 @@ function _policyBody(p, idPrefix, showMaxKeyDays, saveFn, clearFn) {
 async function loadRegPolicy(regId) {
   let p = null;
   try { const d = await api('GET',`/admin/api/registries/${regId}/policy`); if(d?.id) p = d; } catch(e) {}
-  set('reg-policy-body', _policyBody(p,'rp',true,`saveRegPolicy('${regId}')`,`deleteRegPolicy('${regId}')`));
+  set('reg-policy-body', _policyBody(p,'rp',true,['saveRegPolicy',regId],['deleteRegPolicy',regId]));
 }
 async function saveRegPolicy(regId) {
   const ips = document.getElementById('rp-ips').value.trim().split('\n').map(s=>s.trim()).filter(Boolean);
@@ -2090,7 +2209,7 @@ async function deleteRegPolicy(regId) {
 async function loadTeamPolicy(teamId) {
   let p = null;
   try { const d = await api('GET',`/admin/api/teams/${teamId}/policy`); if(d?.id) p = d; } catch(e) {}
-  set('team-policy-body', _policyBody(p,'tp',false,`saveTeamPolicy('${teamId}')`,`deleteTeamPolicy('${teamId}')`));
+  set('team-policy-body', _policyBody(p,'tp',false,['saveTeamPolicy',teamId],['deleteTeamPolicy',teamId]));
 }
 async function saveTeamPolicy(teamId) {
   const ips = document.getElementById('tp-ips').value.trim().split('\n').map(s=>s.trim()).filter(Boolean);
@@ -2132,7 +2251,7 @@ function showAddMemberModal(teamId) {
       <select id="am-user" style="height:34px;">${opts}</select>
     </div>
     <div style="display:flex;gap:8px;margin-top:20px;">
-      <button class="btn btn-primary" id="btn-am" onclick="addMember('${teamId}')">Add Member</button>
+      <button class="btn btn-primary" id="btn-am" ${act('addMember', teamId)}>Add Member</button>
       <button class="btn btn-ghost" onclick="hideModal()">Cancel</button>
     </div>`);
 }
@@ -2186,7 +2305,7 @@ function loadTeamNotifications(teamId, notifs) {
         </label>
         <input type="url" id="tn-discord" placeholder="https://discord.com/api/webhooks/…" value="${x(disc)}" style="height:32px;font-size:11px;">
       </div>
-      <button class="btn btn-primary btn-sm" id="btn-tn-${teamId}" onclick="saveTeamNotifications('${teamId}')">Save Channels</button>
+      <button class="btn btn-primary btn-sm" id="btn-tn-${teamId}" ${act('saveTeamNotifications', teamId)}>Save Channels</button>
     </div>`);
 }
 async function saveTeamNotifications(teamId) {
@@ -2236,7 +2355,7 @@ function _webhookForm(wh, teamId) {
         <label for="wh-enabled" style="font-size:11px;color:var(--text-2);cursor:pointer;">Enabled</label>
       </div>
       <div style="display:flex;align-items:center;gap:8px;">
-        <input type="checkbox" id="wh-signing" ${wh?.signing_enabled?'checked':''} style="width:auto;" onchange="toggleWhSigning(this.checked, '${teamId}')">
+        <input type="checkbox" id="wh-signing" ${wh?.signing_enabled?'checked':''} style="width:auto;" ${actOn('change', 'toggleWhSigning', teamId)}>
         <label for="wh-signing" style="font-size:11px;color:var(--text-2);cursor:pointer;">Enable HMAC signing <span style="color:var(--text-3);">(adds X-Aegis-Signature header)</span></label>
       </div>
       <div id="wh-signing-info" style="display:${wh?.signing_enabled?'block':'none'}">
@@ -2246,11 +2365,11 @@ function _webhookForm(wh, teamId) {
       </div>
     </div>
     <div style="display:flex;gap:6px;margin-top:12px;flex-wrap:wrap;">
-      <button class="btn btn-primary btn-sm" onclick="saveWebhook('${teamId}')">${wh?'Update Webhook':'Create Webhook'}</button>
-      ${wh?.signing_enabled?`<button class="btn btn-ghost btn-sm" onclick="regenerateWebhookSecret('${teamId}')">Regenerate Secret</button>`:''}
-      ${wh?`<button class="btn btn-ghost btn-sm" onclick="testWebhook('${teamId}')">Test</button>`:''}
-      ${wh?`<button class="btn btn-ghost btn-sm" onclick="loadWebhookLog('${teamId}')">View Log</button>`:''}
-      ${wh?`<button class="btn btn-ghost btn-sm" style="color:var(--red);" onclick="deleteWebhook('${teamId}')">Remove</button>`:''}
+      <button class="btn btn-primary btn-sm" ${act('saveWebhook', teamId)}>${wh?'Update Webhook':'Create Webhook'}</button>
+      ${wh?.signing_enabled?`<button class="btn btn-ghost btn-sm" ${act('regenerateWebhookSecret', teamId)}>Regenerate Secret</button>`:''}
+      ${wh?`<button class="btn btn-ghost btn-sm" ${act('testWebhook', teamId)}>Test</button>`:''}
+      ${wh?`<button class="btn btn-ghost btn-sm" ${act('loadWebhookLog', teamId)}>View Log</button>`:''}
+      ${wh?`<button class="btn btn-ghost btn-sm" style="color:var(--red);" ${act('deleteWebhook', teamId)}>Remove</button>`:''}
     </div>
     <div id="wh-log-body" style="margin-top:12px;"></div>`;
 }
@@ -2288,7 +2407,7 @@ function showWebhookSecretModal(secret) {
     <div style="font-size:12px;color:var(--text-3);margin-bottom:16px;">Copy this now — it will not be shown again. Use it to verify the <code style="font-size:11px;background:var(--surface-2);padding:1px 4px;border-radius:3px;">X-Aegis-Signature</code> header on incoming requests.</div>
     <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:monospace;font-size:13px;color:var(--indigo-hi);word-break:break-all;margin-bottom:16px;">${x(secret)}</div>
     <div style="font-size:11px;color:var(--text-3);margin-bottom:16px;">Verify with: <code style="font-size:11px;">HMAC-SHA256(secret, request_body)</code></div>
-    <button class="btn btn-primary" onclick="navigator.clipboard.writeText('${x(secret)}').then(()=>toast('Copied','success'));hideModal();">Copy &amp; Close</button>`);
+    <button class="btn btn-primary" ${act('copySecretAndClose', secret)}>Copy &amp; Close</button>`);
 }
 async function deleteWebhook(teamId) {
   if(!await confirm('Remove webhook?')) return;
